@@ -29,6 +29,9 @@ class Program
             SwapchainDepthFormat = PixelFormat.R16_UNorm
         };
 
+        Engine _engine = new Engine(Window, GD_Options, BakcEnd);
+        _engine.Run();
+
         GraphicsDevice GD = VeldridStartup.CreateGraphicsDevice(Window, GD_Options, BakcEnd);
         Swapchain SC = GD.MainSwapchain;
         CommandList Cl = GD.ResourceFactory.CreateCommandList();
