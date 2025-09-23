@@ -9,34 +9,53 @@ class Program
 {
     static void Main()
     {
-        Sdl2Window window = new Sdl2Window(
-            "Engine-13", // Window title
-            100,         // X
-            100,         // Y
-            800,         // Width
-            600,         // Height
-            SDL_WindowFlags.Resizable,
-            false
-        );
+        WindowCreateInfo Window_Create_Info = new WindowCreateInfo
+        {
+            WindowTitle = "Engine-13", // Window title
+            X = 100,         // X
+            Y = 100,         // Y
+            WindowWidth = 800,         // Width
+            WindowHeight = 600         // Height
+        };
 
-        GraphicsDevice GD = VeldridStartup.CreateGraphicsDevice(
-            window,
-            new GraphicsDeviceOptions(true, null, true),
-            GraphicsBackend.Direct3D11
-        );
+        Sdl2Window Window = VeldridStartup.CreateWindow(Window_Create_Info);
+
+        GraphicsBackend BakcEnd = GraphicsBackend.Vulkan;
+
+        GraphicsDeviceOptions GD_Options = new GraphicsDeviceOptions
+        {
+            Debug = true,
+            SyncToVerticalBlank = true,
+            SwapchainDepthFormat = PixelFormat.R16_UNorm
+        };
+
+        GraphicsDevice GD = VeldridStartup.CreateGraphicsDevice(Window, GD_Options, BakcEnd);
+        Swapchain SC = GD.MainSwapchain;
         CommandList Cl = GD.ResourceFactory.CreateCommandList();
 
         // Example RGB values (0-255)
-        int R = 30, G = 144, B = 255; // DodgerBlue
+        byte R = 0, G = 0, B = 0; // DodgerBlue
         RgbaFloat clearColor = new RgbaFloat(R / 255f, G / 255f, B / 255f, 1f);
 
-        while (window.Exists)
+        while (Window.Exists)
         {
-            window.PumpEvents();
-            if (!window.Exists) break;
+            Window.PumpEvents();
+            if (!Window.Exists) break;
+
+             if (Window.Width != SC.Framebuffer.Width || Window.Height != SC.Framebuffer.Height)
+             {
+                 GD.ResizeMainWindow((uint)Window.Width, (uint)Window.Height);
+                 SC = GD.MainSwapchain;
+             }
+
+            R += 1;
+            if (R >= 255) G += 1;
+            if (G >= 255) B += 1;
+            Console.WriteLine($"R: {R}, G: {G}, B: {B}");
+            clearColor = new RgbaFloat(R / 255f, G / 255f, B / 255f, 1f);
 
             // Here you would typically call your engine's run method
-            // For example: engine.Runn();
+            // For example: engine.Run();
 
             Cl.Begin();
             Cl.SetFramebuffer(GD.SwapchainFramebuffer);
