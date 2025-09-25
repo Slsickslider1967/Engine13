@@ -869,11 +869,11 @@
           }
         }
       },
-      "Veldrid.StartupUtilities/4.8.0": {
+      "Veldrid.StartupUtilities/4.9.0": {
         "type": "package",
         "dependencies": {
-          "Veldrid": "4.8.0",
-          "Veldrid.SDL2": "4.8.0"
+          "Veldrid": "4.9.0",
+          "Veldrid.SDL2": "4.9.0"
         },
         "compile": {
           "lib/netstandard2.0/Veldrid.StartupUtilities.dll": {
@@ -3472,16 +3472,16 @@
         "veldrid.sdl2.nuspec"
       ]
     },
-    "Veldrid.StartupUtilities/4.8.0": {
-      "sha512": "NFTUv+BtkWZQY7d2Pdmw5ZUSkzZAS+qh3aIRjw4uj7hvTAlTO6fFxnDvn/Wpm9sHLdc6b9gmEEKHPKO3naM7mw==",
+    "Veldrid.StartupUtilities/4.9.0": {
+      "sha512": "45JrS5GajAaoom0HJWtPzYgJlNo8tpXB06mJM4hWxdeBxo3y2OIJIfnnB374KB1d7euodW0XneRzKVhwzZFE5g==",
       "type": "package",
-      "path": "veldrid.startuputilities/4.8.0",
+      "path": "veldrid.startuputilities/4.9.0",
       "files": [
         ".nupkg.metadata",
         ".signature.p7s",
         "lib/netstandard2.0/Veldrid.StartupUtilities.dll",
         "lib/netstandard2.0/Veldrid.StartupUtilities.pdb",
-        "veldrid.startuputilities.4.8.0.nupkg.sha512",
+        "veldrid.startuputilities.4.9.0.nupkg.sha512",
         "veldrid.startuputilities.nuspec"
       ]
     },
@@ -3609,36 +3609,29 @@
   "projectFileDependencyGroups": {
     "net9.0": [
       "Veldrid >= 4.9.0",
-      "Veldrid.Sdl2 >= 4.9.0",
-      "Veldrid.StartupUtilities >= 4.8.0"
+      "Veldrid.SDL2 >= 4.9.0",
+      "Veldrid.StartupUtilities >= 4.9.0"
     ]
   },
   "packageFolders": {
-    "C:\\Users\\georg\\.nuget\\packages\\": {},
-    "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages": {}
+    "/home/slickslider/.nuget/packages/": {}
   },
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "D:\\Temp\\Engine-13\\Engine-13\\Engine-13.csproj",
+      "projectUniqueName": "/home/slickslider/Documents/Engine-13/Engine13/Engine-13/Engine-13.csproj",
       "projectName": "Engine-13",
-      "projectPath": "D:\\Temp\\Engine-13\\Engine-13\\Engine-13.csproj",
-      "packagesPath": "C:\\Users\\georg\\.nuget\\packages\\",
-      "outputPath": "D:\\Temp\\Engine-13\\Engine-13\\obj\\",
+      "projectPath": "/home/slickslider/Documents/Engine-13/Engine13/Engine-13/Engine-13.csproj",
+      "packagesPath": "/home/slickslider/.nuget/packages/",
+      "outputPath": "/home/slickslider/Documents/Engine-13/Engine13/Engine-13/obj/",
       "projectStyle": "PackageReference",
-      "fallbackFolders": [
-        "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
-      ],
       "configFilePaths": [
-        "C:\\Users\\georg\\AppData\\Roaming\\NuGet\\NuGet.Config",
-        "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
-        "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+        "/home/slickslider/.nuget/NuGet/NuGet.Config"
       ],
       "originalTargetFrameworks": [
         "net9.0"
       ],
       "sources": {
-        "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
         "https://api.nuget.org/v3/index.json": {}
       },
       "frameworks": {
@@ -3657,7 +3650,7 @@
         "auditLevel": "low",
         "auditMode": "direct"
       },
-      "SdkAnalysisLevel": "9.0.300"
+      "SdkAnalysisLevel": "9.0.100"
     },
     "frameworks": {
       "net9.0": {
@@ -3667,13 +3660,13 @@
             "target": "Package",
             "version": "[4.9.0, )"
           },
-          "Veldrid.Sdl2": {
+          "Veldrid.SDL2": {
             "target": "Package",
             "version": "[4.9.0, )"
           },
           "Veldrid.StartupUtilities": {
             "target": "Package",
-            "version": "[4.8.0, )"
+            "version": "[4.9.0, )"
           }
         },
         "imports": [
@@ -3687,12 +3680,18 @@
         ],
         "assetTargetFallback": true,
         "warn": true,
+        "downloadDependencies": [
+          {
+            "name": "Microsoft.AspNetCore.App.Ref",
+            "version": "[9.0.9, 9.0.9]"
+          }
+        ],
         "frameworkReferences": {
           "Microsoft.NETCore.App": {
             "privateAssets": "all"
           }
         },
-        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.302/PortableRuntimeIdentifierGraph.json"
+        "runtimeIdentifierGraphPath": "/usr/share/dotnet/sdk/9.0.110/PortableRuntimeIdentifierGraph.json"
       }
     }
   }

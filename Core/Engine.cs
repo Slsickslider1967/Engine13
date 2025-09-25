@@ -12,14 +12,16 @@ namespace Engine13.Core
         private GraphicsDevice GD;
         private CommandList CL;
         private Scene CurrentScene;
-        private 
-            byte R = 0, G = 253, B = 0;
+        private GameTime GameTime;
+
+        private byte R = 0, G = 253, B = 0;
 
         public Engine(Sdl2Window _Window, GraphicsDeviceOptions _GDOptions, GraphicsBackend _Backend)
         {
             Window = _Window;
             GD = VeldridStartup.CreateGraphicsDevice(_Window, _GDOptions, _Backend);
             CL = GD.ResourceFactory.CreateCommandList();
+            GameTime = new GameTime();
         }
 
         public void Run()
@@ -36,6 +38,7 @@ namespace Engine13.Core
                     // SC = GD.MainSwapchain;
                 }
 
+                GameTime.Update();
 
                 R += 1;
                 if (R >= 255) G += 1;

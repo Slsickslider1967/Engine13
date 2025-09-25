@@ -13,7 +13,7 @@ class Program
             WindowTitle = "Engine-13", // Window title
             X = 100,         // X
             Y = 100,         // Y
-            WindowWidth = 800,         // Width
+            WindowWidth  = 800,         // Width
             WindowHeight = 600         // Height
         };
 
@@ -28,11 +28,8 @@ class Program
         //Swapchain SC = GD_Options.MainSwapchain;
 
         Engine _engine = new Engine(Window, GD_Options, Backend);
+        GameTime _GameTime = new GameTime();
         _engine.Run();
-
-        // GraphicsDevice GD = VeldridStartup.CreateGraphicsDevice(Window, GD_Options, Backend);
-        //
-        // CommandList Cl = GD.ResourceFactory.CreateCommandList();
 
     }
 }
