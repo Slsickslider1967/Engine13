@@ -3,6 +3,7 @@ using Veldrid.Sdl2;
 using Veldrid.StartupUtilities;
 using System;
 using Engine13.Core;
+using Engine13.Graphics;
 
 namespace Engine13.Core
 {
@@ -13,6 +14,9 @@ namespace Engine13.Core
         private CommandList CL;
         private Scene CurrentScene;
         private GameTime GameTime;
+        private Mesh mesh;
+        private PipeLineManager _PipeLineManager;
+        private Renderer _Renderer;
 
         private byte R = 0, G = 253, B = 0;
 
@@ -22,6 +26,8 @@ namespace Engine13.Core
             GD = VeldridStartup.CreateGraphicsDevice(_Window, _GDOptions, _Backend);
             CL = GD.ResourceFactory.CreateCommandList();
             GameTime = new GameTime();
+            _PipeLineManager = new PipeLineManager(GD);
+            _Renderer = new Renderer(GD, CL, _PipeLineManager);
         }
 
         public void Run()
@@ -46,16 +52,26 @@ namespace Engine13.Core
                 Console.WriteLine($"R: {R}, G: {G}, B: {B}");
                 RgbaFloat clearColor = new RgbaFloat(R / 255f, G / 255f, B / 255f, 1f);
 
+                _Renderer.BeginFrame(clearColor);
+                _Renderer.DrawMesh(mesh);
+                _Renderer.EndFrame();
+
+
+                // Mesh BlackBox = Mesh.CreateQuad(GD, 2f, 1f);
+                // _Renderer.DrawMesh(BlackBox);
+                //_Renderer.EndFrame();
+
+
                 // Here you would typically call your engine's run method
                 // For example: engine.Run();
 
-                CL.Begin();
-                CL.SetFramebuffer(GD.SwapchainFramebuffer);
-                CL.ClearColorTarget(0, clearColor);
-                CL.End();
+                // CL.Begin();
+                // CL.SetFramebuffer(GD.SwapchainFramebuffer);
+                // CL.ClearColorTarget(0, RgbaFloat.Black);
+                // CL.End();
 
-                GD.SubmitCommands(CL);
-                GD.SwapBuffers(GD.MainSwapchain);
+                // GD.SubmitCommands(CL);
+                // GD.SwapBuffers(GD.MainSwapchain);
             }
             
         GD.Dispose();

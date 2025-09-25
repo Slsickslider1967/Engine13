@@ -28,6 +28,7 @@ namespace Engine13.Graphics
 
         public DeviceBuffer VertexBuffer { get; private set; }
         public DeviceBuffer IndexBuffer { get; private set; }
+        public int IndexCount { get;  private set; }
         
         public Mesh(GraphicsDevice GD, VertexPosition[] vertices, ushort[] indices)
         {
