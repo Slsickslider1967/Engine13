@@ -50,14 +50,14 @@ namespace Engine13.Core
 
                 GameTime.Update();
 
-                // R += 1;
-                // if (R >= 255) G += 1;
-                // if (G >= 255) {B += 1; G = 0;}
-                // Console.WriteLine($"R: {R}, G: {G}, B: {B}");
+                R += 1;
+                if (R >= 255) G += 1;
+                if (G >= 255) {B += 1; G = 0;}
+                Console.WriteLine($"R: {R}, G: {G}, B: {B}");
                 RgbaFloat clearColor = new RgbaFloat(R / 255f, G / 255f, B / 255f, 1f);
 
                 _Renderer.BeginFrame(clearColor);
-                _Renderer.DrawMesh(mesh);
+                //_Renderer.DrawMesh(mesh);
                 //_Renderer.EndFrame();
 
 

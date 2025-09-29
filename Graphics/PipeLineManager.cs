@@ -1,4 +1,5 @@
 using Veldrid;
+using Veldrid.SPIRV;
 
 namespace Engine13.Graphics
 {
@@ -6,9 +7,9 @@ namespace Engine13.Graphics
     {
         private GraphicsDevice GD;
         private GraphicsPipelineDescription PipelineDescription = new GraphicsPipelineDescription();
-        private Shader[] _Shaders;
-        private Pipeline _Pipeline;
-        private CommandList CL;
+    private Shader[] _Shaders = Array.Empty<Shader>();
+    private Pipeline _Pipeline = null!;
+    private CommandList CL = null!;
         private ResourceFactory factory;
 
         public void CreatePipeline()
@@ -19,7 +20,7 @@ namespace Engine13.Graphics
 
             var vertexLayout = new VertexLayoutDescription
             (
-                new VertexElementDescription("Position", VertexElementSemantic.TextureCoordinate, VertexElementFormat.Float2)
+                new VertexElementDescription("Position", VertexElementSemantic.Position, VertexElementFormat.Float2)
             );
 
             PipelineDescription.ShaderSet = new ShaderSetDescription
@@ -28,16 +29,12 @@ namespace Engine13.Graphics
                 _Shaders
             );
 
-            PipelineDescription.Outputs = GD.SwapchainFramebuffer.OutputDescription;
-            //_Pipeline = factory.CreateGraphicsPipeline(PipelineDescription);
-
-
-            PipelineDescription.BlendState = BlendStateDescription.SingleOverrideBlend;
+            PipelineDescription.BlendState = BlendStateDescription.SingleAlphaBlend;
             PipelineDescription.DepthStencilState = new DepthStencilStateDescription
             (
-                depthTestEnabled: true,
-                depthWriteEnabled: true,
-                comparisonKind: ComparisonKind.LessEqual
+                depthTestEnabled: false,
+                depthWriteEnabled: false,
+                comparisonKind: ComparisonKind.Always
             );
 
             PipelineDescription.RasterizerState = new RasterizerStateDescription
@@ -51,11 +48,16 @@ namespace Engine13.Graphics
 
             PipelineDescription.PrimitiveTopology = PrimitiveTopology.TriangleList;
             PipelineDescription.ResourceLayouts = Array.Empty<ResourceLayout>();
-
             PipelineDescription.Outputs = GD.SwapchainFramebuffer.OutputDescription;
             _Pipeline = factory.CreateGraphicsPipeline(PipelineDescription);
 
             CL = factory.CreateCommandList();
+        }
+
+        public void InitializeDefaultPipeline()
+        {
+            LoadDefaultShaders();
+            CreatePipeline();
         }
 
         public PipeLineManager(GraphicsDevice _GD)
@@ -66,48 +68,17 @@ namespace Engine13.Graphics
 
         public void LoadDefaultShaders()
         {
-            string vertexCode =
-            @"
-            #version 450
-            layout(location = 0) in vec2 Position;
-            void main()
-            {
-                gl_Position = vec4(Position, 0, 1);
-            }";
+            string shaderDir = System.IO.Path.Combine(AppContext.BaseDirectory, "Shaders");
+            string vertPath = System.IO.Path.Combine(shaderDir, "basic.vert");
+            string fragPath = System.IO.Path.Combine(shaderDir, "basic.frag");
 
-            ShaderDescription vertexShaderDesc = new ShaderDescription
-            (
-                ShaderStages.Vertex,
-                System.Text.Encoding.UTF8.GetBytes(vertexCode),
-                "main"
+            string vertexCode = System.IO.File.ReadAllText(vertPath);
+            string fragmentCode = System.IO.File.ReadAllText(fragPath);
+
+            _Shaders = factory.CreateFromSpirv(
+                new ShaderDescription(ShaderStages.Vertex, System.Text.Encoding.UTF8.GetBytes(vertexCode), "main"),
+                new ShaderDescription(ShaderStages.Fragment, System.Text.Encoding.UTF8.GetBytes(fragmentCode), "main")
             );
-
-            Shader vertexShader = factory.CreateShader(vertexShaderDesc);
-
-            string fragmentCode =
-            @"
-            #version 450
-
-            layout(location = 0) in vec4 fsin_Color;
-            layout(location = 0) out vec4 fsout_Color;
-
-            void main()
-            {
-                fsout_Color = fsin_Color;
-            }";
-
-            ShaderDescription fragmentShaderDesc = new ShaderDescription
-            (
-                ShaderStages.Fragment,
-                System.Text.Encoding.UTF8.GetBytes(fragmentCode),
-                "main"
-            );
-
-            Shader fragmentShader = factory.CreateShader(fragmentShaderDesc);
-
-        
-
-            _Shaders = new Shader[] { vertexShader, fragmentShader };
         }
 
         public Pipeline GetPipeline()

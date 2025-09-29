@@ -1,8 +1,5 @@
 using Veldrid;
 using System;
-using Veldrid.Sdl2;
-using Veldrid.StartupUtilities;
-using Vulkan;
 
 namespace Engine13.Graphics
 {
@@ -23,8 +20,8 @@ namespace Engine13.Graphics
     public class Mesh
     {
         // Declare class members
-        private VertexPosition[] vertices;
-        private ushort[] indices;
+        private VertexPosition[] _vertices;
+        private ushort[] _indices;
 
         public DeviceBuffer VertexBuffer { get; private set; }
         public DeviceBuffer IndexBuffer { get; private set; }
@@ -32,11 +29,11 @@ namespace Engine13.Graphics
         
         public Mesh(GraphicsDevice GD, VertexPosition[] vertices, ushort[] indices)
         {
-            this.vertices = vertices;
-            this.indices = indices;
+            _vertices = vertices;
+            _indices = indices;
 
             // Create vertex buffer
-            DeviceBuffer VertexBuffer = GD.ResourceFactory.CreateBuffer(new BufferDescription(
+            VertexBuffer = GD.ResourceFactory.CreateBuffer(new BufferDescription(
                 (uint)(vertices.Length * VertexPosition.SizeInBytes),
                 BufferUsage.VertexBuffer));
 
@@ -44,12 +41,14 @@ namespace Engine13.Graphics
             GD.UpdateBuffer(VertexBuffer, 0, vertices);
 
             // Create index buffer
-            DeviceBuffer IndexBuffer = GD.ResourceFactory.CreateBuffer(new BufferDescription(
+            IndexBuffer = GD.ResourceFactory.CreateBuffer(new BufferDescription(
                 (uint)(indices.Length * sizeof(ushort)),
                 BufferUsage.IndexBuffer));
 
             // Upload index data
             GD.UpdateBuffer(IndexBuffer, 0, indices);
+
+            IndexCount = indices.Length;
         }
 
         public static Mesh CreateQuad(GraphicsDevice GD, float Width, float Height)

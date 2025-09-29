@@ -16,7 +16,7 @@ namespace Engine13.Graphics
         {
             GD = _GD;
             CL = GD.ResourceFactory.CreateCommandList();
-            _Pipeline = _Pipeline;
+            this._Pipeline = _Pipeline;
         }
 
         public void BeginFrame(RgbaFloat clearColor)
