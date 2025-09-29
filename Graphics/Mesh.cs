@@ -25,8 +25,8 @@ namespace Engine13.Graphics
 
         public DeviceBuffer VertexBuffer { get; private set; }
         public DeviceBuffer IndexBuffer { get; private set; }
-        public int IndexCount { get;  private set; }
-        
+        public int IndexCount { get; private set; }
+
         public Mesh(GraphicsDevice GD, VertexPosition[] vertices, ushort[] indices)
         {
             _vertices = vertices;
@@ -70,6 +70,21 @@ namespace Engine13.Graphics
             return new Mesh(GD, vertices, indices);
 
         }
+        
+        public void UpdateQuad(GraphicsDevice GD, float Width, float Height)
+        {
+            float hx = 0.5f * Width;
+            float hy = 0.5f * Height;
+
+            var verts = new VertexPosition[]
+            {
+                new VertexPosition(-hx, -hy),
+                new VertexPosition( hx, -hy),
+                new VertexPosition(-hx,  hy),
+                new VertexPosition( hx,  hy)
+            };
+            GD.UpdateBuffer(VertexBuffer, 0, verts);
+        } 
     }
 
 

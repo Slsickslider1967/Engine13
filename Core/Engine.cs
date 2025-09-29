@@ -36,7 +36,7 @@ namespace Engine13.Core
 
         public void Run()
         {
-
+            Mesh BlackBox = Mesh.CreateQuad(GD, 1f, 1f);
             while (Window.Exists)
             {
                 Window.PumpEvents();
@@ -53,19 +53,17 @@ namespace Engine13.Core
                 R += 1;
                 if (R >= 255) G += 1;
                 if (G >= 255) {B += 1; G = 0;}
+                RgbaFloat clearColor = new RgbaFloat(R / 255f, G / 255f, B / 255f, 1f);  
                 Console.WriteLine($"R: {R}, G: {G}, B: {B}");
-                RgbaFloat clearColor = new RgbaFloat(R / 255f, G / 255f, B / 255f, 1f);
 
                 _Renderer.BeginFrame(clearColor);
                 //_Renderer.DrawMesh(mesh);
                 //_Renderer.EndFrame();
 
-
-                Mesh BlackBox = Mesh.CreateQuad(GD, 2f, 1f);
                 _Renderer.DrawMesh(BlackBox);
                 _Renderer.EndFrame();
 
-
+                BlackBox.UpdateQuad(GD, 0.5f + 0.5f * (float)Math.Sin(GameTime.TotalTime * 2f), 1f);
                 // Here you would typically call your engine's run method
                 // For example: engine.Run();
 
