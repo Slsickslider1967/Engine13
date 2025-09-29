@@ -5,6 +5,7 @@ using System;
 using Engine13.Core;
 using Engine13.Graphics;
 using System.IO.Pipelines;
+using System.Numerics;
 
 namespace Engine13.Core
 {
@@ -36,7 +37,8 @@ namespace Engine13.Core
 
         public void Run()
         {
-            Mesh BlackBox = Mesh.CreateQuad(GD, 1f, 1f);
+            //Mesh WhiteBox = Mesh.CreateQuad(GD, 1f, 1f);
+            Mesh BlackBox = Mesh.CreateCube(GD, 0.5f);
             while (Window.Exists)
             {
                 Window.PumpEvents();
@@ -61,9 +63,11 @@ namespace Engine13.Core
                 //_Renderer.EndFrame();
 
                 _Renderer.DrawMesh(BlackBox);
+                BlackBox.Position = new Vector2( 0.5f + 0.5f * (float)Math.Sin(GameTime.TotalTime * 2f), 1f);
+                //_Renderer.DrawMesh(WhiteBox);
                 _Renderer.EndFrame();
 
-                BlackBox.UpdateQuad(GD, 0.5f + 0.5f * (float)Math.Sin(GameTime.TotalTime * 2f), 1f);
+                //WhiteBox.UpdateQuad(GD, 0.5f + 0.5f * (float)Math.Sin(GameTime.TotalTime * 2f), 1f);
                 // Here you would typically call your engine's run method
                 // For example: engine.Run();
 

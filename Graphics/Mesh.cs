@@ -1,5 +1,6 @@
 using Veldrid;
 using System;
+using System.Numerics;
 
 namespace Engine13.Graphics
 {
@@ -26,6 +27,7 @@ namespace Engine13.Graphics
         public DeviceBuffer VertexBuffer { get; private set; }
         public DeviceBuffer IndexBuffer { get; private set; }
         public int IndexCount { get; private set; }
+        public Vector2 Position { get; set; } = Vector2.Zero;
 
         public Mesh(GraphicsDevice GD, VertexPosition[] vertices, ushort[] indices)
         {
@@ -70,7 +72,7 @@ namespace Engine13.Graphics
             return new Mesh(GD, vertices, indices);
 
         }
-        
+
         public void UpdateQuad(GraphicsDevice GD, float Width, float Height)
         {
             float hx = 0.5f * Width;
@@ -84,7 +86,27 @@ namespace Engine13.Graphics
                 new VertexPosition( hx,  hy)
             };
             GD.UpdateBuffer(VertexBuffer, 0, verts);
-        } 
+        }
+
+        public static Mesh CreateCube(GraphicsDevice GD, float Size)
+        {
+            VertexPosition[] vertices = new VertexPosition[]
+            {
+                new VertexPosition(-0.5f * Size, -0.5f * Size), // Bottom-left
+                new VertexPosition(0.5f * Size, -0.5f * Size), // Bottom-right
+                new VertexPosition(-0.5f * Size, 0.5f * Size), // Top-right
+                new VertexPosition(0.5f * Size, 0.5f * Size)  // Top-left
+            };
+
+            ushort[] indices =
+            {
+                0, 1, 2,
+                1, 3, 2
+            };
+
+            return new Mesh(GD, vertices, indices);
+            //throw new NotImplementedException("Cube creation not implemented yet.");
+        }
     }
 
 
