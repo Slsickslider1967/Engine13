@@ -27,10 +27,11 @@ class Program
             SwapchainDepthFormat = null
         };
 
-        GraphicsDevice gd = VeldridStartup.CreateGraphicsDevice(window, gdOptions, backend);
-        CommandList cl = gd.ResourceFactory.CreateCommandList();
-        
-        Engine engine = new Engine(window, gdOptions, backend);
+    GraphicsDevice gd = VeldridStartup.CreateGraphicsDevice(window, gdOptions, backend);
+    CommandList cl = gd.ResourceFactory.CreateCommandList();
+
+    // Pass the already-created GraphicsDevice into the Engine to avoid creating duplicate surfaces
+    Engine engine = new Engine(window, gd);
         engine.Run();
     }
 }

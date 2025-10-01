@@ -1,11 +1,9 @@
 using Veldrid;
 using Veldrid.Sdl2;
-using Veldrid.StartupUtilities;
 using System;
-using Engine13.Core;
 using Engine13.Graphics;
-using System.IO.Pipelines;
 using System.Numerics;
+using Engine13.Primitives;
 
 namespace Engine13.Core
 {
@@ -13,34 +11,38 @@ namespace Engine13.Core
     {
         private Sdl2Window Window;
         private GraphicsDevice GD;
-        private CommandList CL;
-        private Scene CurrentScene;
         private GameTime GameTime;
-        private Mesh mesh;
         private PipeLineManager _PipeLineManager;
         private Renderer _Renderer;
-
+        private Input.InputManager _InputManager;
         private byte R = 0, G = 0, B = 0;
+        
 
-        public Engine(Sdl2Window _Window, GraphicsDeviceOptions _GDOptions, GraphicsBackend _Backend)
+        public Engine(Sdl2Window _Window, GraphicsDevice _GD)
         {
             Window = _Window;
-            GD = VeldridStartup.CreateGraphicsDevice(_Window, _GDOptions, _Backend);
-            CL = GD.ResourceFactory.CreateCommandList();
+            GD = _GD;
             GameTime = new GameTime();
             _PipeLineManager = new PipeLineManager(GD);
             _PipeLineManager.LoadDefaultShaders();   // or manually AddShader()
             _PipeLineManager.CreatePipeline();
-            Pipeline pipeline = _PipeLineManager.GetPipeline();
-            _Renderer = new Renderer(GD, CL, _PipeLineManager);
+            var cl = GD.ResourceFactory.CreateCommandList();
+            _Renderer = new Renderer(GD, cl, _PipeLineManager);
+            _InputManager = new Input.InputManager();
         }
 
         public void Run()
         {
-            //Mesh WhiteBox = Mesh.CreateQuad(GD, 1f, 1f);
-            Mesh BlackBox = Mesh.CreateCube(GD, 0.5f);
+            Mesh Sphere = SphereFactory.CreateSphere(GD, 0.05f);
+            {
+                var p = Sphere.Position;
+                p.Y = 0.5f;
+                Sphere.Position = p;
+            }
             while (Window.Exists)
             {
+                _InputManager.Update(Window);
+
                 Window.PumpEvents();
                 if (!Window.Exists) break;
 
@@ -54,34 +56,15 @@ namespace Engine13.Core
 
                 R += 1;
                 if (R >= 255) G += 1;
-                if (G >= 255) {B += 1; G = 0;}
-                RgbaFloat clearColor = new RgbaFloat(R / 255f, G / 255f, B / 255f, 1f);  
-                Console.WriteLine($"R: {R}, G: {G}, B: {B}");
-
+                if (G >= 255) { B += 1; G = 0; }
+                RgbaFloat clearColor = new RgbaFloat(R / 255f, G / 255f, B / 255f, 1f);
                 _Renderer.BeginFrame(clearColor);
-                //_Renderer.DrawMesh(mesh);
-                //_Renderer.EndFrame();
-
-                _Renderer.DrawMesh(BlackBox);
-                BlackBox.Position = new Vector2( 0.5f + 0.5f * (float)Math.Sin(GameTime.TotalTime * 2f), 1f);
-                //_Renderer.DrawMesh(WhiteBox);
+                _Renderer.DrawMesh(Sphere);
+                Sphere.Color = new Vector4(clearColor.R, clearColor.G, clearColor.B, clearColor.A);
                 _Renderer.EndFrame();
-
-                //WhiteBox.UpdateQuad(GD, 0.5f + 0.5f * (float)Math.Sin(GameTime.TotalTime * 2f), 1f);
-                // Here you would typically call your engine's run method
-                // For example: engine.Run();
-
-                // CL.Begin();
-                // CL.SetFramebuffer(GD.SwapchainFramebuffer);
-                // CL.ClearColorTarget(0, clearColor);
-                // CL.End();
-
-                // GD.SubmitCommands(CL);
-                // GD.SwapBuffers(GD.MainSwapchain);
             }
             
-
-        GD.Dispose();
+            GD.Dispose();
 
         }
     }
