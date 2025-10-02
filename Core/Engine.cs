@@ -77,17 +77,21 @@ namespace Engine13.Core
 
         public void Objects()
         {
+            //Makes a buncch of spheres with gravity attributes
             for (int i = 0; i < 10; i++)
             {
                 var s = SphereFactory.CreateSphere(GD, 0.05f);
-                s.AddAttribute(new GravityAttribute(-9.81f));
+                s.AddAttribute(new GravityAttribute(9.81f));
                 s.Position = new Vector2(0, -1f + i * 0.11f);
                 _UpdateManager.Register(s);
                 _Meshes.Add(s);
             }
-
+            
+            //Makes a cube with an atomic wiggle attribute
             Mesh cube = CubeFactory.CreateCube(GD, 0.2f);
             cube.Position = new Vector2(0.5f, 0);
+            cube.AddAttribute(new AtomicWiggle(10f, 0.05f));
+            _UpdateManager.Register(cube);
             _Meshes.Add(cube);
         }
 
@@ -95,9 +99,9 @@ namespace Engine13.Core
         {
             foreach (var mesh in _Meshes)
             {
-                if (mesh.Position.Y < -1.0f)
+                if (mesh.Position.Y > 1.0f)
                 {
-                    mesh.Position = new Vector2(mesh.Position.X, 1.0f);
+                    mesh.Position = new Vector2(mesh.Position.X, -1.0f);
                 }
             }
         }

@@ -16,6 +16,7 @@
     <Compile Include="..\Core\**\*.cs" />
     <Compile Include="..\Graphics\**\*.cs" />
         <Compile Include="..\Input\**\*.cs" />
+    <Compile Include="..\Utilities\**\*.cs" />
     <Compile Include="..\Utilitties\**\*.cs" />
     <None Include="Shaders\**\*.*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

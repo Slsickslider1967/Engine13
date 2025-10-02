@@ -34,4 +34,28 @@ namespace Engine13.Utilities.Attributes
             mesh.Position = p;
         }
     }
+
+    public sealed class AtomicWiggle : IMeshAttribute
+    {
+        public float Frequency { get; set; } = 10f; // Oscillations per second
+        public float Amplitude { get; set; } = 0.1f; // Max displacement in units
+
+        private float _time;
+
+        public AtomicWiggle(float frequency = 10f, float amplitude = 0.1f)
+        {
+            Frequency = frequency;
+            Amplitude = amplitude;
+            _time = 0f;
+        }
+
+        public void Update(Mesh mesh, GameTime gameTime)
+        {
+            _time += gameTime.DeltaTime;
+            float offset = Amplitude * (float)System.Math.Sin(2 * System.Math.PI * Frequency * _time);
+            var p = mesh.Position;
+            p.Y += offset;
+            mesh.Position = p;
+        }
+    }
 }
