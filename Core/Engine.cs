@@ -87,7 +87,7 @@ namespace Engine13.Core
             }
             
             //Makes a cube with an atomic wiggle attribute
-            Mesh cube = CubeFactory.CreateCube(GD, 0.2f);
+            Mesh cube = SphereFactory.CreateSphere(GD, 0.2f);
             cube.Position = new Vector2(0.5f, 0);
             cube.AddAttribute(new AtomicWiggle(10f, 0.005f));
             _UpdateManager.Register(cube);
