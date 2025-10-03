@@ -53,7 +53,6 @@ namespace Engine13.Core
 
                 GameTime.Update();
                 _UpdateManager.Update(GameTime);
-                CheckPos();
 
                 R += 1;
                 if (R >= 255) G += 1;
@@ -78,7 +77,7 @@ namespace Engine13.Core
         public void Objects()
         {
             //Makes a buncch of spheres with gravity attributes
-            for (int i = 0; i < 10; i++)
+            for (int i = 0; i < 1; i++)
             {
                 var s = SphereFactory.CreateSphere(GD, 0.05f);
                 s.AddAttribute(new GravityAttribute(9.81f));
@@ -90,20 +89,10 @@ namespace Engine13.Core
             //Makes a cube with an atomic wiggle attribute
             Mesh cube = CubeFactory.CreateCube(GD, 0.2f);
             cube.Position = new Vector2(0.5f, 0);
-            cube.AddAttribute(new AtomicWiggle(10f, 0.05f));
+            cube.AddAttribute(new AtomicWiggle(10f, 0.005f));
             _UpdateManager.Register(cube);
             _Meshes.Add(cube);
         }
 
-        public void CheckPos()
-        {
-            foreach (var mesh in _Meshes)
-            {
-                if (mesh.Position.Y > 1.0f)
-                {
-                    mesh.Position = new Vector2(mesh.Position.X, -1.0f);
-                }
-            }
-        }
     }
 } 
