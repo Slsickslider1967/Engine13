@@ -1,11 +1,12 @@
 using Engine13.Core;
 using Engine13.Graphics;
+using SharpGen.Runtime.Win32;
 using System.Numerics;
 
 namespace Engine13.Utilities.Attributes
 {
     public interface IMeshAttribute { void Update(Mesh mesh, GameTime gameTime); }
-    public sealed class GravityAttribute : IMeshAttribute
+    public sealed class Gravity : IMeshAttribute
     {
         public float Acceleration { get; set; }
         public float Mass { get; set; } = 1f;
@@ -14,7 +15,8 @@ namespace Engine13.Utilities.Attributes
         private float _vy;
 
         public float VelocityY => _vy;
-        public float MomentumY => Mass * _vy;
+        public float MomentumY => Mass *
+        _vy;
         public float ComputedTerminalVelocityMag
         {
             get
@@ -24,7 +26,7 @@ namespace Engine13.Utilities.Attributes
             }
         }
 
-        public GravityAttribute(float acceleration, float initialVelocity = 0f, float mass = 1f)
+        public Gravity(float acceleration, float initialVelocity = 0f, float mass = 1f)
         { Acceleration = acceleration; _vy = initialVelocity; Mass = mass; }
 
         public void Update(Mesh mesh, GameTime gameTime)
@@ -32,16 +34,12 @@ namespace Engine13.Utilities.Attributes
             float dt = gameTime.DeltaTime;
             if (dt <= 0f) return;
             _vy += Acceleration * dt;
-
-            // Mass-based terminal velocity (from quadratic drag lumped into DragCoefficient)
             float vtMag = ComputedTerminalVelocityMag;
             if (float.IsFinite(vtMag))
             {
                 if (_vy > vtMag) _vy = vtMag;
                 else if (_vy < -vtMag) _vy = -vtMag;
             }
-
-            // Optional manual cap (kept for backwards compatibility)
             if (float.IsFinite(TerminalVelocityY))
             {
                 _vy = System.Math.Clamp(_vy, -TerminalVelocityY, TerminalVelocityY);
@@ -58,12 +56,12 @@ namespace Engine13.Utilities.Attributes
         public float XAmplitude { get; set; } = 0.1f;
         public float YAmplitude { get; set; } = 0.1f;
         public Vector2 Start { get; private set; }
-        public Vector2 End   { get; private set; }
+        public Vector2 End { get; private set; }
         public float PathAmplitude { get; set; } = 0.1f;
-        public float Wavelength    { get; set; } = 0.5f;
-        public float Speed         { get; set; } = 0.5f;
-        public bool Loop           { get; set; } = true;
-        public bool PingPong       { get; set; } = false;
+        public float Wavelength { get; set; } = 0.5f;
+        public float Speed { get; set; } = 0.5f;
+        public bool Loop { get; set; } = true;
+        public bool PingPong { get; set; } = false;
 
         private const float Tau = 6.2831855f;   // 2π
         private const float Eps = 1e-5f;
@@ -141,9 +139,26 @@ namespace Engine13.Utilities.Attributes
             }
         }
     }
-    
 
-    
+    public sealed class EdgeCollision : IMeshAttribute
+    {
+        private float Top = -1f, Left = -1f, Right = 1f, Bottom = 1f;
+        public EdgeCollision() { }
 
-    
+        public void Update(Mesh mesh, GameTime gameTime)
+        {
+            var p = mesh.Position;
+            if (p.X < Left) { p.X = Left; }
+            else if (p.X > Right) { p.X = Right; }
+            if (p.Y < Top) { p.Y = Top; }
+            else if (p.Y > Bottom) { p.Y = -1f; }
+            mesh.Position = new Vector2(p.X, p.Y);
+        }
+
+    }
+
+    public sealed class ObjectCollision : IMeshAttribute
+    {
+
+    }
 }

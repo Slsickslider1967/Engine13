@@ -76,17 +76,18 @@ namespace Engine13.Core
 
         public void Objects()
         {
-            // One sphere that drops due to gravity and collides with all edges (no bounce)
             for (int i = 0; i < 1; i++)
             {
                 float radius = 0.05f;
                 var s = SphereFactory.CreateSphere(GD, radius);
                 s.Position = new Vector2(0f, -1f);
-                s.AddAttribute(new GravityAttribute(acceleration: 9.81f, initialVelocity: 5f, mass: 2.0f));
+                s.AddAttribute(new Gravity(acceleration: 9.81f, initialVelocity: 5f, mass: 2.0f));
+                s.AddAttribute(new EdgeCollision());
 
                 _UpdateManager.Register(s);
                 _Meshes.Add(s);
             }
+
         }
 
     }
