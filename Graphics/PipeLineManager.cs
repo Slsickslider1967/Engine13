@@ -14,7 +14,7 @@ namespace Engine13.Graphics
     // Exposed resource layout(s)
     public ResourceLayout? PositionLayout { get; private set; }
     public ResourceLayout? ProjectionLayout { get; private set; }
-    public ResourceLayout? ColorLayout { get; private set; }
+        public ResourceLayout? ColorLayout { get; private set; }
 
         public void CreatePipeline()
         {

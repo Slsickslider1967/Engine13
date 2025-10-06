@@ -159,6 +159,11 @@ namespace Engine13.Utilities.Attributes
 
     public sealed class ObjectCollision : IMeshAttribute
     {
+        public ObjectCollision() { }
 
+        public void Update(Mesh mesh, GameTime gameTime)
+        {
+            
+        }
     }
 }

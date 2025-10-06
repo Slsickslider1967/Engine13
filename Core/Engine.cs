@@ -81,7 +81,7 @@ namespace Engine13.Core
                 float radius = 0.05f;
                 var s = SphereFactory.CreateSphere(GD, radius);
                 s.Position = new Vector2(0f, -1f);
-                s.AddAttribute(new Gravity(acceleration: 9.81f, initialVelocity: 5f, mass: 2.0f));
+                s.AddAttribute(new Gravity(acceleration: 9.81f, initialVelocity: 5f, mass: 5.0f));
                 s.AddAttribute(new EdgeCollision());
 
                 _UpdateManager.Register(s);
