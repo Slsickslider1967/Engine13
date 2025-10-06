@@ -30,6 +30,81 @@
 				"$msCompile"
 			],
 			"group": "build"
+		},
+		{
+			"label": "Build after Gravity bounce fix",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"build",
+				"Engine-13/Engine-13.csproj",
+				"-v",
+				"m"
+			],
+			"problemMatcher": [
+				"$msCompile"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Build after gravity wiring",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"build",
+				"Engine-13/Engine-13.csproj",
+				"-v",
+				"m"
+			],
+			"problemMatcher": [
+				"$msCompile"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Build after KinematicBounceAttribute",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"build",
+				"Engine-13/Engine-13.csproj",
+				"-v",
+				"m"
+			],
+			"problemMatcher": [
+				"$msCompile"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Build after Engine Objects fix",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"build",
+				"Engine-13/Engine-13.csproj",
+				"-v",
+				"m"
+			],
+			"problemMatcher": [
+				"$msCompile"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Build after collision system",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"build",
+				"Engine-13/Engine-13.csproj",
+				"-v",
+				"m"
+			],
+			"problemMatcher": [
+				"$msCompile"
+			],
+			"group": "build"
 		}
 	]
 }

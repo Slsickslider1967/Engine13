@@ -63,35 +63,21 @@ namespace Engine13.Graphics
             // Update UV coordinates on the mesh when texture system is implemented
         }
 
-        /// <summary>
-        /// Sets the texture region by pixel coordinates (useful for sprite sheets)
-        /// </summary>
         public void SetTextureRegion(int x, int y, int width, int height, int textureWidth, int textureHeight)
         {
             _textureOffset = new Vector2((float)x / textureWidth, (float)y / textureHeight);
             _textureScale = new Vector2((float)width / textureWidth, (float)height / textureHeight);
         }
-
-        /// <summary>
-        /// Plays an animation on this sprite
-        /// </summary>
+        //Animations duhhh
         public void PlayAnimation(SpriteAnimation animation, bool loop = true)
         {
             CurrentAnimation = animation;
             CurrentAnimation.Play(loop);
         }
-
-        /// <summary>
-        /// Stops the current animation
-        /// </summary>
         public void StopAnimation()
         {
             CurrentAnimation?.Stop();
         }
-
-        /// <summary>
-        /// Updates the sprite (handles animations)
-        /// </summary>
         public void Update(GameTime gameTime)
         {
             if (CurrentAnimation != null && CurrentAnimation.IsPlaying)
@@ -109,17 +95,9 @@ namespace Engine13.Graphics
 
         public Mesh GetMesh() => _mesh; //Mesh for tetures
         public Texture? GetTexture() => _texture; 
-        public Vector2 GetTextureOffset() => _textureOffset; //Allining texture with messh 
-
-        /// <summary>
-        /// Gets the current texture scale for UV mapping
-        /// </summary>
+        public Vector2 GetTextureOffset() => _textureOffset; 
         public Vector2 GetTextureScale() => _textureScale;
     }
-
-    /// <summary>
-    /// Represents an animation frame with texture coordinates
-    /// </summary>
     public class AnimationFrame
     {
         public Vector2 TextureOffset { get; set; }
@@ -140,10 +118,6 @@ namespace Engine13.Graphics
             Duration = duration;
         }
     }
-
-    /// <summary>
-    /// Manages sprite animation playback
-    /// </summary>
     public class SpriteAnimation
     {
         private readonly AnimationFrame[] _frames;
@@ -223,10 +197,6 @@ namespace Engine13.Graphics
         public int GetFrameCount() => _frames.Length;
         public int GetCurrentFrameIndex() => _currentFrameIndex;
     }
-
-    /// <summary>
-    /// Blend modes for sprite rendering
-    /// </summary>
     public enum BlendMode
     {
         None,        // No blending
@@ -235,10 +205,6 @@ namespace Engine13.Graphics
         Multiply,    // Multiplicative blending
         Screen       // Screen blending
     }
-
-    /// <summary>
-    /// Factory for creating common sprite types
-    /// </summary>
     public static class SpriteFactory
     {
         /// <summary>
@@ -250,18 +216,10 @@ namespace Engine13.Graphics
             sprite.Tint = color;
             return sprite;
         }
-
-        /// <summary>
-        /// Creates a textured sprite
-        /// </summary>
         public static Sprite CreateTexturedSprite(GraphicsDevice gd, Texture texture, float width, float height)
         {
             return new Sprite(gd, texture, width, height);
         }
-
-        /// <summary>
-        /// Creates a sprite sized to match its texture (when texture system is implemented)
-        /// </summary>
         public static Sprite CreateSpriteFromTexture(GraphicsDevice gd, Texture texture)
         {
             // TODO: Get actual texture dimensions when Texture class is implemented

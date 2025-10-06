@@ -76,22 +76,17 @@ namespace Engine13.Core
 
         public void Objects()
         {
-            //Makes a buncch of spheres with gravity attributes
+            // One sphere that drops due to gravity and collides with all edges (no bounce)
             for (int i = 0; i < 1; i++)
             {
-                var s = SphereFactory.CreateSphere(GD, 0.05f);
-                s.AddAttribute(new GravityAttribute(9.81f));
-                s.Position = new Vector2(0, -1f + i * 0.11f);
+                float radius = 0.05f;
+                var s = SphereFactory.CreateSphere(GD, radius);
+                s.Position = new Vector2(0f, -1f);
+                s.AddAttribute(new GravityAttribute(acceleration: 9.81f, initialVelocity: 5f, mass: 2.0f));
+
                 _UpdateManager.Register(s);
                 _Meshes.Add(s);
             }
-            
-            //Makes a cube with an atomic wiggle attribute
-            Mesh cube = SphereFactory.CreateSphere(GD, 0.2f);
-            cube.Position = new Vector2(0.5f, 0);
-            cube.AddAttribute(new AtomicWiggle(10f, 0.005f));
-            _UpdateManager.Register(cube);
-            _Meshes.Add(cube);
         }
 
     }
