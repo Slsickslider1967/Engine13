@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "OqqlWUqjuc8=",
+  "dgSpecHash": "GgZHJujca4w=",
   "success": true,
-  "projectFilePath": "D:\\Temp\\Engine-13\\Engine-13\\Engine-13.csproj",
+  "projectFilePath": "d:\\Temp\\Engine-13\\Engine-13\\Engine-13.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\georg\\.nuget\\packages\\microsoft.csharp\\4.0.1\\microsoft.csharp.4.0.1.nupkg.sha512",
     "C:\\Users\\georg\\.nuget\\packages\\microsoft.dotnet.platformabstractions\\2.0.3\\microsoft.dotnet.platformabstractions.2.0.3.nupkg.sha512",
