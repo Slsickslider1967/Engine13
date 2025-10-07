@@ -26,10 +26,10 @@ namespace Engine13.Core
             Window = _Window;
             GD = _GD;
             GameTime = new GameTime();  //Initializes GameTime
-            _PipeLineManager = new PipeLineManager(GD); //Creates a new Pipeline Manager Object
-            _PipeLineManager.LoadDefaultShaders(); //Loads the shaders for the Pipeline
-            _PipeLineManager.CreatePipeline();  //Creates the Pipeline for a Mesh and shaders to interract with the buffers and graphics card
-            var cl = GD.ResourceFactory.CreateCommandList();    // CommandList for the Renderer
+            _PipeLineManager = new PipeLineManager(GD);
+            _PipeLineManager.LoadDefaultShaders();
+            _PipeLineManager.CreatePipeline(); 
+            var cl = GD.ResourceFactory.CreateCommandList(); 
             _Renderer = new Renderer(GD, cl, _PipeLineManager); //Creates the Renderer Object
             _InputManager = new Input.InputManager();   //Object managing
             _UpdateManager = new UpdateManager();
