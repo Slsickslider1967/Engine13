@@ -7,11 +7,15 @@ namespace Engine13.Utilities
     {
         public Vector2 Min;
         public Vector2 Max;
+        public Vector2 Center;
+        public Vector2 Size;
 
         public AABB(Vector2 min, Vector2 max)
         {
             Min = min;
             Max = max;
+            Center = (Min + Max) / 2f;
+            Size = Max - Min;
         }
 
         public bool Intersects(AABB other)
@@ -19,6 +23,31 @@ namespace Engine13.Utilities
             return (Min.X <= other.Max.X && Max.X >= other.Min.X) &&
                    (Min.Y <= other.Max.Y && Max.Y >= other.Min.Y);
         }
+
+        public static bool OverlapDepth(AABB a, AABB b, out Vector2 depth)
+        {
+            depth = Vector2.Zero;
+
+            if (!a.Intersects(b))
+                return false;
+
+            float dx1 = b.Max.X - a.Min.X;
+            float dx2 = a.Max.X - b.Min.X;
+            float dy1 = b.Max.Y - a.Min.Y;
+            float dy2 = a.Max.Y - b.Min.Y;
+
+            // Find the smallest overlap on each axis
+            float overlapX = (dx1 < dx2) ? dx1 : -dx2;
+            float overlapY = (dy1 < dy2) ? dy1 : -dy2;
+
+            if (System.MathF.Abs(overlapX) < System.MathF.Abs(overlapY))
+                depth = new Vector2(overlapX, 0);
+            else
+                depth = new Vector2(0, overlapY);
+
+            return true;
+        }
+
 
     }
 
@@ -32,6 +61,7 @@ namespace Engine13.Utilities
         /// List<Mesh> list of corrisponding meshes in that cell
         /// </summary>
         private System.Collections.Generic.Dictionary<(int, int), System.Collections.Generic.List<Mesh>> cells;
+        private readonly System.Collections.Generic.Dictionary<Mesh, System.Collections.Generic.HashSet<(int, int)>> meshCells = new System.Collections.Generic.Dictionary<Mesh, System.Collections.Generic.HashSet<(int, int)>>();
 
         public SpatialGrid(float cellSize)
         {
@@ -70,9 +100,9 @@ namespace Engine13.Utilities
             }
         }
 
-        public void UpdateMeshPosition(Mesh mesh, Vector2 oldPosition)
+        public void UpdateMeshPosition(Mesh mesh)
         {
-            var oldCellCoords = GetCellCoords(oldPosition);
+            var oldCellCoords = GetCellCoords(meshCells);
             var newCellCoords = GetCellCoords(mesh.Position);
             if (oldCellCoords != newCellCoords)
             {

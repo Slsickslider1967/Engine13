@@ -3,6 +3,7 @@ using System;
 using System.Numerics;
 using Engine13.Core;
 using Engine13.Utilities.Attributes;
+using Engine13.Utilities;
 
 namespace Engine13.Graphics
 {
@@ -24,22 +25,35 @@ namespace Engine13.Graphics
     {
         private VertexPosition[] _vertices;
         private ushort[] _indices;
-
         public VertexPosition[] GetVertices() => _vertices;
         public ushort[] GetIndices() => _indices;
-
         public DeviceBuffer VertexBuffer { get; private set; }
         public DeviceBuffer IndexBuffer { get; private set; }
         public int IndexCount { get; private set; }
-    public Vector2 Position { get; set; } = Vector2.Zero;
-    public Vector4 Color { get; set; } = new Vector4(1f, 1f, 1f, 1f);
-
-    private readonly System.Collections.Generic.List<IMeshAttribute> _attributes = new();
-
+        public Vector2 Position { get; set; } = Vector2.Zero;
+        public Vector4 Color { get; set; } = new Vector4(1f, 1f, 1f, 1f);
+        private readonly System.Collections.Generic.List<IMeshAttribute> _attributes = new();
         public DeviceBuffer? PositionBuffer { get; private set; }
         public ResourceSet? PositionResourceSet { get; private set; }
-    public DeviceBuffer? ColorBuffer { get; private set; }
-    public ResourceSet? ColorResourceSet { get; private set; }
+        public DeviceBuffer? ColorBuffer { get; private set; }
+        public ResourceSet? ColorResourceSet { get; private set; }
+        public AABB GetAABB()
+        {
+            if (_vertices == null || _vertices.Length == 0)
+                return new AABB(Vector2.Zero, Vector2.Zero);
+
+            Vector2 min = new Vector2(float.MaxValue);
+            Vector2 max = new Vector2(float.MinValue);
+
+            foreach (var vertex in _vertices)
+            {
+                Vector2 pos = new Vector2(vertex.X, vertex.Y) + Position;
+                min = Vector2.Min(min, pos);
+                max = Vector2.Max(max, pos);
+            }
+
+            return new AABB(min, max);
+        }
 
         public Mesh(GraphicsDevice GD, VertexPosition[] vertices, ushort[] indices)
         {

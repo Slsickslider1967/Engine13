@@ -20,6 +20,7 @@ namespace Engine13.Core
         private byte R = 0, G = 0, B = 0;
         private System.Collections.Generic.List<Mesh> _Meshes = new();
         private UpdateManager _UpdateManager;
+        private SpatialGrid _Grid = new SpatialGrid(0.5f);
 
 
         public Engine(Sdl2Window _Window, GraphicsDevice _GD)
@@ -29,8 +30,8 @@ namespace Engine13.Core
             GameTime = new GameTime();  //Initializes GameTime
             _PipeLineManager = new PipeLineManager(GD);
             _PipeLineManager.LoadDefaultShaders();
-            _PipeLineManager.CreatePipeline(); 
-            var cl = GD.ResourceFactory.CreateCommandList(); 
+            _PipeLineManager.CreatePipeline();
+            var cl = GD.ResourceFactory.CreateCommandList();
             _Renderer = new Renderer(GD, cl, _PipeLineManager); //Creates the Renderer Object
             _InputManager = new Input.InputManager();   //Object managing
             _UpdateManager = new UpdateManager();
@@ -42,6 +43,7 @@ namespace Engine13.Core
             while (Window.Exists)
             {
                 _InputManager.Update(Window);
+                _Grid.Update(_Meshes);
 
                 Window.PumpEvents();
                 if (!Window.Exists) break;
@@ -87,6 +89,8 @@ namespace Engine13.Core
 
                 _UpdateManager.Register(s);
                 _Meshes.Add(s);
+
+                _Grid.AddMesh(s);
             }
 
         }
