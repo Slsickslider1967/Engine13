@@ -47,8 +47,58 @@ namespace Engine13.Utilities
 
             return true;
         }
+    }
 
+    public struct CollisionPair
+    {
+        public Mesh MeshA;
+        public Mesh MeshB;
 
+        public CollisionPair(Mesh a, Mesh b)
+        {
+            MeshA = a;
+            MeshB = b;
+        }
+    }
+
+    public class CollisionInfo
+    {
+        public Mesh MeshA;
+        public Mesh MeshB;
+        public Vector2 ContactPoint;
+        public Vector2 PenetrationDepth;
+        public Vector2 SeparationDirection;
+
+        public CollisionInfo(Mesh a, Mesh b, Vector2 contactPoint, Vector2 penetrationDepth, Vector2 separationDirection)
+        {
+            MeshA = a;
+            MeshB = b;
+            ContactPoint = contactPoint;
+            PenetrationDepth = penetrationDepth;
+            SeparationDirection = separationDirection;
+        }
+
+        public static bool AreColliding(Mesh a, Mesh b, out CollisionInfo collisionInfo)
+        {
+            collisionInfo = null!;
+
+            // Use the mesh's built-in AABB calculation!
+            var aabbA = a.GetAABB();
+            var aabbB = b.GetAABB();
+
+            if (!aabbA.Intersects(aabbB))
+                return false;
+
+            if (AABB.OverlapDepth(aabbA, aabbB, out Vector2 depth))
+            {
+                Vector2 contactPoint = (a.Position + b.Position) / 2;
+                Vector2 separationDir = Vector2.Normalize(depth);
+                collisionInfo = new CollisionInfo(a, b, contactPoint, depth, separationDir);
+                return true;
+            }
+
+            return false;
+        }
     }
 
     ///Turning the screan in a spatial grid
@@ -86,27 +136,49 @@ namespace Engine13.Utilities
                 cells[cellCoords] = list;
             }
             cells[cellCoords].Add(mesh);
+
+            if (!meshCells.ContainsKey(mesh))
+            {
+                meshCells[mesh] = new System.Collections.Generic.HashSet<(int, int)>();
+            }
+            meshCells[mesh].Add(cellCoords);
         }
 
-        private void RemoveMesh(Mesh mesh, (int, int) cellCoords)
+        private void RemoveMesh(Mesh mesh)
         {
-            if (cells.ContainsKey(cellCoords))
+            if (meshCells.TryGetValue(mesh, out var OccupiedCells))
             {
-                cells[cellCoords].Remove(mesh);
-                if (cells[cellCoords].Count == 0)
+                foreach (var cellCoords in OccupiedCells)
                 {
-                    cells.Remove(cellCoords);
+                    if (cells.ContainsKey(cellCoords))
+                    {
+                        cells[cellCoords].Remove(mesh);
+                        if (cells[cellCoords].Count == 0)
+                        {
+                            cells.Remove(cellCoords);
+                        }
+                    }
                 }
+                meshCells.Remove(mesh);
             }
+
         }
 
         public void UpdateMeshPosition(Mesh mesh)
         {
-            var oldCellCoords = GetCellCoords(meshCells);
-            var newCellCoords = GetCellCoords(mesh.Position);
-            if (oldCellCoords != newCellCoords)
+            if (meshCells.TryGetValue(mesh, out var oldCells))
             {
-                RemoveMesh(mesh, oldCellCoords);  
+                var newCellCoords = GetCellCoords(mesh.Position);
+
+                if (!oldCells.Contains(newCellCoords) || oldCells.Count != 1)
+                {
+                    RemoveMesh(mesh);
+
+                    AddMesh(mesh);
+                }
+            }
+            else
+            {
                 AddMesh(mesh);
             }
         }
@@ -132,10 +204,42 @@ namespace Engine13.Utilities
             return nearbyMeshes;
         }
 
+        public System.Collections.Generic.HashSet<(int, int)> GetOccupiedCells(Mesh mesh)
+        {
+            return meshCells.TryGetValue(mesh, out var cells) ? cells : new System.Collections.Generic.HashSet<(int, int)>();
+        }
+
+        public System.Collections.Generic.List<CollisionPair> GetCollisionPairs()
+        {
+            var pairs = new System.Collections.Generic.List<CollisionPair>();
+            var processedPairs = new System.Collections.Generic.HashSet<(Mesh, Mesh)>();
+
+            foreach (var cell in cells.Values)
+            {
+                // Check all mesh pairs within each cell
+                for (int i = 0; i < cell.Count; i++)
+                {
+                    for (int j = i + 1; j < cell.Count; j++)
+                    {
+                        var meshA = cell[i];
+                        var meshB = cell[j];
+                        
+                        // Avoid duplicate pairs (A,B) and (B,A)
+                        var pair = meshA.GetHashCode() < meshB.GetHashCode() ? (meshA, meshB) : (meshB, meshA);
+                        if (processedPairs.Add(pair))
+                        {
+                            pairs.Add(new CollisionPair(pair.Item1, pair.Item2));
+                        }
+                    }
+                }
+            }
+
+            return pairs;
+        }
+
         public void Clear()
         {
             cells.Clear();
         }
-
     }
 }

@@ -20,7 +20,7 @@ namespace Engine13.Core
         private byte R = 0, G = 0, B = 0;
         private System.Collections.Generic.List<Mesh> _Meshes = new();
         private UpdateManager _UpdateManager;
-        private SpatialGrid _Grid = new SpatialGrid(0.5f);
+        private SpatialGrid _Grid = new SpatialGrid(0.05f);
 
 
         public Engine(Sdl2Window _Window, GraphicsDevice _GD)
@@ -43,7 +43,6 @@ namespace Engine13.Core
             while (Window.Exists)
             {
                 _InputManager.Update(Window);
-                _Grid.Update(_Meshes);
 
                 Window.PumpEvents();
                 if (!Window.Exists) break;
@@ -56,6 +55,15 @@ namespace Engine13.Core
 
                 GameTime.Update();
                 _UpdateManager.Update(GameTime);
+                
+                // Update each mesh position in the spatial grid
+                foreach (var mesh in _Meshes)
+                {
+                    _Grid.UpdateMeshPosition(mesh);
+                }
+                
+                RunCollisionDetection();
+
 
                 R += 1;
                 if (R >= 255) G += 1;
@@ -77,15 +85,62 @@ namespace Engine13.Core
 
         }
 
+        private void RunCollisionDetection()
+        {
+            // Get all collision pairs from spatial grid (broad phase)
+            var collisionPairs = _Grid.GetCollisionPairs();
+
+            // Process each potential collision (narrow phase)
+            foreach (var pair in collisionPairs)
+            {
+                if (CollisionInfo.AreColliding(pair.MeshA, pair.MeshB, out CollisionInfo collisionInfo))
+                {
+                    // Handle the collision
+                    ResolveCollision(collisionInfo);
+                }
+            }
+        }
+
+        private void ResolveCollision(CollisionInfo collision)
+        {
+            var meshA = collision.MeshA;
+            var meshB = collision.MeshB;
+
+            // Get ObjectCollision attributes if they exist
+            var objA = meshA.GetAttribute<ObjectCollision>();
+            var objB = meshB.GetAttribute<ObjectCollision>();
+
+            // Simple separation - move objects apart
+            var separation = collision.SeparationDirection * (collision.PenetrationDepth.Length() * 0.5f);
+            
+            if (objA != null && !objA.IsStatic)
+            {
+                meshA.Position -= separation;
+            }
+            if (objB != null && !objB.IsStatic)
+            {
+                meshB.Position += separation;
+            }
+
+            // Simple velocity exchange if both have ObjectCollision
+            if (objA != null && objB != null && !objA.IsStatic && !objB.IsStatic)
+            {
+                var tempVel = objA.Velocity;
+                objA.Velocity = objB.Velocity * objA.Restitution;
+                objB.Velocity = tempVel * objB.Restitution;
+            }
+        }
+
         public void Objects()
         {
-            for (int i = 0; i < 1; i++)
+            for (int i = 0; i < 1; i++) // Create 3 spheres to test collision
             {
                 float radius = 0.05f;
                 var s = SphereFactory.CreateSphere(GD, radius);
-                s.Position = new Vector2(0f, -1f);
+                s.Position = new Vector2(0f, -1f + i * 0.1f);
                 s.AddAttribute(new Gravity(acceleration: 9.81f, initialVelocity: 5f, mass: 5.0f));
-                s.AddAttribute(new EdgeCollision());
+                s.AddAttribute(new EdgeCollision(loop: false)); //true for looping, false for clamping
+                s.AddAttribute(new ObjectCollision { Mass = 5.0f, Restitution = 0.8f });
 
                 _UpdateManager.Register(s);
                 _Meshes.Add(s);

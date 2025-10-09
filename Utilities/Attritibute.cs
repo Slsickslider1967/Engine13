@@ -1,6 +1,7 @@
 using Engine13.Core;
 using Engine13.Graphics;
 using SharpGen.Runtime.Win32;
+using System.Linq.Expressions;
 using System.Numerics;
 
 namespace Engine13.Utilities.Attributes
@@ -143,27 +144,68 @@ namespace Engine13.Utilities.Attributes
     public sealed class EdgeCollision : IMeshAttribute
     {
         private float Top = -1f, Left = -1f, Right = 1f, Bottom = 1f;
-        public EdgeCollision() { }
+        private bool Loop;
+        public EdgeCollision(bool loop) { Loop = loop; }
 
         public void Update(Mesh mesh, GameTime gameTime)
         {
-            var p = mesh.Position;
-            if (p.X < Left) { p.X = Left; }
-            else if (p.X > Right) { p.X = Right; }
-            if (p.Y < Top) { p.Y = Top; }
-            else if (p.Y > Bottom) { p.Y = -1f; }
-            mesh.Position = new Vector2(p.X, p.Y);
+            if (Loop == true)
+            {
+                var p = mesh.Position;
+                if (p.X < Left) { p.X = Left; }
+                else if (p.X > Right) { p.X = Right; }
+                if (p.Y < Top) { p.Y = Top; }
+                else if (p.Y > Bottom) { p.Y = -1f; }
+                mesh.Position = new Vector2(p.X, p.Y);
+            }
+            else
+            {
+                var p = mesh.Position;
+                var objCollision = mesh.GetAttribute<ObjectCollision>();
+                
+                if (p.X < Left) 
+                { 
+                    p.X = Left;
+                    if (objCollision != null) objCollision.Velocity = new Vector2(-objCollision.Velocity.X * objCollision.Restitution, objCollision.Velocity.Y);
+                }
+                else if (p.X > Right) 
+                { 
+                    p.X = Right;
+                    if (objCollision != null) objCollision.Velocity = new Vector2(-objCollision.Velocity.X * objCollision.Restitution, objCollision.Velocity.Y);
+                }
+                if (p.Y < Top) 
+                { 
+                    p.Y = Top;
+                    if (objCollision != null) objCollision.Velocity = new Vector2(objCollision.Velocity.X, -objCollision.Velocity.Y * objCollision.Restitution);
+                }
+                else if (p.Y > Bottom) 
+                { 
+                    p.Y = Bottom;
+                    if (objCollision != null) objCollision.Velocity = new Vector2(objCollision.Velocity.X, -objCollision.Velocity.Y * objCollision.Restitution);
+                }
+                mesh.Position = new Vector2(p.X, p.Y);
+            }
         }
 
     }
 
     public sealed class ObjectCollision : IMeshAttribute
     {
-        public ObjectCollision() { }
+        public float Mass { get; set; } = 1f;
+        public float Restitution { get; set; } = 0.8f;
+        public Vector2 Velocity { get; set; } = Vector2.Zero;
+        public bool IsStatic { get; set; } = false;
 
         public void Update(Mesh mesh, GameTime gameTime)
         {
-            
+            // Handle velocity and physics
+            if (!IsStatic)
+            {
+                var pos = mesh.Position;
+                pos += Velocity * gameTime.DeltaTime;
+                mesh.Position = pos;
+                Velocity *= 0.99f; 
+            }
         }
     }
 }

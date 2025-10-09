@@ -87,6 +87,15 @@ namespace Engine13.Graphics
             return false;
         }
 
+        public T? GetAttribute<T>() where T : IMeshAttribute
+        {
+            for (int i = 0; i < _attributes.Count; i++)
+            {
+                if (_attributes[i] is T attr) return attr;
+            }
+            return default;
+        }
+
         public void ClearAttributes() => _attributes.Clear();
 
         public void UpdateAttributes(GameTime gameTime)
