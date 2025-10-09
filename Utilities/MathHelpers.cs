@@ -126,22 +126,15 @@ namespace Engine13.Utilities
             return (x, y);
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
         public void AddMesh(Mesh mesh)
         {
-            var cellCoords = GetCellCoords(mesh.Position);
-            //Creates the list enrty if it doesn't exist
-            if (!cells.TryGetValue(cellCoords, out var list))
-            {
-                list = new System.Collections.Generic.List<Mesh>();
-                cells[cellCoords] = list;
-            }
-            cells[cellCoords].Add(mesh);
+            AABB aabb = mesh.GetAABB();
+            AABB cellRange = GetCellRange(aabb);
 
-            if (!meshCells.ContainsKey(mesh))
-            {
-                meshCells[mesh] = new System.Collections.Generic.HashSet<(int, int)>();
-            }
-            meshCells[mesh].Add(cellCoords);
+            
         }
 
         private void RemoveMesh(Mesh mesh)
@@ -204,6 +197,13 @@ namespace Engine13.Utilities
             return nearbyMeshes;
         }
 
+        public AABB GetCellRange(AABB aabb)
+        {
+            var minCell = GetCellCoords(aabb.Min);
+            var maxCell = GetCellCoords(aabb.Max);
+            return new AABB(new Vector2(minCell.Item1, minCell.Item2), new Vector2(maxCell.Item1, maxCell.Item2));
+        } 
+
         public System.Collections.Generic.HashSet<(int, int)> GetOccupiedCells(Mesh mesh)
         {
             return meshCells.TryGetValue(mesh, out var cells) ? cells : new System.Collections.Generic.HashSet<(int, int)>();
@@ -223,7 +223,7 @@ namespace Engine13.Utilities
                     {
                         var meshA = cell[i];
                         var meshB = cell[j];
-                        
+
                         // Avoid duplicate pairs (A,B) and (B,A)
                         var pair = meshA.GetHashCode() < meshB.GetHashCode() ? (meshA, meshB) : (meshB, meshA);
                         if (processedPairs.Add(pair))
@@ -240,6 +240,7 @@ namespace Engine13.Utilities
         public void Clear()
         {
             cells.Clear();
+            meshCells.Clear();
         }
     }
 }

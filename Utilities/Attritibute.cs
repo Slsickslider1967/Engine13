@@ -149,6 +149,7 @@ namespace Engine13.Utilities.Attributes
 
         public void Update(Mesh mesh, GameTime gameTime)
         {
+            Console.WriteLine($"Current updated Mesh Size: {mesh.Size}");
             if (Loop == true)
             {
                 var p = mesh.Position;
@@ -160,27 +161,28 @@ namespace Engine13.Utilities.Attributes
             }
             else
             {
+
                 var p = mesh.Position;
                 var objCollision = mesh.GetAttribute<ObjectCollision>();
-                
-                if (p.X < Left) 
+
+                if (p.X < Left + (mesh.Size.X / 2)) 
                 { 
-                    p.X = Left;
+                    p.X = Left + (mesh.Size.X / 2);
                     if (objCollision != null) objCollision.Velocity = new Vector2(-objCollision.Velocity.X * objCollision.Restitution, objCollision.Velocity.Y);
                 }
-                else if (p.X > Right) 
+                else if (p.X > Right - (mesh.Size.X / 2)) 
                 { 
-                    p.X = Right;
+                    p.X = Right - (mesh.Size.X / 2);
                     if (objCollision != null) objCollision.Velocity = new Vector2(-objCollision.Velocity.X * objCollision.Restitution, objCollision.Velocity.Y);
                 }
-                if (p.Y < Top) 
+                if (p.Y < Top + (mesh.Size.Y / 2)) 
                 { 
-                    p.Y = Top;
+                    p.Y = Top + (mesh.Size.Y / 2);
                     if (objCollision != null) objCollision.Velocity = new Vector2(objCollision.Velocity.X, -objCollision.Velocity.Y * objCollision.Restitution);
                 }
-                else if (p.Y > Bottom) 
-                { 
-                    p.Y = Bottom;
+                else if (p.Y > Bottom - (mesh.Size.Y / 2)) 
+                {
+                    p.Y = Bottom - (mesh.Size.Y / 2);
                     if (objCollision != null) objCollision.Velocity = new Vector2(objCollision.Velocity.X, -objCollision.Velocity.Y * objCollision.Restitution);
                 }
                 mesh.Position = new Vector2(p.X, p.Y);
@@ -204,7 +206,7 @@ namespace Engine13.Utilities.Attributes
                 var pos = mesh.Position;
                 pos += Velocity * gameTime.DeltaTime;
                 mesh.Position = pos;
-                Velocity *= 0.99f; 
+                Velocity *= 0.99f;
             }
         }
     }

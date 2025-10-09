@@ -32,6 +32,8 @@ namespace Engine13.Graphics
         public int IndexCount { get; private set; }
         public Vector2 Position { get; set; } = Vector2.Zero;
         public Vector4 Color { get; set; } = new Vector4(1f, 1f, 1f, 1f);
+        public float Mass { get; set; } = 1f;
+        public Vector2 Size { get; set; }
         private readonly System.Collections.Generic.List<IMeshAttribute> _attributes = new();
         public DeviceBuffer? PositionBuffer { get; private set; }
         public ResourceSet? PositionResourceSet { get; private set; }
@@ -54,6 +56,26 @@ namespace Engine13.Graphics
 
             return new AABB(min, max);
         }
+
+        // public Vector2 ObjectSize()
+        // {
+        //     if (_vertices == null || _vertices.Length == 0)
+        //         return Vector2.Zero;
+        //     else
+        //     {
+        //         Vector2 min = new Vector2(float.MaxValue);
+        //         Vector2 max = new Vector2(float.MinValue);
+
+        //         foreach (var vertex in _vertices)
+        //         {
+        //             Vector2 pos = new Vector2(vertex.X, vertex.Y);
+        //             min = Vector2.Min(min, pos);
+        //             max = Vector2.Max(max, pos);
+        //         }
+
+        //         return max - min;
+        //     }
+        // }
 
         public Mesh(GraphicsDevice GD, VertexPosition[] vertices, ushort[] indices)
         {
@@ -164,13 +186,16 @@ namespace Engine13.Primitives
                 new Engine13.Graphics.VertexPosition(0.5f * Width, 0.5f * Height)
             };
             ushort[] indices = { 0, 1, 2, 1, 3, 2 };
-            return BuildMesh(vertices, indices);
+            var mesh = BuildMesh(vertices, indices);
+            mesh.Size = new Vector2(Width, Height);
+            return mesh;
         }
 
         public Engine13.Graphics.Mesh Quad(float Width, float Height, Vector4 color)
         {
             var mesh = Quad(Width, Height);
             mesh.Color = color;
+            mesh.Size = new Vector2(Width, Height);
             return mesh;
         }
 
@@ -186,6 +211,7 @@ namespace Engine13.Primitives
                 new Engine13.Graphics.VertexPosition( hx,  hy)
             };
             GD.UpdateBuffer(mesh.VertexBuffer, 0, verts);
+            mesh.Size = new Vector2(Width, Height);
         }
 
         public static Engine13.Graphics.Mesh CreateQuad(GraphicsDevice GD, float Width, float Height)
@@ -210,13 +236,16 @@ namespace Engine13.Primitives
                 new Engine13.Graphics.VertexPosition(0.5f * Size, 0.5f * Size)
             };
             ushort[] indices = { 0, 1, 2, 1, 3, 2 };
-            return BuildMesh(vertices, indices);
+            var mesh = BuildMesh(vertices, indices);
+            mesh.Size = new Vector2(Size, Size);
+            return mesh;
         }
 
         public Engine13.Graphics.Mesh Cube(float Size, Vector4 color)
         {
             var mesh = Cube(Size);
             mesh.Color = color;
+            mesh.Size = new Vector2(Size, Size);
             return mesh;
         }
 
@@ -231,6 +260,7 @@ namespace Engine13.Primitives
                 new Engine13.Graphics.VertexPosition( hs,  hs)
             };
             GD.UpdateBuffer(mesh.VertexBuffer, 0, verts);
+            mesh.Size = new Vector2(Size, Size);
         }
 
         public static Engine13.Graphics.Mesh CreateCube(GraphicsDevice GD, float Size)
@@ -289,13 +319,16 @@ namespace Engine13.Primitives
                 }
             }
 
-            return BuildMesh(vertices.ToArray(), indices.ToArray());
+            var mesh = BuildMesh(vertices.ToArray(), indices.ToArray());
+            mesh.Size = new Vector2(Radius * 2f, Radius * 2f);
+            return mesh;
         }
 
         public Engine13.Graphics.Mesh Sphere(float Radius, Vector4 color, int LatitudeSegments = 16, int LongitudeSegments = 16)
         {
             var mesh = Sphere(Radius, LatitudeSegments, LongitudeSegments);
             mesh.Color = color;
+            mesh.Size = new Vector2(Radius * 2f, Radius * 2f);
             return mesh;
         }
 
@@ -303,13 +336,13 @@ namespace Engine13.Primitives
         {
             var newSphere = Sphere(Radius, LatitudeSegments, LongitudeSegments);
             GD.UpdateBuffer(mesh.VertexBuffer, 0, newSphere.GetVertices());
+            mesh.Size = new Vector2(Radius * 2f, Radius * 2f);
         }
 
         public static Engine13.Graphics.Mesh CreateSphere(GraphicsDevice GD, float Radius, int LatitudeSegments = 16, int LongitudeSegments = 16)
             => new SphereFactory(GD).Sphere(Radius, LatitudeSegments, LongitudeSegments);
         public static Engine13.Graphics.Mesh CreateSphere(GraphicsDevice GD, float Radius, Vector4 color, int LatitudeSegments = 16, int LongitudeSegments = 16)
             => new SphereFactory(GD).Sphere(Radius, color, LatitudeSegments, LongitudeSegments);
-
         public static void UpdateSphere(Engine13.Graphics.Mesh mesh, GraphicsDevice GD, float Radius, int LatitudeSegments = 16, int LongitudeSegments = 16)
             => new SphereFactory(GD).Update(mesh, Radius, LatitudeSegments, LongitudeSegments);
     }

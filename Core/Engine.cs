@@ -72,7 +72,6 @@ namespace Engine13.Core
 
                 _Renderer.BeginFrame(new RgbaFloat(0.1f, 0.1f, 0.1f, 1f));
 
-                // Draw all meshes
                 for (int i = 0; i < _Meshes.Count; i++)
                 {
                     _Renderer.DrawMesh(_Meshes[i]);
@@ -106,11 +105,9 @@ namespace Engine13.Core
             var meshA = collision.MeshA;
             var meshB = collision.MeshB;
 
-            // Get ObjectCollision attributes if they exist
             var objA = meshA.GetAttribute<ObjectCollision>();
             var objB = meshB.GetAttribute<ObjectCollision>();
 
-            // Simple separation - move objects apart
             var separation = collision.SeparationDirection * (collision.PenetrationDepth.Length() * 0.5f);
             
             if (objA != null && !objA.IsStatic)
@@ -122,7 +119,6 @@ namespace Engine13.Core
                 meshB.Position += separation;
             }
 
-            // Simple velocity exchange if both have ObjectCollision
             if (objA != null && objB != null && !objA.IsStatic && !objB.IsStatic)
             {
                 var tempVel = objA.Velocity;
@@ -133,14 +129,15 @@ namespace Engine13.Core
 
         public void Objects()
         {
-            for (int i = 0; i < 1; i++) // Create 3 spheres to test collision
+            for (int i = 0; i < 3; i++) // Create a set amount of meshes
             {
-                float radius = 0.05f;
-                var s = SphereFactory.CreateSphere(GD, radius);
-                s.Position = new Vector2(0f, -1f + i * 0.1f);
-                s.AddAttribute(new Gravity(acceleration: 9.81f, initialVelocity: 5f, mass: 5.0f));
+                float size = 0.1f;
+                var s = CubeFactory.CreateCube(GD, size);
+                s.Position = new Vector2(0f, -1f + i * 0.2f);
+                s.Mass = 0.5f;
+                s.AddAttribute(new Gravity(acceleration: 9.81f, initialVelocity: 0f, mass: s.Mass));
                 s.AddAttribute(new EdgeCollision(loop: false)); //true for looping, false for clamping
-                s.AddAttribute(new ObjectCollision { Mass = 5.0f, Restitution = 0.8f });
+                s.AddAttribute(new ObjectCollision { Mass = s.Mass, Restitution = 0.8f });
 
                 _UpdateManager.Register(s);
                 _Meshes.Add(s);
