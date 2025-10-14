@@ -76,28 +76,58 @@ namespace Engine13.Utilities
             ContactPoint = contactPoint;
             PenetrationDepth = penetrationDepth;
             SeparationDirection = separationDirection;
+            Console.WriteLine($"MeshA posistion is: {MeshA.Position}\nMeshB position is: {MeshB.Position}");
         }
 
         public static bool AreColliding(Mesh a, Mesh b, out CollisionInfo collisionInfo)
         {
             collisionInfo = null!;
 
-            // Use the mesh's built-in AABB calculation!
             var aabbA = a.GetAABB();
             var aabbB = b.GetAABB();
 
             if (!aabbA.Intersects(aabbB))
                 return false;
 
-            if (AABB.OverlapDepth(aabbA, aabbB, out Vector2 depth))
+            float overlapX = System.MathF.Min(aabbA.Max.X - aabbB.Min.X, aabbB.Max.X - aabbA.Min.X);
+            float overlapY = System.MathF.Min(aabbA.Max.Y - aabbB.Min.Y, aabbB.Max.Y - aabbA.Min.Y);
+
+            if (overlapX <= 0f || overlapY <= 0f) return false;
+
+            // Determine predominant motion direction (if any)
+            Vector2 velA = Vector2.Zero, velB = Vector2.Zero;
+            var ocA = a.GetAttribute<Engine13.Utilities.Attributes.ObjectCollision>();
+            var ocB = b.GetAttribute<Engine13.Utilities.Attributes.ObjectCollision>();
+            if (ocA != null) velA = ocA.Velocity;
+            if (ocB != null) velB = ocB.Velocity;
+            // Add gravity contribution if present (affects Y only)
+            var gA = a.GetAttribute<Engine13.Utilities.Attributes.Gravity>();
+            var gB = b.GetAttribute<Engine13.Utilities.Attributes.Gravity>();
+            if (gA != null) velA.Y += gA.VelocityY;
+            if (gB != null) velB.Y += gB.VelocityY;
+            Vector2 relVel = velB - velA;
+
+            bool preferY = System.MathF.Abs(relVel.Y) > System.MathF.Abs(relVel.X) * 1.25f; // slight bias threshold
+
+            Vector2 depth;
+            if (preferY || overlapY < overlapX)
             {
-                Vector2 contactPoint = (a.Position + b.Position) / 2;
-                Vector2 separationDir = Vector2.Normalize(depth);
-                collisionInfo = new CollisionInfo(a, b, contactPoint, depth, separationDir);
-                return true;
+                float signY = (aabbB.Center.Y > aabbA.Center.Y) ? 1f : -1f;
+                depth = new Vector2(0f, signY * overlapY);
+            }
+            else
+            {
+                float signX = (aabbB.Center.X > aabbA.Center.X) ? 1f : -1f;
+                depth = new Vector2(signX * overlapX, 0f);
             }
 
-            return false;
+            float len = depth.Length();
+            if (len <= 1e-6f) return false;
+
+            Vector2 contactPoint = (a.Position + b.Position) / 2f;
+            Vector2 separationDir = depth / len;
+            collisionInfo = new CollisionInfo(a, b, contactPoint, depth, separationDir);
+            return true;
         }
     }
 
@@ -127,14 +157,37 @@ namespace Engine13.Utilities
         }
 
         /// <summary>
-        /// 
+        /// Register a mesh into every grid cell overlapped by its world-space AABB.
         /// </summary>
         public void AddMesh(Mesh mesh)
         {
-            AABB aabb = mesh.GetAABB();
-            AABB cellRange = GetCellRange(aabb);
+            var aabb = mesh.GetAABB();
+            var minCell = GetCellCoords(aabb.Min);
+            var maxCell = GetCellCoords(aabb.Max);
 
-            
+            if (!meshCells.TryGetValue(mesh, out var occupied))
+            {
+                occupied = new System.Collections.Generic.HashSet<(int, int)>();
+                meshCells[mesh] = occupied;
+            }
+
+            for (int x = minCell.Item1; x <= maxCell.Item1; x++)
+            {
+                for (int y = minCell.Item2; y <= maxCell.Item2; y++)
+                {
+                    var cell = (x, y);
+                    if (!cells.TryGetValue(cell, out var list))
+                    {
+                        list = new System.Collections.Generic.List<Mesh>();
+                        cells[cell] = list;
+                    }
+                    if (!list.Contains(mesh))
+                    {
+                        list.Add(mesh);
+                    }
+                    occupied.Add(cell);
+                }
+            }
         }
 
         private void RemoveMesh(Mesh mesh)
@@ -159,20 +212,16 @@ namespace Engine13.Utilities
 
         public void UpdateMeshPosition(Mesh mesh)
         {
-            if (meshCells.TryGetValue(mesh, out var oldCells))
-            {
-                var newCellCoords = GetCellCoords(mesh.Position);
+            // Re-register mesh into all cells overlapped by its current AABB
+            RemoveMesh(mesh);
+            AddMesh(mesh);
+        }
 
-                if (!oldCells.Contains(newCellCoords) || oldCells.Count != 1)
-                {
-                    RemoveMesh(mesh);
-
-                    AddMesh(mesh);
-                }
-            }
-            else
+        public void UpdateAllAabb(System.Collections.Generic.IEnumerable<Mesh> meshes)
+        {
+            foreach (var m in meshes)
             {
-                AddMesh(mesh);
+                UpdateMeshPosition(m);
             }
         }
 

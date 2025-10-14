@@ -20,7 +20,7 @@ namespace Engine13.Core
         private byte R = 0, G = 0, B = 0;
         private System.Collections.Generic.List<Mesh> _Meshes = new();
         private UpdateManager _UpdateManager;
-        private SpatialGrid _Grid = new SpatialGrid(0.05f);
+        private SpatialGrid _Grid = new SpatialGrid(0.25f);
 
 
         public Engine(Sdl2Window _Window, GraphicsDevice _GD)
@@ -56,11 +56,8 @@ namespace Engine13.Core
                 GameTime.Update();
                 _UpdateManager.Update(GameTime);
                 
-                // Update each mesh position in the spatial grid
-                foreach (var mesh in _Meshes)
-                {
-                    _Grid.UpdateMeshPosition(mesh);
-                }
+                // Refresh spatial grid memberships using current AABBs
+                _Grid.UpdateAllAabb(_Meshes);
                 
                 RunCollisionDetection();
 
@@ -104,11 +101,28 @@ namespace Engine13.Core
         {
             var meshA = collision.MeshA;
             var meshB = collision.MeshB;
-
+            var sepDist = collision.SeparationDirection;
             var objA = meshA.GetAttribute<ObjectCollision>();
             var objB = meshB.GetAttribute<ObjectCollision>();
 
-            var separation = collision.SeparationDirection * (collision.PenetrationDepth.Length() * 0.5f);
+            //ObjectCollision and values 
+            Vector2 MeshAV = objA?.Velocity ?? Vector2.Zero;
+            Vector2 MeshBV = objA?.Velocity ?? Vector2.Zero;
+
+            float invMassA = (objA == null || objA.IsStatic || objA.Mass <= 0f) ? 0f : 1f / objA.Mass;
+            float invMassB = (objB == null || objB.IsStatic || objB.Mass <= 0f) ? 0f : 1f / objB.Mass;
+
+            Vector2 RelativeVelocity = MeshBV - MeshAV;
+            float VReIn = Vector2.Dot(RelativeVelocity, sepDist); //Velocity againt normal
+            float Rest = Math.Clamp(MathF.Min(objA?.Restitution ?? 0f, objB?.Restitution ?? 0f), 0f, 1f);
+
+            // Use the minimum translation vector (penetration vector) directly, split between bodies.
+            var mtv = collision.PenetrationDepth;
+            if (mtv.LengthSquared() <= 1e-12f)
+            {
+                return; // no reliable separation needed
+            }
+            var separation = mtv * 0.5f;
             
             if (objA != null && !objA.IsStatic)
             {
@@ -119,32 +133,42 @@ namespace Engine13.Core
                 meshB.Position += separation;
             }
 
-            if (objA != null && objB != null && !objA.IsStatic && !objB.IsStatic)
-            {
-                var tempVel = objA.Velocity;
-                objA.Velocity = objB.Velocity * objA.Restitution;
-                objB.Velocity = tempVel * objB.Restitution;
-            }
+            //Add impulse 
+
+            if (sepDist.LengthSquared() < 1e-8f) return;
+            sepDist = Vector2.Normalize(sepDist);
+
+            if (VReIn > 0f) return; 
+            
+
         }
 
         public void Objects()
         {
-            for (int i = 0; i < 3; i++) // Create a set amount of meshes
-            {
-                float size = 0.1f;
-                var s = CubeFactory.CreateCube(GD, size);
-                s.Position = new Vector2(0f, -1f + i * 0.2f);
-                s.Mass = 0.5f;
-                s.AddAttribute(new Gravity(acceleration: 9.81f, initialVelocity: 0f, mass: s.Mass));
-                s.AddAttribute(new EdgeCollision(loop: false)); //true for looping, false for clamping
-                s.AddAttribute(new ObjectCollision { Mass = s.Mass, Restitution = 0.8f });
+            var Cube1 = CubeFactory.CreateCube(GD, 0.05f);
+            Cube1.Position = new Vector2(0.5f, -0.9f);
+            Cube1.Mass = 1f;
 
-                _UpdateManager.Register(s);
-                _Meshes.Add(s);
+            Cube1.AddAttribute(new Gravity(acceleration: 9.81f, initialVelocity: 0f, mass: Cube1.Mass));
+            Cube1.AddAttribute(new EdgeCollision(loop: false)); //true for looping, false for clamping
 
-                _Grid.AddMesh(s);
-            }
+            _UpdateManager.Register(Cube1);
+            _Meshes.Add(Cube1);
+            _Grid.AddMesh(Cube1);
 
+
+
+            var Cube2 = CubeFactory.CreateCube(GD, 0.05f);
+            Cube2.Position = new Vector2(-0.5f, -0.9f);
+            Cube2.Mass = 5f;
+
+            Cube2.AddAttribute(new Gravity(acceleration: 9.81f, initialVelocity: 0f, mass: Cube2.Mass));
+            Cube2.AddAttribute(new EdgeCollision(loop: false)); //true for looping, false for clamping
+            Cube2.AddAttribute(new ObjectCollision() { Mass = Cube2.Mass, Restitution = 0.8f, Velocity = new Vector2(1f, 0f) });
+
+            _UpdateManager.Register(Cube2);
+            _Meshes.Add(Cube2);
+            _Grid.AddMesh(Cube2);
         }
 
     }
