@@ -1,3 +1,4 @@
+using System;
 using System.Numerics;
 using Engine13.Graphics;
 
@@ -76,7 +77,7 @@ namespace Engine13.Utilities
             ContactPoint = contactPoint;
             PenetrationDepth = penetrationDepth;
             SeparationDirection = separationDirection;
-            Console.WriteLine($"MeshA posistion is: {MeshA.Position}\nMeshB position is: {MeshB.Position}");
+            // Debug logging removed to avoid spamming console during collisions
         }
 
         public static bool AreColliding(Mesh a, Mesh b, out CollisionInfo collisionInfo)
@@ -94,17 +95,11 @@ namespace Engine13.Utilities
 
             if (overlapX <= 0f || overlapY <= 0f) return false;
 
-            // Determine predominant motion direction (if any)
             Vector2 velA = Vector2.Zero, velB = Vector2.Zero;
             var ocA = a.GetAttribute<Engine13.Utilities.Attributes.ObjectCollision>();
             var ocB = b.GetAttribute<Engine13.Utilities.Attributes.ObjectCollision>();
             if (ocA != null) velA = ocA.Velocity;
             if (ocB != null) velB = ocB.Velocity;
-            // Add gravity contribution if present (affects Y only)
-            var gA = a.GetAttribute<Engine13.Utilities.Attributes.Gravity>();
-            var gB = b.GetAttribute<Engine13.Utilities.Attributes.Gravity>();
-            if (gA != null) velA.Y += gA.VelocityY;
-            if (gB != null) velB.Y += gB.VelocityY;
             Vector2 relVel = velB - velA;
 
             bool preferY = System.MathF.Abs(relVel.Y) > System.MathF.Abs(relVel.X) * 1.25f; // slight bias threshold
@@ -251,7 +246,7 @@ namespace Engine13.Utilities
             var minCell = GetCellCoords(aabb.Min);
             var maxCell = GetCellCoords(aabb.Max);
             return new AABB(new Vector2(minCell.Item1, minCell.Item2), new Vector2(maxCell.Item1, maxCell.Item2));
-        } 
+        }
 
         public System.Collections.Generic.HashSet<(int, int)> GetOccupiedCells(Mesh mesh)
         {
@@ -291,5 +286,10 @@ namespace Engine13.Utilities
             cells.Clear();
             meshCells.Clear();
         }
+    }
+
+    public class MathHelpers
+    {
+
     }
 }

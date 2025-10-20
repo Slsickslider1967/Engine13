@@ -4,6 +4,7 @@ using System.Numerics;
 using Engine13.Core;
 using Engine13.Utilities.Attributes;
 using Engine13.Utilities;
+using System.Diagnostics;
 
 namespace Engine13.Graphics
 {
@@ -347,4 +348,9 @@ namespace Engine13.Primitives
             => new SphereFactory(GD).Update(mesh, Radius, LatitudeSegments, LongitudeSegments);
     }
 
+    public class TriangleFactory : PrimitiveFactory
+    {
+        public TriangleFactory(GraphicsDevice gd) : base(gd) { }
+
+    }
 }

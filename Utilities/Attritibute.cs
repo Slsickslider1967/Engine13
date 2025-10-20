@@ -34,18 +34,44 @@ namespace Engine13.Utilities.Attributes
         {
             float dt = gameTime.DeltaTime;
             if (dt <= 0f) return;
-            _vy += Acceleration * dt;
-            float vtMag = ComputedTerminalVelocityMag;
-            if (float.IsFinite(vtMag))
+            var obj = mesh.GetAttribute<ObjectCollision>();
+            if (obj != null && !obj.IsStatic)
             {
-                if (_vy > vtMag) _vy = vtMag;
-                else if (_vy < -vtMag) _vy = -vtMag;
+                // Respect grounding: if grounded and moving downward (positive Y), don't add more downward velocity.
+                float vy = obj.Velocity.Y;
+                if (!(obj.IsGrounded && vy >= 0f))
+                {
+                    vy += Acceleration * dt;
+                }
+
+                float vtMag = ComputedTerminalVelocityMag;
+                if (float.IsFinite(vtMag))
+                {
+                    if (vy > vtMag) vy = vtMag;
+                    else if (vy < -vtMag) vy = -vtMag;
+                }
+                if (float.IsFinite(TerminalVelocityY))
+                {
+                    vy = System.Math.Clamp(vy, -TerminalVelocityY, TerminalVelocityY);
+                }
+
+                obj.Velocity = new Vector2(obj.Velocity.X, vy);
             }
-            if (float.IsFinite(TerminalVelocityY))
+            else
             {
-                _vy = System.Math.Clamp(_vy, -TerminalVelocityY, TerminalVelocityY);
+                _vy += Acceleration * dt;
+                float vtMag = ComputedTerminalVelocityMag;
+                if (float.IsFinite(vtMag))
+                {
+                    if (_vy > vtMag) _vy = vtMag;
+                    else if (_vy < -vtMag) _vy = -vtMag;
+                }
+                if (float.IsFinite(TerminalVelocityY))
+                {
+                    _vy = System.Math.Clamp(_vy, -TerminalVelocityY, TerminalVelocityY);
+                }
+                var p = mesh.Position; p.Y += _vy * dt; mesh.Position = p;
             }
-            var p = mesh.Position; p.Y += _vy * dt; mesh.Position = p;
         }
     }
 
@@ -146,10 +172,9 @@ namespace Engine13.Utilities.Attributes
         private float Top = -1f, Left = -1f, Right = 1f, Bottom = 1f;
         private bool Loop;
         public EdgeCollision(bool loop) { Loop = loop; }
-
         public void Update(Mesh mesh, GameTime gameTime)
         {
-            Console.WriteLine($"Current updated Mesh Size: {mesh.Size}");
+            // Console.WriteLine($"Current updated Mesh Size: {mesh.Size}");
             if (Loop == true)
             {
                 var p = mesh.Position;
@@ -164,26 +189,83 @@ namespace Engine13.Utilities.Attributes
 
                 var p = mesh.Position;
                 var objCollision = mesh.GetAttribute<ObjectCollision>();
+                const float sleepVelocity = 0.05f;
+                const float recovery = 0.0005f;   
 
-                if (p.X < Left + (mesh.Size.X / 2)) 
-                { 
+                if (p.X < Left + (mesh.Size.X / 2))
+                {
                     p.X = Left + (mesh.Size.X / 2);
-                    if (objCollision != null) objCollision.Velocity = new Vector2(-objCollision.Velocity.X * objCollision.Restitution, objCollision.Velocity.Y);
+                    if (objCollision != null)
+                    {
+                        float vx = objCollision.Velocity.X;
+                        if (System.MathF.Abs(vx) < sleepVelocity)
+                        {
+                            vx = 0f;
+                        }
+                        else
+                        {
+                            vx = -vx * objCollision.Restitution;
+                        }
+                        objCollision.Velocity = new Vector2(vx, objCollision.Velocity.Y);
+                    }
+                    p.X += recovery; // small nudge away from wall
                 }
-                else if (p.X > Right - (mesh.Size.X / 2)) 
-                { 
+                else if (p.X > Right - (mesh.Size.X / 2))
+                {
                     p.X = Right - (mesh.Size.X / 2);
-                    if (objCollision != null) objCollision.Velocity = new Vector2(-objCollision.Velocity.X * objCollision.Restitution, objCollision.Velocity.Y);
+                    if (objCollision != null)
+                    {
+                        float vx = objCollision.Velocity.X;
+                        if (System.MathF.Abs(vx) < sleepVelocity)
+                        {
+                            vx = 0f;
+                        }
+                        else
+                        {
+                            vx = -vx * objCollision.Restitution;
+                        }
+                        objCollision.Velocity = new Vector2(vx, objCollision.Velocity.Y);
+                    }
+                    p.X -= recovery; // small nudge away from wall
                 }
-                if (p.Y < Top + (mesh.Size.Y / 2)) 
-                { 
+                if (p.Y < Top + (mesh.Size.Y / 2))
+                {
                     p.Y = Top + (mesh.Size.Y / 2);
-                    if (objCollision != null) objCollision.Velocity = new Vector2(objCollision.Velocity.X, -objCollision.Velocity.Y * objCollision.Restitution);
+                    if (objCollision != null)
+                    {
+                        float vy = objCollision.Velocity.Y;
+                        if (System.MathF.Abs(vy) < sleepVelocity)
+                        {
+                            vy = 0f;
+                        }
+                        else
+                        {
+                            vy = -vy * objCollision.Restitution;
+                        }
+                        objCollision.Velocity = new Vector2(objCollision.Velocity.X, vy);
+                        objCollision.IsGrounded = false;
+                    }
+                    p.Y += recovery;
                 }
-                else if (p.Y > Bottom - (mesh.Size.Y / 2)) 
+                else if (p.Y > Bottom - (mesh.Size.Y / 2))
                 {
                     p.Y = Bottom - (mesh.Size.Y / 2);
-                    if (objCollision != null) objCollision.Velocity = new Vector2(objCollision.Velocity.X, -objCollision.Velocity.Y * objCollision.Restitution);
+                    if (objCollision != null)
+                    {
+                        float vy = objCollision.Velocity.Y;
+                        if (System.MathF.Abs(vy) < sleepVelocity)
+                        {
+                            vy = 0f;
+                            objCollision.IsGrounded = true;
+                        }
+                        else
+                        {
+                            vy = -vy * objCollision.Restitution;
+                            objCollision.IsGrounded = false;
+                        }
+                        objCollision.Velocity = new Vector2(objCollision.Velocity.X, vy);
+                    }
+                    p.Y -= recovery;
                 }
                 mesh.Position = new Vector2(p.X, p.Y);
             }
@@ -195,8 +277,11 @@ namespace Engine13.Utilities.Attributes
     {
         public float Mass { get; set; } = 1f;
         public float Restitution { get; set; } = 0.8f;
+        public float Friction { get; set; } = 0.5f;
         public Vector2 Velocity { get; set; } = Vector2.Zero;
         public bool IsStatic { get; set; } = false;
+        public bool IsGrounded { get; set; } = false;
+    // Transient WasGroundedThisFrame removed; IsGrounded suffices for gravity logic
 
         public void Update(Mesh mesh, GameTime gameTime)
         {
@@ -206,6 +291,7 @@ namespace Engine13.Utilities.Attributes
                 var pos = mesh.Position;
                 pos += Velocity * gameTime.DeltaTime;
                 mesh.Position = pos;
+                // Damping only (micro-bounce sleep removed)
                 Velocity *= 0.99f;
             }
         }

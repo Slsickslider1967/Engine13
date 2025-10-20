@@ -1,0 +1,350 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Build after Step 2 positional correction",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"build",
+				"Engine-13/Engine-13.csproj",
+				"-v",
+				"m"
+			],
+			"problemMatcher": [
+				"$msCompile"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Build after Step 3 iterations",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"build",
+				"Engine-13/Engine-13.csproj",
+				"-v",
+				"m"
+			],
+			"problemMatcher": [
+				"$msCompile"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Build after friction and thresholds",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"build",
+				"Engine-13/Engine-13.csproj",
+				"-v",
+				"m"
+			],
+			"problemMatcher": [
+				"$msCompile"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Build after suppression",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"build",
+				"Engine-13/Engine-13.csproj",
+				"-v",
+				"m"
+			],
+			"problemMatcher": [
+				"$msCompile"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Build after grounded logic",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"build",
+				"Engine-13/Engine-13.csproj",
+				"-v",
+				"m"
+			],
+			"problemMatcher": [
+				"$msCompile"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Build after resting-grounded flags",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"build",
+				"Engine-13/Engine-13.csproj",
+				"-v",
+				"m"
+			],
+			"problemMatcher": [
+				"$msCompile"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Build after removing micro-bounce suppression",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"build",
+				"Engine-13/Engine-13.csproj",
+				"-v",
+				"m"
+			],
+			"problemMatcher": [
+				"$msCompile"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Build after cleanup",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"build",
+				"Engine-13/Engine-13.csproj",
+				"-v",
+				"m"
+			],
+			"problemMatcher": [
+				"$msCompile"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Build after attribute cleanup",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"build",
+				"Engine-13/Engine-13.csproj",
+				"-v",
+				"m"
+			],
+			"problemMatcher": [
+				"$msCompile"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Build collision updates",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"build",
+				"Engine-13/Engine-13.csproj",
+				"-v",
+				"m"
+			],
+			"problemMatcher": [
+				"$msCompile"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Build after audit fixes",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"build",
+				"Engine-13/Engine-13.csproj",
+				"-v",
+				"m"
+			],
+			"problemMatcher": [
+				"$msCompile"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Build after Mesh velocity cleanup",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"build",
+				"Engine-13/Engine-13.csproj",
+				"-v",
+				"m"
+			],
+			"problemMatcher": [
+				"$msCompile"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Build after resting clamp",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"build",
+				"Engine-13/Engine-13.csproj",
+				"-v",
+				"m"
+			],
+			"problemMatcher": [
+				"$msCompile"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Build after bounce tuning",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"build",
+				"Engine-13/Engine-13.csproj",
+				"-v",
+				"m"
+			],
+			"problemMatcher": [
+				"$msCompile"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Build after solver tuning",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"build",
+				"Engine-13/Engine-13.csproj",
+				"-v",
+				"m"
+			],
+			"problemMatcher": [
+				"$msCompile"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Build after threshold tuning",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"build",
+				"Engine-13/Engine-13.csproj",
+				"-v",
+				"m"
+			],
+			"problemMatcher": [
+				"$msCompile"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Build after revert tuning",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"build",
+				"Engine-13/Engine-13.csproj",
+				"-v",
+				"m"
+			],
+			"problemMatcher": [
+				"$msCompile"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Build after restitution threshold",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"build",
+				"Engine-13/Engine-13.csproj",
+				"-v",
+				"m"
+			],
+			"problemMatcher": [
+				"$msCompile"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Build after removing threshold",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"build",
+				"Engine-13/Engine-13.csproj",
+				"-v",
+				"m"
+			],
+			"problemMatcher": [
+				"$msCompile"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Build final tuning",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"build",
+				"Engine-13/Engine-13.csproj",
+				"-v",
+				"m"
+			],
+			"problemMatcher": [
+				"$msCompile"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Build after brace fix",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"build",
+				"Engine-13/Engine-13.csproj",
+				"-v",
+				"m"
+			],
+			"problemMatcher": [
+				"$msCompile"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Build debug overlay",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"build",
+				"Engine-13/Engine-13.csproj",
+				"-v",
+				"m"
+			],
+			"problemMatcher": [
+				"$msCompile"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Build after overlay tuning",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"build",
+				"Engine-13/Engine-13.csproj",
+				"-v",
+				"m"
+			],
+			"problemMatcher": [
+				"$msCompile"
+			],
+			"group": "build"
+		}
+	]
+}
