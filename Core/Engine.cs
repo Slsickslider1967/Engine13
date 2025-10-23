@@ -239,7 +239,7 @@ namespace Engine13.Core
                 Cube1.AddAttribute(
                     new Gravity(acceleration: 9.81f, initialVelocity: 0f, mass: Cube1.Mass)
                 );
-                Cube1.AddAttribute(new ObjectCollision() { Mass = Cube1.Mass, Restitution = 0.8f });
+                Cube1.AddAttribute(new ObjectCollision() { Mass = Cube1.Mass, Restitution = 0.4f });
                 Cube1.AddAttribute(new EdgeCollision(loop: false));
 
                 _UpdateManager.Register(Cube1);

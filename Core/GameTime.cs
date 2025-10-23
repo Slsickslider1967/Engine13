@@ -2,10 +2,10 @@ namespace Engine13.Core
 {
     public class GameTime
     {
-        public float DeltaTime { get; private set; } // Time in seconds since last frame
-        public float TotalTime { get; private set; } // Total time in seconds since the start of the game
+        public float DeltaTime { get; private set; } 
+        public float TotalTime { get; private set; } 
         private System.Diagnostics.Stopwatch _Timer = new System.Diagnostics.Stopwatch();
-        private float _LastTime;  // Time in seconds at the last frame
+        private float _LastTime; 
 
         public GameTime()
         {
@@ -17,10 +17,10 @@ namespace Engine13.Core
 
         public void Update()
         {
-            float currentTime = (float)_Timer.Elapsed.TotalSeconds; // Get the current time in seconds
-            DeltaTime = currentTime - _LastTime; // Calculate delta time
-            TotalTime += DeltaTime; // Update total time
-            _LastTime = currentTime; // Update last time to current time
+            float currentTime = (float)_Timer.Elapsed.TotalSeconds; 
+            DeltaTime = currentTime - _LastTime; 
+            TotalTime += DeltaTime;
+            _LastTime = currentTime; 
         }
     }
 }

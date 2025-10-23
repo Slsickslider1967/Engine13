@@ -1,6 +1,8 @@
 using System.Numerics;
+using System.Collections.Generic;
 using Engine13.Core;
 using Engine13.Graphics;
+using Engine13.Utilities;
 
 namespace Engine13.Utilities.Attributes
 {
@@ -38,6 +40,15 @@ namespace Engine13.Utilities.Attributes
 
         public void Update(Mesh mesh, GameTime gameTime)
         {
+            // If this mesh is controlled by MD, contribute force instead of moving directly.
+            var md = mesh.GetAttribute<MolecularDynamics>();
+            if (md != null)
+            {
+                double m = (mesh.Mass > 0f) ? mesh.Mass : 1.0;
+                // In this engine, positive Y is downward; match existing gravity convention.
+                Forces.AddForce(mesh, new Vec2(0.0, m * Acceleration));
+                return;
+            }
             float dt = gameTime.DeltaTime;
             if (dt <= 0f)
                 return;
@@ -159,6 +170,18 @@ namespace Engine13.Utilities.Attributes
             if (dt <= 0f)
                 return;
 
+            var md = mesh.GetAttribute<MolecularDynamics>();
+            if (md != null)
+            {
+                _time += dt;
+                const float Tau = 6.2831855f;
+                float phase = Tau * Frequency * _time;
+                double fx = XAmplitude * System.Math.Sin(phase);
+                double fy = YAmplitude * System.Math.Cos(phase);
+                Forces.AddForce(mesh, new Vec2(fx, fy));
+                return;
+            }
+
             if (Mode == WiggleMode.Local)
             {
                 UpdateLocal(ref mesh, dt);
@@ -226,12 +249,40 @@ namespace Engine13.Utilities.Attributes
 
     public sealed class MolecularDynamics : IMeshAttribute
     {
-        
+        private static readonly List<Mesh> _mdMeshes = new();
+
+        private static void Register(Mesh mesh)
+        {
+            if (!_mdMeshes.Contains(mesh))
+            {
+                _mdMeshes.Add(mesh);
+            }
+        }
+        public static void Step(GameTime gameTime)
+        {
+            float dt = gameTime.DeltaTime;
+            if (dt <= 0f || _mdMeshes.Count == 0)
+                return;
+
+            for (int i = 0; i < _mdMeshes.Count; i++)
+            {
+                var mesh = _mdMeshes[i];
+                var obj = mesh.GetAttribute<ObjectCollision>();
+                if (obj == null || obj.IsStatic)
+                    continue;
+                Vec2 fext = Forces.GetForce(mesh);
+                double m = (mesh.Mass > 0f) ? mesh.Mass : 1.0;
+                var dv = new Vector2((float)(fext.X / m * dt), (float)(fext.Y / m * dt));
+                obj.Velocity += dv;
+            }
+        }
+
         public void Update(Mesh mesh, GameTime gameTime)
         {
-            // Molecular dynamics logic to be implemented
+            // Attribute-level call just ensures the mesh is tracked; integration runs once per frame in Step().
+            Register(mesh);
         }
-    } 
+    }
 
     public sealed class EdgeCollision : IMeshAttribute
     {
@@ -364,8 +415,6 @@ namespace Engine13.Utilities.Attributes
         public Vector2 Velocity { get; set; } = Vector2.Zero;
         public bool IsStatic { get; set; } = false;
         public bool IsGrounded { get; set; } = false;
-
-        // Transient WasGroundedThisFrame removed; IsGrounded suffices for gravity logic
 
         public void Update(Mesh mesh, GameTime gameTime)
         {

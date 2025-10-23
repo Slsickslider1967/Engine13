@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using Engine13.Graphics;
+using Engine13.Utilities;
+using Engine13.Utilities.Attributes;
 
 namespace Engine13.Core
 {
@@ -31,13 +33,14 @@ namespace Engine13.Core
 
         public void Update(GameTime gameTime)
         {
-            // Update attribute-driven mesh behavior (e.g., gravity)
+            Forces.Reset();
+
             for (int i = 0; i < _meshes.Count; i++)
             {
                 _meshes[i].UpdateAttributes(gameTime);
             }
 
-            // Update any other registered updatables
+            Engine13.Utilities.Attributes.MolecularDynamics.Step(gameTime);
             for (int i = 0; i < _updatables.Count; i++)
             {
                 _updatables[i].Update(gameTime);
