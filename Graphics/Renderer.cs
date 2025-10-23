@@ -2,8 +2,6 @@ using Veldrid;
 using Engine13.Graphics;
 using System;
 using System.Numerics;
-using Veldrid.Sdl2;
-using Veldrid.StartupUtilities; 
 
 namespace Engine13.Graphics
 {

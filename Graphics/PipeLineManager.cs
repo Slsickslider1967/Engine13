@@ -11,7 +11,6 @@ namespace Engine13.Graphics
     private Pipeline _Pipeline = null!;
     private CommandList CL = null!;
         private ResourceFactory factory;
-    // Exposed resource layout(s)
     public ResourceLayout? PositionLayout { get; private set; }
     public ResourceLayout? ProjectionLayout { get; private set; }
         public ResourceLayout? ColorLayout { get; private set; }
@@ -51,17 +50,14 @@ namespace Engine13.Graphics
             );
 
             PipelineDescription.PrimitiveTopology = PrimitiveTopology.TriangleList;
-            // Create a resource layout for a per-mesh position uniform buffer at set=0 binding=0
             PositionLayout = factory.CreateResourceLayout(new ResourceLayoutDescription(
                 new ResourceLayoutElementDescription("PositionBuffer", ResourceKind.UniformBuffer, ShaderStages.Vertex)
             ));
 
-            // Create a resource layout for a projection matrix at set=1 binding=0
             ProjectionLayout = factory.CreateResourceLayout(new ResourceLayoutDescription(
                 new ResourceLayoutElementDescription("ProjectionBuffer", ResourceKind.UniformBuffer, ShaderStages.Vertex)
             ));
 
-            // Add a per-mesh color uniform (fragment stage) at set=2, binding=0
             ColorLayout = factory.CreateResourceLayout(new ResourceLayoutDescription(
                 new ResourceLayoutElementDescription("ColorBuffer", ResourceKind.UniformBuffer, ShaderStages.Fragment)
             ));

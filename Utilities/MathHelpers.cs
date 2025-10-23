@@ -21,8 +21,8 @@ namespace Engine13.Utilities
 
         public bool Intersects(AABB other)
         {
-            return (Min.X <= other.Max.X && Max.X >= other.Min.X) &&
-                   (Min.Y <= other.Max.Y && Max.Y >= other.Min.Y);
+            return (Min.X <= other.Max.X && Max.X >= other.Min.X)
+                && (Min.Y <= other.Max.Y && Max.Y >= other.Min.Y);
         }
 
         public static bool OverlapDepth(AABB a, AABB b, out Vector2 depth)
@@ -70,7 +70,13 @@ namespace Engine13.Utilities
         public Vector2 PenetrationDepth;
         public Vector2 SeparationDirection;
 
-        public CollisionInfo(Mesh a, Mesh b, Vector2 contactPoint, Vector2 penetrationDepth, Vector2 separationDirection)
+        public CollisionInfo(
+            Mesh a,
+            Mesh b,
+            Vector2 contactPoint,
+            Vector2 penetrationDepth,
+            Vector2 separationDirection
+        )
         {
             MeshA = a;
             MeshB = b;
@@ -93,13 +99,17 @@ namespace Engine13.Utilities
             float overlapX = System.MathF.Min(aabbA.Max.X - aabbB.Min.X, aabbB.Max.X - aabbA.Min.X);
             float overlapY = System.MathF.Min(aabbA.Max.Y - aabbB.Min.Y, aabbB.Max.Y - aabbA.Min.Y);
 
-            if (overlapX <= 0f || overlapY <= 0f) return false;
+            if (overlapX <= 0f || overlapY <= 0f)
+                return false;
 
-            Vector2 velA = Vector2.Zero, velB = Vector2.Zero;
+            Vector2 velA = Vector2.Zero,
+                velB = Vector2.Zero;
             var ocA = a.GetAttribute<Engine13.Utilities.Attributes.ObjectCollision>();
             var ocB = b.GetAttribute<Engine13.Utilities.Attributes.ObjectCollision>();
-            if (ocA != null) velA = ocA.Velocity;
-            if (ocB != null) velB = ocB.Velocity;
+            if (ocA != null)
+                velA = ocA.Velocity;
+            if (ocB != null)
+                velB = ocB.Velocity;
             Vector2 relVel = velB - velA;
 
             bool preferY = System.MathF.Abs(relVel.Y) > System.MathF.Abs(relVel.X) * 1.25f; // slight bias threshold
@@ -117,7 +127,8 @@ namespace Engine13.Utilities
             }
 
             float len = depth.Length();
-            if (len <= 1e-6f) return false;
+            if (len <= 1e-6f)
+                return false;
 
             Vector2 contactPoint = (a.Position + b.Position) / 2f;
             Vector2 separationDir = depth / len;
@@ -135,13 +146,25 @@ namespace Engine13.Utilities
         /// (int, int) mesh cooirds in the grid
         /// List<Mesh> list of corrisponding meshes in that cell
         /// </summary>
-        private System.Collections.Generic.Dictionary<(int, int), System.Collections.Generic.List<Mesh>> cells;
-        private readonly System.Collections.Generic.Dictionary<Mesh, System.Collections.Generic.HashSet<(int, int)>> meshCells = new System.Collections.Generic.Dictionary<Mesh, System.Collections.Generic.HashSet<(int, int)>>();
+        private System.Collections.Generic.Dictionary<
+            (int, int),
+            System.Collections.Generic.List<Mesh>
+        > cells;
+        private readonly System.Collections.Generic.Dictionary<
+            Mesh,
+            System.Collections.Generic.HashSet<(int, int)>
+        > meshCells = new System.Collections.Generic.Dictionary<
+            Mesh,
+            System.Collections.Generic.HashSet<(int, int)>
+        >();
 
         public SpatialGrid(float cellSize)
         {
             this.cellSize = cellSize;
-            cells = new System.Collections.Generic.Dictionary<(int, int), System.Collections.Generic.List<Mesh>>();
+            cells = new System.Collections.Generic.Dictionary<
+                (int, int),
+                System.Collections.Generic.List<Mesh>
+            >();
         }
 
         public (int, int) GetCellCoords(Vector2 position)
@@ -202,7 +225,6 @@ namespace Engine13.Utilities
                 }
                 meshCells.Remove(mesh);
             }
-
         }
 
         public void UpdateMeshPosition(Mesh mesh)
@@ -245,12 +267,17 @@ namespace Engine13.Utilities
         {
             var minCell = GetCellCoords(aabb.Min);
             var maxCell = GetCellCoords(aabb.Max);
-            return new AABB(new Vector2(minCell.Item1, minCell.Item2), new Vector2(maxCell.Item1, maxCell.Item2));
+            return new AABB(
+                new Vector2(minCell.Item1, minCell.Item2),
+                new Vector2(maxCell.Item1, maxCell.Item2)
+            );
         }
 
         public System.Collections.Generic.HashSet<(int, int)> GetOccupiedCells(Mesh mesh)
         {
-            return meshCells.TryGetValue(mesh, out var cells) ? cells : new System.Collections.Generic.HashSet<(int, int)>();
+            return meshCells.TryGetValue(mesh, out var cells)
+                ? cells
+                : new System.Collections.Generic.HashSet<(int, int)>();
         }
 
         public System.Collections.Generic.List<CollisionPair> GetCollisionPairs()
@@ -269,7 +296,10 @@ namespace Engine13.Utilities
                         var meshB = cell[j];
 
                         // Avoid duplicate pairs (A,B) and (B,A)
-                        var pair = meshA.GetHashCode() < meshB.GetHashCode() ? (meshA, meshB) : (meshB, meshA);
+                        var pair =
+                            meshA.GetHashCode() < meshB.GetHashCode()
+                                ? (meshA, meshB)
+                                : (meshB, meshA);
                         if (processedPairs.Add(pair))
                         {
                             pairs.Add(new CollisionPair(pair.Item1, pair.Item2));
@@ -288,8 +318,5 @@ namespace Engine13.Utilities
         }
     }
 
-    public class MathHelpers
-    {
-
-    }
+    public class MathHelpers { }
 }

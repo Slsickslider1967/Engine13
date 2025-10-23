@@ -4,7 +4,6 @@ using System.Numerics;
 using Engine13.Core;
 using Engine13.Utilities.Attributes;
 using Engine13.Utilities;
-using System.Diagnostics;
 
 namespace Engine13.Graphics
 {
@@ -43,40 +42,17 @@ namespace Engine13.Graphics
         public AABB GetAABB()
         {
             if (_vertices == null || _vertices.Length == 0)
-                return new AABB(Vector2.Zero, Vector2.Zero);
-
+                return new AABB(Vector2.Zero, Vector2.Zero);            
             Vector2 min = new Vector2(float.MaxValue);
-            Vector2 max = new Vector2(float.MinValue);
-
+            Vector2 max = new Vector2(float.MinValue);            
             foreach (var vertex in _vertices)
             {
                 Vector2 pos = new Vector2(vertex.X, vertex.Y) + Position;
                 min = Vector2.Min(min, pos);
                 max = Vector2.Max(max, pos);
             }
-
             return new AABB(min, max);
         }
-
-        // public Vector2 ObjectSize()
-        // {
-        //     if (_vertices == null || _vertices.Length == 0)
-        //         return Vector2.Zero;
-        //     else
-        //     {
-        //         Vector2 min = new Vector2(float.MaxValue);
-        //         Vector2 max = new Vector2(float.MinValue);
-
-        //         foreach (var vertex in _vertices)
-        //         {
-        //             Vector2 pos = new Vector2(vertex.X, vertex.Y);
-        //             min = Vector2.Min(min, pos);
-        //             max = Vector2.Max(max, pos);
-        //         }
-
-        //         return max - min;
-        //     }
-        // }
 
         public Mesh(GraphicsDevice GD, VertexPosition[] vertices, ushort[] indices)
         {
