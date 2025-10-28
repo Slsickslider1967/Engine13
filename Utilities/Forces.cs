@@ -39,61 +39,9 @@ namespace Engine13.Utilities
         {
             return new Vec2(a.X / b, a.Y / b);
         }
+
         public double Norm2() => X * X + Y * Y;
     }
-
-    // public static class MolecularDynamics
-    // {
-    //     public static Vec2 MinimumImage(Vec2 position)
-    //     {
-    //         double x = position.X;
-    //         double y = position.Y;
-    //         if (x > 1.0)
-    //         {
-    //             x -= 2.0;
-    //         }
-    //         if (x < -1.0)
-    //         {
-    //             x += 2.0;
-    //         }
-    //         if (y > 1.0)
-    //         {
-    //             y -= 2.0;
-    //         }
-    //         if (y < -1.0)
-    //         {
-    //             y += 2.0;
-    //         }
-    //         return new Vec2(x, y);
-    //     }
-
-    //     public static void AccumulatedLJForce
-    //     (
-    //         ref Vec2 TotalForce,
-    //         Vec2 Pos_i,
-    //         Vec2 Pos_j,
-    //         double epsilon,
-    //         double sigma,
-    //         double rcut
-    //     )
-    //     {
-    //         Vec2 Dr = MolecularDynamics.MinimumImage(Pos_i - Pos_j);
-    //         double r2 = Dr.Norm2();
-    //         double rcut2 = rcut * rcut;
-
-    //         if (r2 <= 1e-12 || r2 > rcut2)
-    //         {
-    //             return;
-    //         }
-
-    //         double invr2 = 1.0 / r2;
-    //         double sr2 = (sigma * sigma) * invr2;
-    //         double sr6 = sr2 * sr2 * sr2;
-
-    //         double forceScalar = 24.0 * epsilon * (2.0 * sr6 * sr6 - sr6) * invr2;
-    //         TotalForce += Dr * forceScalar;
-    //     }
-    // }
 
     public static class Forces
     {
@@ -116,6 +64,32 @@ namespace Engine13.Utilities
         public static Vec2 GetForce(Mesh mesh)
         {
             return _acc.TryGetValue(mesh, out var f) ? f : new Vec2(0.0, 0.0);
+        }
+
+        // Apply accumulated forces to meshes by updating their ObjectCollision velocity.
+        // This should be called once per frame after all attributes have contributed forces.
+        public static void Apply(Engine13.Core.GameTime gameTime)
+        {
+            double dt = gameTime.DeltaTime;
+            if (dt <= 0.0)
+                return;
+            if (_acc.Count == 0)
+                return;
+
+            foreach (var kv in _acc)
+            {
+                Mesh mesh = kv.Key;
+                Vec2 f = kv.Value;
+                var obj = mesh.GetAttribute<Engine13.Utilities.Attributes.ObjectCollision>();
+                if (obj == null || obj.IsStatic)
+                    continue;
+                double mass = (mesh.Mass > 0f) ? mesh.Mass : 1.0;
+                var dv = new System.Numerics.Vector2(
+                    (float)(f.X / mass * dt),
+                    (float)(f.Y / mass * dt)
+                );
+                obj.Velocity += dv;
+            }
         }
     }
 }

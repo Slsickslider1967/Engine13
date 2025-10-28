@@ -1,5 +1,6 @@
 using System;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using Engine13.Debug;
 using Engine13.Graphics;
 using Engine13.Primitives;
@@ -7,6 +8,7 @@ using Engine13.Utilities;
 using Engine13.Utilities.Attributes;
 using Veldrid;
 using Veldrid.Sdl2;
+using Vulkan;
 
 namespace Engine13.Core
 {
@@ -230,35 +232,23 @@ namespace Engine13.Core
 
         public void Objects()
         {
-            for (int i = 0; i < 1; i++)
+            for (int i = 0; i < 5; i++)
             {
-                var Cube1 = CubeFactory.CreateCube(GD, 0.05f);
-                Cube1.Position = new Vector2(0.5f, -1f);
-                Cube1.Mass = 10f;
+                var Particle = SphereFactory.CreateSphere(GD, 0.03f, 8, 8);
+                Particle.Position = new Vector2(0.0f + i * 0.06f, 0.5f);
+                Particle.Mass = 0.01f;
 
-                Cube1.AddAttribute(
-                    new Gravity(acceleration: 9.81f, initialVelocity: 0f, mass: Cube1.Mass)
+                Particle.AddAttribute(
+                    new Gravity(acceleration: 9.81f, initialVelocity: 0f, mass: Particle.Mass)
                 );
-                Cube1.AddAttribute(new ObjectCollision() { Mass = Cube1.Mass, Restitution = 0.4f });
-                Cube1.AddAttribute(new EdgeCollision(loop: false));
+                Particle.AddAttribute(new ObjectCollision() { Mass = Particle.Mass, Restitution = 0.4f });
+                Particle.AddAttribute(new EdgeCollision(loop: false));
+                Particle.AddAttribute(new MolecularDynamics(){ SpringConstant = 1f, AnchorFollowFactor = 2f, DriveAmplitude = 0.1f });
 
-                _UpdateManager.Register(Cube1);
-                _Meshes.Add(Cube1);
-                _Grid.AddMesh(Cube1);
-            }
-
-            var Cube2 = CubeFactory.CreateCube(GD, 0.05f);
-            Cube2.Position = new Vector2(-0.5f, -0.9f);
-            Cube2.Mass = 500f;
-
-            //Cube2.AddAttribute(new Gravity(acceleration: 9.81f, initialVelocity: 0f, mass: Cube2.Mass));
-            Cube2.AddAttribute(new ObjectCollision() { Mass = Cube2.Mass, Restitution = 0.8f });
-            Cube2.AddAttribute(new AtomicWiggle(amplitude: 0.0005f, frequency: 50f));
-            Cube2.AddAttribute(new EdgeCollision(loop: false));
-
-            _UpdateManager.Register(Cube2);
-            _Meshes.Add(Cube2);
-            _Grid.AddMesh(Cube2);
+                _UpdateManager.Register(Particle);
+                _Meshes.Add(Particle);
+                _Grid.AddMesh(Particle);
+            }   
         }
     }
 }

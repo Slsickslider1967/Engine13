@@ -1,8 +1,12 @@
-using System.Numerics;
+using System;
 using System.Collections.Generic;
+using System.ComponentModel;
+using System.Numerics;
+using System.Runtime.Intrinsics.X86;
 using Engine13.Core;
 using Engine13.Graphics;
 using Engine13.Utilities;
+using Vortice.DXGI;
 
 namespace Engine13.Utilities.Attributes
 {
@@ -17,10 +21,10 @@ namespace Engine13.Utilities.Attributes
         public float Mass { get; set; } = 1f;
         public float TerminalVelocityY { get; set; } = float.PositiveInfinity;
         public float DragCoefficient { get; set; } = 1f;
-        private float _vy;
+        private float _velocityY;
 
-        public float VelocityY => _vy;
-        public float MomentumY => Mass * _vy;
+        public float VelocityY => _velocityY;
+        public float MomentumY => Mass * _velocityY;
         public float ComputedTerminalVelocityMag
         {
             get
@@ -34,253 +38,171 @@ namespace Engine13.Utilities.Attributes
         public Gravity(float acceleration, float initialVelocity = 0f, float mass = 1f)
         {
             Acceleration = acceleration;
-            _vy = initialVelocity;
+            _velocityY = initialVelocity;
             Mass = mass;
         }
 
         public void Update(Mesh mesh, GameTime gameTime)
         {
-            // If this mesh is controlled by MD, contribute force instead of moving directly.
-            var md = mesh.GetAttribute<MolecularDynamics>();
-            if (md != null)
+            // If MD is active on this mesh, contribute gravity as a force and exit.
+            var molecularDynamics = mesh.GetAttribute<MolecularDynamics>();
+            if (molecularDynamics != null)
             {
-                double m = (mesh.Mass > 0f) ? mesh.Mass : 1.0;
-                // In this engine, positive Y is downward; match existing gravity convention.
-                Forces.AddForce(mesh, new Vec2(0.0, m * Acceleration));
+                double effectiveMass = (mesh.Mass > 0f) ? mesh.Mass : 1.0;
+                Forces.AddForce(mesh, new Vec2(0.0, effectiveMass * Acceleration));
                 return;
             }
-            float dt = gameTime.DeltaTime;
-            if (dt <= 0f)
+
+            float deltaTime = gameTime.DeltaTime;
+            if (deltaTime <= 0f)
                 return;
-            var obj = mesh.GetAttribute<ObjectCollision>();
-            if (obj != null && !obj.IsStatic)
+
+            var objectCollision = mesh.GetAttribute<ObjectCollision>();
+            if (objectCollision != null && !objectCollision.IsStatic)
             {
-                float vy = obj.Velocity.Y;
-                if (!(obj.IsGrounded && vy >= 0f))
+                float velocityY = objectCollision.Velocity.Y;
+                if (!(objectCollision.IsGrounded && velocityY >= 0f))
                 {
-                    vy += Acceleration * dt;
+                    velocityY += Acceleration * deltaTime;
                 }
-                float massForDrag = (obj.Mass > 0f) ? obj.Mass : Mass;
+                float massForDrag = (objectCollision.Mass > 0f) ? objectCollision.Mass : Mass;
                 float area =
                     (mesh.Size.X > 0f && mesh.Size.Y > 0f) ? (mesh.Size.X * mesh.Size.Y) : 1f;
-                float kEff = DragCoefficient * area;
-                float vtMag =
-                    (kEff > 0f && Acceleration != 0f)
-                        ? System.MathF.Sqrt(System.MathF.Abs(massForDrag * Acceleration) / kEff)
+                float effectiveDrag = DragCoefficient * area;
+                float terminalVelocityMagnitude =
+                    (effectiveDrag > 0f && Acceleration != 0f)
+                        ? System.MathF.Sqrt(System.MathF.Abs(massForDrag * Acceleration) / effectiveDrag)
                         : float.PositiveInfinity;
-                if (float.IsFinite(vtMag))
+                if (float.IsFinite(terminalVelocityMagnitude))
                 {
-                    if (vy > vtMag)
-                        vy = vtMag;
-                    else if (vy < -vtMag)
-                        vy = -vtMag;
+                    if (velocityY > terminalVelocityMagnitude)
+                        velocityY = terminalVelocityMagnitude;
+                    else if (velocityY < -terminalVelocityMagnitude)
+                        velocityY = -terminalVelocityMagnitude;
                 }
                 if (float.IsFinite(TerminalVelocityY))
                 {
-                    vy = System.Math.Clamp(vy, -TerminalVelocityY, TerminalVelocityY);
+                    velocityY = System.Math.Clamp(velocityY, -TerminalVelocityY, TerminalVelocityY);
                 }
 
-                obj.Velocity = new Vector2(obj.Velocity.X, vy);
+                objectCollision.Velocity = new Vector2(objectCollision.Velocity.X, velocityY);
             }
             else
             {
-                _vy += Acceleration * dt;
+                _velocityY += Acceleration * deltaTime;
                 float area =
                     (mesh.Size.X > 0f && mesh.Size.Y > 0f) ? (mesh.Size.X * mesh.Size.Y) : 1f;
-                float kEff = DragCoefficient * area;
-                float vtMag =
-                    (kEff > 0f && Acceleration != 0f)
-                        ? System.MathF.Sqrt(System.MathF.Abs(Mass * Acceleration) / kEff)
+                float effectiveDrag = DragCoefficient * area;
+                float terminalVelocityMagnitude =
+                    (effectiveDrag > 0f && Acceleration != 0f)
+                        ? System.MathF.Sqrt(System.MathF.Abs(Mass * Acceleration) / effectiveDrag)
                         : float.PositiveInfinity;
-                if (float.IsFinite(vtMag))
+                if (float.IsFinite(terminalVelocityMagnitude))
                 {
-                    if (_vy > vtMag)
-                        _vy = vtMag;
-                    else if (_vy < -vtMag)
-                        _vy = -vtMag;
+                    if (_velocityY > terminalVelocityMagnitude)
+                        _velocityY = terminalVelocityMagnitude;
+                    else if (_velocityY < -terminalVelocityMagnitude)
+                        _velocityY = -terminalVelocityMagnitude;
                 }
                 if (float.IsFinite(TerminalVelocityY))
                 {
-                    _vy = System.Math.Clamp(_vy, -TerminalVelocityY, TerminalVelocityY);
+                    _velocityY = System.Math.Clamp(_velocityY, -TerminalVelocityY, TerminalVelocityY);
                 }
-                var p = mesh.Position;
-                p.Y += _vy * dt;
-                mesh.Position = p;
-            }
-        }
-    }
-
-    public sealed class AtomicWiggle : IMeshAttribute
-    {
-        public enum WiggleMode
-        {
-            Local,
-            Path,
-        }
-
-        public WiggleMode Mode { get; private set; } = WiggleMode.Local;
-        public float Frequency { get; set; } = 10f;
-        public float XAmplitude { get; set; } = 0.1f;
-        public float YAmplitude { get; set; } = 0.1f;
-        public Vector2 Start { get; private set; }
-        public Vector2 End { get; private set; }
-        public float PathAmplitude { get; set; } = 0.1f;
-        public float Wavelength { get; set; } = 0.5f;
-        public float Speed { get; set; } = 0.5f;
-        public bool Loop { get; set; } = true;
-        public bool PingPong { get; set; } = false;
-
-        private const float Tau = 6.2831855f;
-        private const float Eps = 1e-5f;
-        private float _time;
-        private float _distance;
-        private int _dirSign = 1;
-
-        public AtomicWiggle(float frequency = 10f, float amplitude = 0.01f)
-        {
-            Mode = WiggleMode.Local;
-            Frequency = frequency;
-            XAmplitude = amplitude;
-            YAmplitude = amplitude;
-        }
-
-        public AtomicWiggle(
-            Vector2 start,
-            Vector2 end,
-            float amplitude,
-            float wavelength,
-            float speed,
-            bool loop = true,
-            bool pingPong = false
-        )
-        {
-            Mode = WiggleMode.Path;
-            Start = start;
-            End = end;
-            PathAmplitude = amplitude;
-            Wavelength = wavelength;
-            Speed = speed;
-            Loop = loop;
-            PingPong = pingPong;
-        }
-
-        public void Update(Mesh mesh, GameTime gameTime)
-        {
-            float dt = gameTime.DeltaTime;
-            if (dt <= 0f)
-                return;
-
-            var md = mesh.GetAttribute<MolecularDynamics>();
-            if (md != null)
-            {
-                _time += dt;
-                const float Tau = 6.2831855f;
-                float phase = Tau * Frequency * _time;
-                double fx = XAmplitude * System.Math.Sin(phase);
-                double fy = YAmplitude * System.Math.Cos(phase);
-                Forces.AddForce(mesh, new Vec2(fx, fy));
-                return;
-            }
-
-            if (Mode == WiggleMode.Local)
-            {
-                UpdateLocal(ref mesh, dt);
-                return;
-            }
-
-            Vector2 ab = End - Start;
-            float len = ab.Length();
-            if (len < Eps)
-            {
-                Mode = WiggleMode.Local;
-                UpdateLocal(ref mesh, dt);
-                return;
-            }
-
-            var dir = ab / len;
-            var normal = new Vector2(-dir.Y, dir.X);
-
-            AdvanceDistance(len, dt);
-
-            float wl = (Wavelength <= Eps) ? (len * 0.25f) : Wavelength;
-            float angle = Tau * (_distance / wl);
-            float offset = PathAmplitude * System.MathF.Sin(angle);
-
-            mesh.Position = Start + dir * _distance + normal * offset;
-        }
-
-        private void UpdateLocal(ref Mesh mesh, float dt)
-        {
-            _time += dt;
-            float phase = Tau * Frequency * _time;
-            float x = XAmplitude * System.MathF.Sin(phase);
-            float y = YAmplitude * System.MathF.Cos(-phase);
-            var p = mesh.Position;
-            p.X += x;
-            p.Y += y;
-            mesh.Position = p;
-        }
-
-        private void AdvanceDistance(float pathLength, float dt)
-        {
-            _distance += _dirSign * Speed * dt;
-            if (PingPong)
-            {
-                if (_distance > pathLength || _distance < 0f)
-                {
-                    _dirSign *= -1;
-                    _distance = System.Math.Clamp(_distance, 0f, pathLength);
-                }
-                return;
-            }
-
-            if (Loop)
-            {
-                _distance %= pathLength;
-                if (_distance < 0f)
-                    _distance += pathLength;
-            }
-            else
-            {
-                _distance = System.Math.Clamp(_distance, 0f, pathLength);
+                var position = mesh.Position;
+                position.Y += _velocityY * deltaTime;
+                mesh.Position = position;
             }
         }
     }
 
     public sealed class MolecularDynamics : IMeshAttribute
     {
-        private static readonly List<Mesh> _mdMeshes = new();
+        private static readonly Random _random = new Random();
 
-        private static void Register(Mesh mesh)
+        private Vector2 _restAnchor;
+        private bool _restAnchorInitialized;
+        private float _phaseX;
+        private float _phaseY;
+
+    public float SpringConstant { get; set; } = 10f;
+    public float DampingRatio { get; set; } = 1.1f;
+    public float DriveAmplitude { get; set; } = 0.005f;
+    public Vector2 DriveAxisWeights { get; set; } = new Vector2(0f, 1f);
+    public float DriveFrequency { get; set; } = 4f;
+        public bool EnableDrive { get; set; } = true;
+        public float AnchorFollowFactor { get; set; } = 0f;
+    public float MaxForceMagnitude { get; set; } = 5f;
+
+        private void EnsureAnchorInitialized(Mesh mesh)
         {
-            if (!_mdMeshes.Contains(mesh))
-            {
-                _mdMeshes.Add(mesh);
-            }
-        }
-        public static void Step(GameTime gameTime)
-        {
-            float dt = gameTime.DeltaTime;
-            if (dt <= 0f || _mdMeshes.Count == 0)
+            if (_restAnchorInitialized)
                 return;
 
-            for (int i = 0; i < _mdMeshes.Count; i++)
-            {
-                var mesh = _mdMeshes[i];
-                var obj = mesh.GetAttribute<ObjectCollision>();
-                if (obj == null || obj.IsStatic)
-                    continue;
-                Vec2 fext = Forces.GetForce(mesh);
-                double m = (mesh.Mass > 0f) ? mesh.Mass : 1.0;
-                var dv = new Vector2((float)(fext.X / m * dt), (float)(fext.Y / m * dt));
-                obj.Velocity += dv;
-            }
+            _restAnchor = mesh.Position;
+            _phaseX = (float)(_random.NextDouble() * (MathF.PI * 2f));
+            _phaseY = (float)(_random.NextDouble() * (MathF.PI * 2f));
+            _restAnchorInitialized = true;
+        }
+
+        public void ResetRestAnchor(Vector2 newAnchor)
+        {
+            _restAnchor = newAnchor;
+            _restAnchorInitialized = true;
         }
 
         public void Update(Mesh mesh, GameTime gameTime)
         {
-            // Attribute-level call just ensures the mesh is tracked; integration runs once per frame in Step().
-            Register(mesh);
+            EnsureAnchorInitialized(mesh);
+
+            if (AnchorFollowFactor > 0f)
+            {
+                float followT = Math.Clamp(AnchorFollowFactor * gameTime.DeltaTime, 0f, 1f);
+                _restAnchor = Vector2.Lerp(_restAnchor, mesh.Position, followT);
+            }
+
+            float mass = (mesh.Mass > 0f) ? mesh.Mass : 1f;
+            float springConstant = MathF.Max(SpringConstant, 1e-4f);
+            float dampingCoefficient = 2f * MathF.Sqrt(springConstant * mass) * MathF.Max(DampingRatio, 0f);
+
+            Vector2 desiredOffset = Vector2.Zero;
+            Vector2 desiredVelocity = Vector2.Zero;
+            if (EnableDrive && DriveAmplitude != 0f && DriveFrequency > 0f)
+            {
+                float angularFrequency = 2f * MathF.PI * DriveFrequency;
+                float time = gameTime.TotalTime;
+                float phaseX = angularFrequency * time + _phaseX;
+                float phaseY = angularFrequency * time + _phaseY;
+
+                float amplitude = DriveAmplitude;
+                desiredOffset = new Vector2(
+                    DriveAxisWeights.X * amplitude * MathF.Sin(phaseX),
+                    DriveAxisWeights.Y * amplitude * MathF.Sin(phaseY)
+                );
+
+                desiredVelocity = new Vector2(
+                    DriveAxisWeights.X * amplitude * angularFrequency * MathF.Cos(phaseX),
+                    DriveAxisWeights.Y * amplitude * angularFrequency * MathF.Cos(phaseY)
+                );
+            }
+
+            Vector2 desiredPosition = _restAnchor + desiredOffset;
+            Vector2 displacementError = mesh.Position - desiredPosition;
+            Vector2 velocityError = mesh.Velocity - desiredVelocity;
+
+            Vector2 springForce = -springConstant * displacementError;
+            Vector2 dampingForce = -dampingCoefficient * velocityError;
+            Vector2 totalForce = springForce + dampingForce;
+            if (MaxForceMagnitude > 0f)
+            {
+                float magnitude = totalForce.Length();
+                if (magnitude > MaxForceMagnitude)
+                {
+                    float scale = MaxForceMagnitude / magnitude;
+                    totalForce *= scale;
+                }
+            }
+
+            Forces.AddForce(mesh, new Vec2(totalForce.X, totalForce.Y));
         }
     }
 
@@ -301,108 +223,108 @@ namespace Engine13.Utilities.Attributes
         {
             if (Loop == true)
             {
-                var p = mesh.Position;
-                if (p.X < Left)
+                var position = mesh.Position;
+                if (position.X < Left)
                 {
-                    p.X = Left;
+                    position.X = Left;
                 }
-                else if (p.X > Right)
+                else if (position.X > Right)
                 {
-                    p.X = Right;
+                    position.X = Right;
                 }
-                if (p.Y < Top)
+                if (position.Y < Top)
                 {
-                    p.Y = Top;
+                    position.Y = Top;
                 }
-                else if (p.Y > Bottom)
+                else if (position.Y > Bottom)
                 {
-                    p.Y = -1f;
+                    position.Y = -1f;
                 }
-                mesh.Position = new Vector2(p.X, p.Y);
+                mesh.Position = new Vector2(position.X, position.Y);
             }
             else
             {
-                var p = mesh.Position;
-                var objCollision = mesh.GetAttribute<ObjectCollision>();
+                var position = mesh.Position;
+                var objectCollision = mesh.GetAttribute<ObjectCollision>();
                 const float sleepVelocity = 0.05f;
                 const float recovery = 0.0005f;
 
-                if (p.X < Left + (mesh.Size.X / 2))
+                if (position.X < Left + (mesh.Size.X / 2))
                 {
-                    p.X = Left + (mesh.Size.X / 2);
-                    if (objCollision != null)
+                    position.X = Left + (mesh.Size.X / 2);
+                    if (objectCollision != null)
                     {
-                        float vx = objCollision.Velocity.X;
-                        if (System.MathF.Abs(vx) < sleepVelocity)
+                        float velocityX = objectCollision.Velocity.X;
+                        if (System.MathF.Abs(velocityX) < sleepVelocity)
                         {
-                            vx = 0f;
+                            velocityX = 0f;
                         }
                         else
                         {
-                            vx = -vx * objCollision.Restitution;
+                            velocityX = -velocityX * objectCollision.Restitution;
                         }
-                        objCollision.Velocity = new Vector2(vx, objCollision.Velocity.Y);
+                        objectCollision.Velocity = new Vector2(velocityX, objectCollision.Velocity.Y);
                     }
-                    p.X += recovery;
+                    position.X += recovery;
                 }
-                else if (p.X > Right - (mesh.Size.X / 2))
+                else if (position.X > Right - (mesh.Size.X / 2))
                 {
-                    p.X = Right - (mesh.Size.X / 2);
-                    if (objCollision != null)
+                    position.X = Right - (mesh.Size.X / 2);
+                    if (objectCollision != null)
                     {
-                        float vx = objCollision.Velocity.X;
-                        if (System.MathF.Abs(vx) < sleepVelocity)
+                        float velocityX = objectCollision.Velocity.X;
+                        if (System.MathF.Abs(velocityX) < sleepVelocity)
                         {
-                            vx = 0f;
+                            velocityX = 0f;
                         }
                         else
                         {
-                            vx = -vx * objCollision.Restitution;
+                            velocityX = -velocityX * objectCollision.Restitution;
                         }
-                        objCollision.Velocity = new Vector2(vx, objCollision.Velocity.Y);
+                        objectCollision.Velocity = new Vector2(velocityX, objectCollision.Velocity.Y);
                     }
-                    p.X -= recovery;
+                    position.X -= recovery;
                 }
-                if (p.Y < Top + (mesh.Size.Y / 2))
+                if (position.Y < Top + (mesh.Size.Y / 2))
                 {
-                    p.Y = Top + (mesh.Size.Y / 2);
-                    if (objCollision != null)
+                    position.Y = Top + (mesh.Size.Y / 2);
+                    if (objectCollision != null)
                     {
-                        float vy = objCollision.Velocity.Y;
-                        if (System.MathF.Abs(vy) < sleepVelocity)
+                        float velocityY = objectCollision.Velocity.Y;
+                        if (System.MathF.Abs(velocityY) < sleepVelocity)
                         {
-                            vy = 0f;
+                            velocityY = 0f;
                         }
                         else
                         {
-                            vy = -vy * objCollision.Restitution;
+                            velocityY = -velocityY * objectCollision.Restitution;
                         }
-                        objCollision.Velocity = new Vector2(objCollision.Velocity.X, vy);
-                        objCollision.IsGrounded = false;
+                        objectCollision.Velocity = new Vector2(objectCollision.Velocity.X, velocityY);
+                        objectCollision.IsGrounded = false;
                     }
-                    p.Y += recovery;
+                    position.Y += recovery;
                 }
-                else if (p.Y > Bottom - (mesh.Size.Y / 2))
+                else if (position.Y > Bottom - (mesh.Size.Y / 2))
                 {
-                    p.Y = Bottom - (mesh.Size.Y / 2);
-                    if (objCollision != null)
+                    position.Y = Bottom - (mesh.Size.Y / 2);
+                    if (objectCollision != null)
                     {
-                        float vy = objCollision.Velocity.Y;
-                        if (System.MathF.Abs(vy) < sleepVelocity)
+                        float velocityY = objectCollision.Velocity.Y;
+                        if (System.MathF.Abs(velocityY) < sleepVelocity)
                         {
-                            vy = 0f;
-                            objCollision.IsGrounded = true;
+                            velocityY = 0f;
+                            objectCollision.IsGrounded = true;
                         }
                         else
                         {
-                            vy = -vy * objCollision.Restitution;
-                            objCollision.IsGrounded = false;
+                            velocityY = -velocityY * objectCollision.Restitution;
+                            objectCollision.IsGrounded = false;
                         }
-                        objCollision.Velocity = new Vector2(objCollision.Velocity.X, vy);
+                        objectCollision.Velocity = new Vector2(objectCollision.Velocity.X, velocityY);
                     }
-                    p.Y -= recovery;
+                    position.Y -= recovery;
                 }
-                mesh.Position = new Vector2(p.X, p.Y);
+                mesh.Position = new Vector2(position.X, position.Y);
             }
         }
     }
