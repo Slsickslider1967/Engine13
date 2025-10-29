@@ -416,3 +416,7 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# Keep the repository's source Debug folder tracked (but still ignore build Debug folders)
+!/Debug/
+!/Debug/**
