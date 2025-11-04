@@ -1,6 +1,7 @@
 using System;
 using System.Numerics;
 using Engine13.Graphics;
+using Engine13.Utilities.Attributes;
 
 namespace Engine13.Utilities
 {
@@ -90,50 +91,179 @@ namespace Engine13.Utilities
         {
             collisionInfo = null!;
 
-            var aabbA = a.GetAABB();
-            var aabbB = b.GetAABB();
+            return VertexCollisionSolver.Instance.TryFindContact(a, b, out collisionInfo);
+        }
+    }
 
-            if (!aabbA.Intersects(aabbB))
-                return false;
+    public static class PhysicsSolver
+    {
+        private const float PenetrationSlop = 0.0015f;
+        private const float PositionalCorrectionPercent = 0.6f;
+        private const float MaxPositionalCorrectionSpeed = 2.0f;
+        private const float BaumgarteScalar = 0.25f;
+        private const float RestitutionVelocityThreshold = 0.15f;
+        private const float StaticToDynamicFrictionRatio = 0.8f;
+        private const float GroundNormalThreshold = 0.6f;
+        private const float RestingRelativeVelocityThreshold = 0.4f;
 
-            float overlapX = System.MathF.Min(aabbA.Max.X - aabbB.Min.X, aabbB.Max.X - aabbA.Min.X);
-            float overlapY = System.MathF.Min(aabbA.Max.Y - aabbB.Min.Y, aabbB.Max.Y - aabbA.Min.Y);
+        public static void ResolveCollision(CollisionInfo collision, float deltaTime)
+        {
+            if (collision == null)
+                return;
 
-            if (overlapX <= 0f || overlapY <= 0f)
-                return false;
+            var meshA = collision.MeshA;
+            var meshB = collision.MeshB;
+            if (meshA == null || meshB == null)
+                return;
 
-            Vector2 velA = Vector2.Zero,
-                velB = Vector2.Zero;
-            var ocA = a.GetAttribute<Engine13.Utilities.Attributes.ObjectCollision>();
-            var ocB = b.GetAttribute<Engine13.Utilities.Attributes.ObjectCollision>();
-            if (ocA != null)
-                velA = ocA.Velocity;
-            if (ocB != null)
-                velB = ocB.Velocity;
-            Vector2 relVel = velB - velA;
+            var objA = meshA.GetAttribute<ObjectCollision>();
+            var objB = meshB.GetAttribute<ObjectCollision>();
 
-            bool preferY = System.MathF.Abs(relVel.Y) > System.MathF.Abs(relVel.X) * 1.25f; // slight bias threshold
+            float invMassA = (objA == null || objA.IsStatic || objA.Mass <= 0f) ? 0f : 1f / objA.Mass;
+            float invMassB = (objB == null || objB.IsStatic || objB.Mass <= 0f) ? 0f : 1f / objB.Mass;
+            float invMassSum = invMassA + invMassB;
+            if (invMassSum <= 1e-8f)
+                return;
 
-            Vector2 depth;
-            if (preferY || overlapY < overlapX)
+            Vector2 mtv = collision.PenetrationDepth;
+            float mtvLenSq = mtv.LengthSquared();
+            if (mtvLenSq <= 1e-12f)
+                return;
+
+            float mtvLen = MathF.Sqrt(mtvLenSq);
+            Vector2 normal = mtv / mtvLen;
+
+            deltaTime = MathF.Max(deltaTime, 1e-5f);
+
+            float penetrationDepth = MathF.Max(mtvLen - PenetrationSlop, 0f);
+            if (penetrationDepth > 0f)
             {
-                float signY = (aabbB.Center.Y > aabbA.Center.Y) ? 1f : -1f;
-                depth = new Vector2(0f, signY * overlapY);
+                float correctionSpeed = MathF.Min(
+                    (penetrationDepth / deltaTime) * PositionalCorrectionPercent,
+                    MaxPositionalCorrectionSpeed
+                );
+                float correctionMag = correctionSpeed * deltaTime;
+                Vector2 correction = (correctionMag / invMassSum) * normal;
+                if (objA != null && invMassA > 0f)
+                    meshA.Position -= correction * invMassA;
+                if (objB != null && invMassB > 0f)
+                    meshB.Position += correction * invMassB;
             }
-            else
+
+            Vector2 velocityA = Vector2.Zero;
+            if (objA != null)
+                velocityA = objA.Velocity;
+
+            Vector2 velocityB = Vector2.Zero;
+            if (objB != null)
+                velocityB = objB.Velocity;
+            Vector2 relativeVelocity = velocityB - velocityA;
+            float relVelN = Vector2.Dot(relativeVelocity, normal);
+
+            float restitutionCandidateA = 0f;
+            if (objA != null)
+                restitutionCandidateA = objA.Restitution;
+
+            float restitutionCandidateB = 0f;
+            if (objB != null)
+                restitutionCandidateB = objB.Restitution;
+
+            float restitution = Math.Clamp(MathF.Max(restitutionCandidateA, restitutionCandidateB), 0f, 1f);
+            if (MathF.Abs(relVelN) < RestitutionVelocityThreshold)
+                restitution = 0f;
+
+            float bias = 0f;
+            if (penetrationDepth > 0f)
             {
-                float signX = (aabbB.Center.X > aabbA.Center.X) ? 1f : -1f;
-                depth = new Vector2(signX * overlapX, 0f);
+                bias = MathF.Min(
+                    BaumgarteScalar * penetrationDepth / deltaTime,
+                    MaxPositionalCorrectionSpeed
+                );
             }
 
-            float len = depth.Length();
-            if (len <= 1e-6f)
-                return false;
+            float normalImpulseScalar = (-(1f + restitution) * relVelN + bias) / invMassSum;
+            if (normalImpulseScalar < 0f)
+                normalImpulseScalar = 0f;
 
-            Vector2 contactPoint = (a.Position + b.Position) / 2f;
-            Vector2 separationDir = depth / len;
-            collisionInfo = new CollisionInfo(a, b, contactPoint, depth, separationDir);
-            return true;
+            Vector2 normalImpulse = normalImpulseScalar * normal;
+
+            if (objA != null && invMassA > 0f)
+                objA.Velocity -= normalImpulse * invMassA;
+            if (objB != null && invMassB > 0f)
+                objB.Velocity += normalImpulse * invMassB;
+
+            velocityA = Vector2.Zero;
+            if (objA != null)
+                velocityA = objA.Velocity;
+
+            velocityB = Vector2.Zero;
+            if (objB != null)
+                velocityB = objB.Velocity;
+            relativeVelocity = velocityB - velocityA;
+
+            Vector2 tangent = relativeVelocity - (Vector2.Dot(relativeVelocity, normal) * normal);
+            float tangentLenSq = tangent.LengthSquared();
+            if (tangentLenSq > 1e-12f)
+            {
+                tangent /= MathF.Sqrt(tangentLenSq);
+                float muA = 0.5f;
+                if (objA != null)
+                    muA = objA.Friction;
+
+                float muB = 0.5f;
+                if (objB != null)
+                    muB = objB.Friction;
+                float staticFriction = MathF.Sqrt(MathF.Max(muA * muB, 0f));
+                float dynamicFriction = staticFriction * StaticToDynamicFrictionRatio;
+
+                float relVelT = Vector2.Dot(relativeVelocity, tangent);
+                float tangentImpulseScalar = -relVelT / invMassSum;
+
+                float maxStaticImpulse = staticFriction * normalImpulseScalar;
+                Vector2 frictionImpulse;
+                if (MathF.Abs(tangentImpulseScalar) <= maxStaticImpulse)
+                {
+                    frictionImpulse = tangentImpulseScalar * tangent;
+                }
+                else
+                {
+                    float direction = MathF.Sign(tangentImpulseScalar);
+                    frictionImpulse = -direction * dynamicFriction * normalImpulseScalar * tangent;
+                }
+
+                if (objA != null && invMassA > 0f)
+                    objA.Velocity -= frictionImpulse * invMassA;
+                if (objB != null && invMassB > 0f)
+                    objB.Velocity += frictionImpulse * invMassB;
+            }
+
+            velocityA = Vector2.Zero;
+            if (objA != null)
+                velocityA = objA.Velocity;
+
+            velocityB = Vector2.Zero;
+            if (objB != null)
+                velocityB = objB.Velocity;
+            relVelN = Vector2.Dot(velocityB - velocityA, normal);
+
+            if (normal.Y > GroundNormalThreshold)
+            {
+                if (objA != null && MathF.Abs(relVelN) < RestingRelativeVelocityThreshold)
+                {
+                    objA.IsGrounded = true;
+                    if (objA.Velocity.Y > 0f)
+                        objA.Velocity = new Vector2(objA.Velocity.X, 0f);
+                }
+            }
+            else if (normal.Y < -GroundNormalThreshold)
+            {
+                if (objB != null && MathF.Abs(relVelN) < RestingRelativeVelocityThreshold)
+                {
+                    objB.IsGrounded = true;
+                    if (objB.Velocity.Y > 0f)
+                        objB.Velocity = new Vector2(objB.Velocity.X, 0f);
+                }
+            }
         }
     }
 
@@ -315,6 +445,119 @@ namespace Engine13.Utilities
         {
             cells.Clear();
             meshCells.Clear();
+        }
+    }
+
+    /// <summary>
+    /// Entry point for narrow-phase collision detection. Replace the former AABB-overlap check
+    /// with vertex-aware algorithms (SAT, GJK+EPA, etc.). As long as <see cref="TryFindContact"/>
+    /// returns <c>false</c> the engine keeps running without collision response, letting you
+    /// iterate on an implementation safely.
+    /// </summary>
+    public sealed class VertexCollisionSolver
+    {
+        public static VertexCollisionSolver Instance { get; } = new VertexCollisionSolver();
+
+        private VertexCollisionSolver() { }
+
+        /// <summary>
+        /// Try to produce a detailed contact between <paramref name="meshA"/> and
+        /// <paramref name="meshB"/>.
+        /// </summary>
+        /// <remarks>
+        /// <para>The bullet list below walks through a concrete Separating Axis Theorem (SAT)
+        /// implementation for convex 2D meshes:</para>
+        /// <list type="number">
+        /// <item>
+        /// <description>
+        /// Export both meshes' vertices to world space (<see cref="CopyWorldSpaceVertices"/>).
+        /// If meshes acquire rotation/scale later, incorporate the full transform before storing
+        /// the vertices.
+        /// </description>
+        /// </item>
+        /// <item>
+        /// <description>
+        /// Build the set of candidate axes: take each edge of each polygon, compute the outward
+        /// normal (perpendicular), and normalise it. SAT only needs these edge normals for convex
+        /// shapes.
+        /// </description>
+        /// </item>
+        /// <item>
+        /// <description>
+        /// Project both vertex sets onto every axis. Track the scalar interval
+        /// <c>[min, max]</c> for each projection and measure the overlap depth. If any axis shows
+        /// a gap, the polygons are separated—early out with <c>false</c>.
+        /// </description>
+        /// </item>
+        /// <item>
+        /// <description>
+        /// Keep the axis that produced the smallest positive overlap. That axis yields your
+        /// contact normal (pointing from A to B) and overlap magnitude. Use them to form the MTV
+        /// (minimum translation vector).
+        /// </description>
+        /// </item>
+        /// <item>
+        /// <description>
+        /// Clip the incident polygon against the reference polygon to find the actual contact
+        /// points lying along the contact plane. Average or choose the deepest point, then create
+        /// a new <see cref="CollisionInfo"/> with the contact point, penetration vector, and
+        /// separation direction. Return <c>true</c>.
+        /// </description>
+        /// </item>
+        /// <item>
+        /// <description>
+        /// (Optional but recommended) Persist the manifold/contact IDs so you can reuse impulses
+        /// between frames and keep stacks stable.
+        /// </description>
+        /// </item>
+        /// </list>
+        /// <para>
+        /// If you later need support for concave meshes, decompose them into convex pieces before
+        /// running SAT, or swap in a different algorithm (GJK + EPA). Until any of the above is
+        /// implemented the method returns <c>false</c>, effectively disabling collision response.
+        /// Instrument intermediate values with debug rendering to validate axes, normals, and
+        /// penetration depths while you iterate.
+        /// </para>
+        /// </remarks>
+        public bool TryFindContact(Mesh meshA, Mesh meshB, out CollisionInfo collision)
+        {
+            collision = null!;
+            if (meshA == null || meshB == null)
+                return false;
+
+            // TODO(engine):
+            // 1. Copy vertices into stackalloc'd spans or pooled arrays using CopyWorldSpaceVertices.
+            // 2. Enumerate SAT axes (edge normals) and project both shapes, tracking the smallest
+            //    overlap. Abort early if a separating axis is found.
+            // 3. When all axes overlap, compute the MTV from the smallest overlap axis, clip
+            //    polygons along the contact plane to gather contact points, then construct the
+            //    CollisionInfo and return true.
+
+            return false;
+        }
+
+        /// <summary>
+        /// Convert local mesh vertices into world-space positions. Useful once a vertex-based
+        /// collision test is in place.
+        /// </summary>
+        /// <param name="mesh">Mesh to extract vertices from.</param>
+        /// <param name="destination">
+        /// Buffer that receives converted vertices. Provide a buffer at least as large as the
+        /// mesh vertex array. The method returns how many entries were written.
+        /// </param>
+        public int CopyWorldSpaceVertices(Mesh mesh, Span<Vector2> destination)
+        {
+            if (mesh == null)
+                throw new ArgumentNullException(nameof(mesh));
+
+            var vertices = mesh.GetVertices();
+            int count = Math.Min(vertices.Length, destination.Length);
+            for (int i = 0; i < count; i++)
+            {
+                destination[i] = new Vector2(vertices[i].X, vertices[i].Y) + mesh.Position;
+            }
+
+            return count;
         }
     }
 

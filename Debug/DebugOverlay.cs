@@ -29,7 +29,11 @@ namespace Engine13.Debug
                 var m = _meshes[i];
                 var oc = m.GetAttribute<ObjectCollision>();
 
-                Vector2 vOc = oc?.Velocity ?? Vector2.Zero;
+                Vector2 vOc = Vector2.Zero;
+                if (oc != null)
+                {
+                    vOc = oc.Velocity;
+                }
                 Vector2 vEst = Vector2.Zero;
                 bool hasEst = false;
                 if (deltaTime > 1e-6f && _lastPositions.TryGetValue(m, out var last))

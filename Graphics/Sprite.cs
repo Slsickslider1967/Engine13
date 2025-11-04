@@ -76,7 +76,10 @@ namespace Engine13.Graphics
         }
         public void StopAnimation()
         {
-            CurrentAnimation?.Stop();
+            if (CurrentAnimation != null)
+            {
+                CurrentAnimation.Stop();
+            }
         }
         public void Update(GameTime gameTime)
         {
@@ -131,7 +134,10 @@ namespace Engine13.Graphics
         public SpriteAnimation(string name, params AnimationFrame[] frames)
         {
             Name = name;
-            _frames = frames ?? throw new System.ArgumentNullException(nameof(frames));
+            if (frames == null)
+                throw new System.ArgumentNullException(nameof(frames));
+
+            _frames = frames;
             if (_frames.Length == 0)
                 throw new System.ArgumentException("Animation must have at least one frame", nameof(frames));
         }
