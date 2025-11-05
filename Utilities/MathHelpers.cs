@@ -448,103 +448,88 @@ namespace Engine13.Utilities
         }
     }
 
-    /// <summary>
-    /// Entry point for narrow-phase collision detection. Replace the former AABB-overlap check
-    /// with vertex-aware algorithms (SAT, GJK+EPA, etc.). As long as <see cref="TryFindContact"/>
-    /// returns <c>false</c> the engine keeps running without collision response, letting you
-    /// iterate on an implementation safely.
-    /// </summary>
     public sealed class VertexCollisionSolver
     {
+        private const float AxisEpsilon = 1e-6f;
         public static VertexCollisionSolver Instance { get; } = new VertexCollisionSolver();
 
         private VertexCollisionSolver() { }
 
-        /// <summary>
-        /// Try to produce a detailed contact between <paramref name="meshA"/> and
-        /// <paramref name="meshB"/>.
-        /// </summary>
-        /// <remarks>
-        /// <para>The bullet list below walks through a concrete Separating Axis Theorem (SAT)
-        /// implementation for convex 2D meshes:</para>
-        /// <list type="number">
-        /// <item>
-        /// <description>
-        /// Export both meshes' vertices to world space (<see cref="CopyWorldSpaceVertices"/>).
-        /// If meshes acquire rotation/scale later, incorporate the full transform before storing
-        /// the vertices.
-        /// </description>
-        /// </item>
-        /// <item>
-        /// <description>
-        /// Build the set of candidate axes: take each edge of each polygon, compute the outward
-        /// normal (perpendicular), and normalise it. SAT only needs these edge normals for convex
-        /// shapes.
-        /// </description>
-        /// </item>
-        /// <item>
-        /// <description>
-        /// Project both vertex sets onto every axis. Track the scalar interval
-        /// <c>[min, max]</c> for each projection and measure the overlap depth. If any axis shows
-        /// a gap, the polygons are separated—early out with <c>false</c>.
-        /// </description>
-        /// </item>
-        /// <item>
-        /// <description>
-        /// Keep the axis that produced the smallest positive overlap. That axis yields your
-        /// contact normal (pointing from A to B) and overlap magnitude. Use them to form the MTV
-        /// (minimum translation vector).
-        /// </description>
-        /// </item>
-        /// <item>
-        /// <description>
-        /// Clip the incident polygon against the reference polygon to find the actual contact
-        /// points lying along the contact plane. Average or choose the deepest point, then create
-        /// a new <see cref="CollisionInfo"/> with the contact point, penetration vector, and
-        /// separation direction. Return <c>true</c>.
-        /// </description>
-        /// </item>
-        /// <item>
-        /// <description>
-        /// (Optional but recommended) Persist the manifold/contact IDs so you can reuse impulses
-        /// between frames and keep stacks stable.
-        /// </description>
-        /// </item>
-        /// </list>
-        /// <para>
-        /// If you later need support for concave meshes, decompose them into convex pieces before
-        /// running SAT, or swap in a different algorithm (GJK + EPA). Until any of the above is
-        /// implemented the method returns <c>false</c>, effectively disabling collision response.
-        /// Instrument intermediate values with debug rendering to validate axes, normals, and
-        /// penetration depths while you iterate.
-        /// </para>
-        /// </remarks>
+        public readonly struct SetAxis
+        {
+            public readonly Vector2 Normal;
+            public readonly int Source;
+            public readonly int EdgeIndex;
+
+            public SetAxis(Vector2 normal, int source, int edgeIndex)
+            {
+                Normal = normal;
+                Source = source;
+                EdgeIndex = edgeIndex;
+            }
+
+            public override string ToString()
+                => $"n={Normal}, src={(Source == 0 ? "A" : "B")}, edge={EdgeIndex}";
+
+        }
+
+        private static void BuildAxes(ReadOnlySpan<Vector2> VertsA, ReadOnlySpan<Vector2> VertsB, System.Collections.Generic.List<SetAxis> axes)
+        {
+            axes.Clear();
+            AddAxesFromPolygon(VertsA, 0, axes);
+            AddAxesFromPolygon(VertsB, 1, axes);
+        }
+
+        private static void AddAxesFromPolygon(ReadOnlySpan<Vector2> Vertices, int source, System.Collections.Generic.List<SetAxis> axes)
+        {
+            int n = Vertices.Length;
+            if (n < 2) return;
+
+            for (int i = 0; i < n; i++)
+            {
+                var a = Vertices[i];
+                var b = Vertices[(i + 1) % n];
+                var edge = b - a;
+                if (edge.LengthSquared() < AxisEpsilon * AxisEpsilon)
+                    continue;
+
+                var Normal = new Vector2(-edge.Y, edge.X);
+                float Len = Normal.Length();
+                if (Len < AxisEpsilon)
+                    continue;
+
+                Normal /= Len;
+                axes.Add(new SetAxis(Normal, source, i));
+            }
+        }
+
+        private static void DedupeAxes(System.Collections.Generic.List<SetAxis> axis)
+        {
+            if (axis == null || axis.Count == 0)
+                return;
+
+            var OutList = new System.Collections.Generic.List<SetAxis>(axis.Count);
+            foreach (var a in axis)
+            {
+                if (!OutList.Contains(a))
+                    OutList.Add(a);
+            }
+
+            axis.Clear();
+            axis.AddRange(OutList);
+        }
+
         public bool TryFindContact(Mesh meshA, Mesh meshB, out CollisionInfo collision)
         {
             collision = null!;
             if (meshA == null || meshB == null)
                 return false;
 
-            // TODO(engine):
-            // 1. Copy vertices into stackalloc'd spans or pooled arrays using CopyWorldSpaceVertices.
-            // 2. Enumerate SAT axes (edge normals) and project both shapes, tracking the smallest
-            //    overlap. Abort early if a separating axis is found.
-            // 3. When all axes overlap, compute the MTV from the smallest overlap axis, clip
-            //    polygons along the contact plane to gather contact points, then construct the
-            //    CollisionInfo and return true.
+
 
             return false;
         }
 
-        /// <summary>
-        /// Convert local mesh vertices into world-space positions. Useful once a vertex-based
-        /// collision test is in place.
-        /// </summary>
-        /// <param name="mesh">Mesh to extract vertices from.</param>
-        /// <param name="destination">
-        /// Buffer that receives converted vertices. Provide a buffer at least as large as the
-        /// mesh vertex array. The method returns how many entries were written.
-        /// </param>
         public int CopyWorldSpaceVertices(Mesh mesh, Span<Vector2> destination)
         {
             if (mesh == null)
