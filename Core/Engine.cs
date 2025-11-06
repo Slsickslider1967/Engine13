@@ -1,7 +1,5 @@
 using System;
 using System.Numerics;
-using System.Runtime.CompilerServices;
-using Engine13.Debug;
 using Engine13.Graphics;
 using Engine13.Primitives;
 using Engine13.Utilities;
@@ -14,16 +12,16 @@ namespace Engine13.Core
 {
     public class Engine
     {
-    private Sdl2Window Window;
-    private GraphicsDevice GD;
-    private GameTime GameTime;
-    private PipeLineManager _PipeLineManager;
-    private Renderer _Renderer;
-    private DebugOverlay _DebugOverlay;
-    private Input.InputManager _InputManager;
-    private System.Collections.Generic.List<Mesh> _Meshes = new();
-    private UpdateManager _UpdateManager;
-    private SpatialGrid _Grid = new SpatialGrid(0.25f);
+        private Sdl2Window Window;
+        private GraphicsDevice GD;
+        private GameTime GameTime;
+        private PipeLineManager _PipeLineManager;
+        private Renderer _Renderer;
+        private Input.InputManager _InputManager;
+        private System.Collections.Generic.List<Mesh> _Meshes = new();
+        private UpdateManager _UpdateManager;
+        private SpatialGrid _Grid = new SpatialGrid(0.025f);
+        private const float _PhysicsTick = 20f;
 
         public Engine(Sdl2Window _Window, GraphicsDevice _GD)
         {
@@ -38,7 +36,6 @@ namespace Engine13.Core
             _InputManager = new Input.InputManager();
             _InputManager.Attach(Window);
             _UpdateManager = new UpdateManager();
-            _DebugOverlay = new DebugOverlay(_Meshes, _Renderer);
         }
 
         public void Run()
@@ -61,12 +58,15 @@ namespace Engine13.Core
                 }
 
                 GameTime.Update();
-                _UpdateManager.Update(GameTime);
 
-                // Refresh spatial grid memberships using current AABBs
-                _Grid.UpdateAllAabb(_Meshes);
+                int Ticks = (int)(GameTime.DeltaTime / _PhysicsTick);
 
-                RunCollisionDetection();
+                for (int i = 0; i <= Ticks; i++)
+                {
+                    _UpdateManager.Update(GameTime);
+                    _Grid.UpdateAllAabb(_Meshes);
+                    RunCollisionDetection();
+                }
 
                 _Renderer.BeginFrame(new RgbaFloat(0.1f, 0.1f, 0.1f, 1f));
 
@@ -74,8 +74,6 @@ namespace Engine13.Core
                 {
                     _Renderer.DrawMesh(_Meshes[i]);
                 }
-
-                _DebugOverlay.Draw(GameTime.DeltaTime);
 
                 _Renderer.EndFrame();
             }
@@ -85,7 +83,6 @@ namespace Engine13.Core
 
         private void RunCollisionDetection()
         {
-            // Clear grounded each frame; it'll be set again when resting contacts are detected
             foreach (var m in _Meshes)
             {
                 var oc = m.GetAttribute<ObjectCollision>();
@@ -115,34 +112,41 @@ namespace Engine13.Core
                         PhysicsSolver.ResolveCollision(collisionInfo, GameTime.DeltaTime);
                     }
                 }
+
                 if (!anyContacts)
                     break;
-
-                if (iter < iterations - 1)
-                    _Grid.UpdateAllAabb(_Meshes);
             }
         }
 
-
         public void Objects()
         {
-            for (int i = 0; i < 25; i++)
+            for (int i = 0; i < 200; i++)
             {
-                var Particle = SphereFactory.CreateSphere(GD, 0.03f, 8, 8);
-                Particle.Position = new Vector2(0.0f + i * 0.06f, 0.5f+ i * 0.06f);
-                Particle.Mass = 0.01f;
+                var Particle = CircleFactory.CreateCircle(GD, 0.01f, 8, 8);
+                Particle.Position = new Vector2(0.25f, 0.5f + i * 0.06f);
+                Particle.Mass = 1f;
 
                 Particle.AddAttribute(
                     new Gravity(acceleration: 9.81f, initialVelocity: 0f, mass: Particle.Mass)
                 );
-                Particle.AddAttribute(new ObjectCollision() { Mass = Particle.Mass, Restitution = 0.0f });
+                Particle.AddAttribute(
+                    new ObjectCollision() { Mass = Particle.Mass, Restitution = 0.4f }
+                );
                 Particle.AddAttribute(new EdgeCollision(loop: false));
-                //Particle.AddAttribute(new MolecularDynamics(){ SpringConstant = 1f, AnchorFollowFactor = 2f, DriveAmplitude = 0.1f });
 
                 _UpdateManager.Register(Particle);
                 _Meshes.Add(Particle);
                 _Grid.AddMesh(Particle);
-            }   
+            }
+
+            var EdgeLeft = QuadFactory.CreateQuad(GD, 0.15f, 100f);
+            EdgeLeft.Position = new Vector2(-0.25f, 0f);
+
+            EdgeLeft.AddAttribute(new ObjectCollision() { IsStatic = true, Restitution = 0.0f });
+
+            _UpdateManager.Register(EdgeLeft);
+            _Meshes.Add(EdgeLeft);
+            _Grid.AddMesh(EdgeLeft);
         }
     }
 }

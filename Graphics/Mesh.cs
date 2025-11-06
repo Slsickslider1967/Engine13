@@ -294,12 +294,12 @@ namespace Engine13.Primitives
             new CubeFactory(GD).Update(mesh, Size);
     }
 
-    public class SphereFactory : PrimitiveFactory
+    public class CircleFactory : PrimitiveFactory
     {
-        public SphereFactory(GraphicsDevice gd)
+        public CircleFactory(GraphicsDevice gd)
             : base(gd) { }
 
-        public Engine13.Graphics.Mesh Sphere(
+        public Engine13.Graphics.Mesh Circle(
             float Radius,
             int LatitudeSegments = 16,
             int LongitudeSegments = 16
@@ -353,14 +353,14 @@ namespace Engine13.Primitives
             return mesh;
         }
 
-        public Engine13.Graphics.Mesh Sphere(
+        public Engine13.Graphics.Mesh Circle(
             float Radius,
             Vector4 color,
             int LatitudeSegments = 16,
             int LongitudeSegments = 16
         )
         {
-            var mesh = Sphere(Radius, LatitudeSegments, LongitudeSegments);
+            var mesh = Circle(Radius, LatitudeSegments, LongitudeSegments);
             mesh.Color = color;
             mesh.Size = new Vector2(Radius * 2f, Radius * 2f);
             return mesh;
@@ -373,33 +373,33 @@ namespace Engine13.Primitives
             int LongitudeSegments = 16
         )
         {
-            var newSphere = Sphere(Radius, LatitudeSegments, LongitudeSegments);
-            GD.UpdateBuffer(mesh.VertexBuffer, 0, newSphere.GetVertices());
+            var newCircle = Circle(Radius, LatitudeSegments, LongitudeSegments);
+            GD.UpdateBuffer(mesh.VertexBuffer, 0, newCircle.GetVertices());
             mesh.Size = new Vector2(Radius * 2f, Radius * 2f);
         }
 
-        public static Engine13.Graphics.Mesh CreateSphere(
+        public static Engine13.Graphics.Mesh CreateCircle(
             GraphicsDevice GD,
             float Radius,
             int LatitudeSegments = 16,
             int LongitudeSegments = 16
-        ) => new SphereFactory(GD).Sphere(Radius, LatitudeSegments, LongitudeSegments);
+        ) => new CircleFactory(GD).Circle(Radius, LatitudeSegments, LongitudeSegments);
 
-        public static Engine13.Graphics.Mesh CreateSphere(
+        public static Engine13.Graphics.Mesh CreateCircle(
             GraphicsDevice GD,
             float Radius,
             Vector4 color,
             int LatitudeSegments = 16,
             int LongitudeSegments = 16
-        ) => new SphereFactory(GD).Sphere(Radius, color, LatitudeSegments, LongitudeSegments);
+        ) => new CircleFactory(GD).Circle(Radius, color, LatitudeSegments, LongitudeSegments);
 
-        public static void UpdateSphere(
+        public static void UpdateCircle(
             Engine13.Graphics.Mesh mesh,
             GraphicsDevice GD,
             float Radius,
             int LatitudeSegments = 16,
             int LongitudeSegments = 16
-        ) => new SphereFactory(GD).Update(mesh, Radius, LatitudeSegments, LongitudeSegments);
+        ) => new CircleFactory(GD).Update(mesh, Radius, LatitudeSegments, LongitudeSegments);
     }
 
     public class TriangleFactory : PrimitiveFactory

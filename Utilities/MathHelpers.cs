@@ -90,7 +90,15 @@ namespace Engine13.Utilities
         public static bool AreColliding(Mesh a, Mesh b, out CollisionInfo collisionInfo)
         {
             collisionInfo = null!;
+            if (a == null || b == null)
+                return false;
 
+            var aabbA = a.GetAABB();
+            var aabbB = b.GetAABB();
+            if (!aabbA.Intersects(aabbB))
+                return false;
+
+            // Narrow-phase: SAT
             return VertexCollisionSolver.Instance.TryFindContact(a, b, out collisionInfo);
         }
     }
@@ -505,18 +513,44 @@ namespace Engine13.Utilities
 
         private static void DedupeAxes(System.Collections.Generic.List<SetAxis> axis)
         {
-            if (axis == null || axis.Count == 0)
+            if (axis == null || axis.Count <= 1)
                 return;
 
-            var OutList = new System.Collections.Generic.List<SetAxis>(axis.Count);
-            foreach (var a in axis)
+            var outList = new System.Collections.Generic.List<SetAxis>(axis.Count);
+            const float parallelDot = 0.9995f; // treat near-parallel (including opposite) as duplicate
+
+            for (int i = 0; i < axis.Count; i++)
             {
-                if (!OutList.Contains(a))
-                    OutList.Add(a);
+                var a = axis[i];
+                var n = a.Normal;
+
+                // normalize to be safe
+                float len = n.Length();
+                if (len <= AxisEpsilon)
+                    continue;
+                n /= len;
+
+                // Canonicalize hemisphere so n and -n dedupe together
+                if (n.Y < 0f || (System.MathF.Abs(n.Y) <= AxisEpsilon && n.X < 0f))
+                    n = -n;
+
+                bool keep = true;
+                for (int j = 0; j < outList.Count; j++)
+                {
+                    float dot = Vector2.Dot(n, outList[j].Normal);
+                    if (System.MathF.Abs(dot) > parallelDot)
+                    {
+                        keep = false;
+                        break;
+                    }
+                }
+
+                if (keep)
+                    outList.Add(new SetAxis(n, a.Source, a.EdgeIndex));
             }
 
             axis.Clear();
-            axis.AddRange(OutList);
+            axis.AddRange(outList);
         }
 
         public bool TryFindContact(Mesh meshA, Mesh meshB, out CollisionInfo collision)
@@ -525,9 +559,136 @@ namespace Engine13.Utilities
             if (meshA == null || meshB == null)
                 return false;
 
+            // Copy world-space vertices
+            var rawA = meshA.GetVertices();
+            var rawB = meshB.GetVertices();
+            if (rawA == null || rawB == null)
+                return false;
+            if (rawA.Length < 2 || rawB.Length < 2)
+                return false;
 
+            var worldA = new Vector2[rawA.Length];
+            var worldB = new Vector2[rawB.Length];
+            int countA = CopyWorldSpaceVertices(meshA, worldA.AsSpan());
+            int countB = CopyWorldSpaceVertices(meshB, worldB.AsSpan());
+            if (countA < 2 || countB < 2)
+                return false;
 
-            return false;
+            if (countA != worldA.Length)
+            {
+                var tmp = new Vector2[countA];
+                System.Array.Copy(worldA, tmp, countA);
+                worldA = tmp;
+            }
+            if (countB != worldB.Length)
+            {
+                var tmp = new Vector2[countB];
+                System.Array.Copy(worldB, tmp, countB);
+                worldB = tmp;
+            }
+
+            // Build and dedupe axes
+            var axes = new System.Collections.Generic.List<SetAxis>(worldA.Length + worldB.Length);
+            BuildAxes(worldA, worldB, axes);
+            DedupeAxes(axes);
+            if (axes.Count == 0)
+                return false;
+
+            // SAT projection to find minimum overlap axis
+            float minOverlap = float.MaxValue;
+            Vector2 minAxis = Vector2.Zero;
+            int minAxisSource = -1;
+            int minAxisEdge = -1;
+
+            foreach (var a in axes)
+            {
+                var axis = a.Normal;
+
+                float minA = float.MaxValue;
+                float maxA = float.MinValue;
+                for (int i = 0; i < worldA.Length; i++)
+                {
+                    float p = Vector2.Dot(worldA[i], axis);
+                    if (p < minA)
+                        minA = p;
+                    if (p > maxA)
+                        maxA = p;
+                }
+
+                float minB = float.MaxValue;
+                float maxB = float.MinValue;
+                for (int i = 0; i < worldB.Length; i++)
+                {
+                    float p = Vector2.Dot(worldB[i], axis);
+                    if (p < minB)
+                        minB = p;
+                    if (p > maxB)
+                        maxB = p;
+                }
+
+                float overlap = System.MathF.Min(maxA, maxB) - System.MathF.Max(minA, minB);
+                if (overlap <= 0f)
+                {
+                    // Separating axis -> no collision
+                    return false;
+                }
+
+                if (overlap < minOverlap)
+                {
+                    minOverlap = overlap;
+                    minAxis = axis;
+                    minAxisSource = a.Source;
+                    minAxisEdge = a.EdgeIndex;
+                }
+            }
+
+            if (minOverlap == float.MaxValue)
+                return false;
+
+            // Orient normal from A to B
+            Vector2 centerA = Vector2.Zero;
+            for (int i = 0; i < worldA.Length; i++)
+                centerA += worldA[i];
+            centerA /= worldA.Length;
+            Vector2 centerB = Vector2.Zero;
+            for (int i = 0; i < worldB.Length; i++)
+                centerB += worldB[i];
+            centerB /= worldB.Length;
+
+            Vector2 normal = minAxis;
+            if (Vector2.Dot(centerB - centerA, normal) < 0f)
+                normal = -normal;
+
+            // Support points along normal
+            Vector2 supportA = worldA[0];
+            float bestA = Vector2.Dot(supportA, normal);
+            for (int i = 1; i < worldA.Length; i++)
+            {
+                float p = Vector2.Dot(worldA[i], normal);
+                if (p > bestA)
+                {
+                    bestA = p;
+                    supportA = worldA[i];
+                }
+            }
+
+            Vector2 supportB = worldB[0];
+            float bestB = Vector2.Dot(supportB, normal);
+            for (int i = 1; i < worldB.Length; i++)
+            {
+                float p = Vector2.Dot(worldB[i], normal);
+                if (p < bestB)
+                {
+                    bestB = p;
+                    supportB = worldB[i];
+                }
+            }
+
+            Vector2 contactPoint = (supportA + supportB) * 0.5f;
+            Vector2 penetrationVec = normal * minOverlap;
+
+            collision = new CollisionInfo(meshA, meshB, contactPoint, penetrationVec, normal);
+            return true;
         }
 
         public int CopyWorldSpaceVertices(Mesh mesh, Span<Vector2> destination)
