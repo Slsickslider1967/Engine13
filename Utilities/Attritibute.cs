@@ -71,7 +71,9 @@ namespace Engine13.Utilities.Attributes
                 float effectiveDrag = DragCoefficient * area;
                 float terminalVelocityMagnitude =
                     (effectiveDrag > 0f && Acceleration != 0f)
-                        ? System.MathF.Sqrt(System.MathF.Abs(massForDrag * Acceleration) / effectiveDrag)
+                        ? System.MathF.Sqrt(
+                            System.MathF.Abs(massForDrag * Acceleration) / effectiveDrag
+                        )
                         : float.PositiveInfinity;
                 if (float.IsFinite(terminalVelocityMagnitude))
                 {
@@ -106,7 +108,11 @@ namespace Engine13.Utilities.Attributes
                 }
                 if (float.IsFinite(TerminalVelocityY))
                 {
-                    _velocityY = System.Math.Clamp(_velocityY, -TerminalVelocityY, TerminalVelocityY);
+                    _velocityY = System.Math.Clamp(
+                        _velocityY,
+                        -TerminalVelocityY,
+                        TerminalVelocityY
+                    );
                 }
                 var position = mesh.Position;
                 position.Y += _velocityY * deltaTime;
@@ -124,14 +130,14 @@ namespace Engine13.Utilities.Attributes
         private float _phaseX;
         private float _phaseY;
 
-    public float SpringConstant { get; set; } = 10f;
-    public float DampingRatio { get; set; } = 1.1f;
-    public float DriveAmplitude { get; set; } = 0.005f;
-    public Vector2 DriveAxisWeights { get; set; } = new Vector2(0f, 1f);
-    public float DriveFrequency { get; set; } = 4f;
+        public float SpringConstant { get; set; } = 10f;
+        public float DampingRatio { get; set; } = 1.1f;
+        public float DriveAmplitude { get; set; } = 0.005f;
+        public Vector2 DriveAxisWeights { get; set; } = new Vector2(0f, 1f);
+        public float DriveFrequency { get; set; } = 4f;
         public bool EnableDrive { get; set; } = true;
         public float AnchorFollowFactor { get; set; } = 0f;
-    public float MaxForceMagnitude { get; set; } = 5f;
+        public float MaxForceMagnitude { get; set; } = 5f;
 
         private void EnsureAnchorInitialized(Mesh mesh)
         {
@@ -162,7 +168,8 @@ namespace Engine13.Utilities.Attributes
 
             float mass = (mesh.Mass > 0f) ? mesh.Mass : 1f;
             float springConstant = MathF.Max(SpringConstant, 1e-4f);
-            float dampingCoefficient = 2f * MathF.Sqrt(springConstant * mass) * MathF.Max(DampingRatio, 0f);
+            float dampingCoefficient =
+                2f * MathF.Sqrt(springConstant * mass) * MathF.Max(DampingRatio, 0f);
 
             Vector2 desiredOffset = Vector2.Zero;
             Vector2 desiredVelocity = Vector2.Zero;
@@ -263,7 +270,10 @@ namespace Engine13.Utilities.Attributes
                         {
                             velocityX = -velocityX * objectCollision.Restitution;
                         }
-                        objectCollision.Velocity = new Vector2(velocityX, objectCollision.Velocity.Y);
+                        objectCollision.Velocity = new Vector2(
+                            velocityX,
+                            objectCollision.Velocity.Y
+                        );
                     }
                     position.X += recovery;
                 }
@@ -281,7 +291,10 @@ namespace Engine13.Utilities.Attributes
                         {
                             velocityX = -velocityX * objectCollision.Restitution;
                         }
-                        objectCollision.Velocity = new Vector2(velocityX, objectCollision.Velocity.Y);
+                        objectCollision.Velocity = new Vector2(
+                            velocityX,
+                            objectCollision.Velocity.Y
+                        );
                     }
                     position.X -= recovery;
                 }
@@ -299,7 +312,10 @@ namespace Engine13.Utilities.Attributes
                         {
                             velocityY = -velocityY * objectCollision.Restitution;
                         }
-                        objectCollision.Velocity = new Vector2(objectCollision.Velocity.X, velocityY);
+                        objectCollision.Velocity = new Vector2(
+                            objectCollision.Velocity.X,
+                            velocityY
+                        );
                         objectCollision.IsGrounded = false;
                     }
                     position.Y += recovery;
@@ -320,7 +336,10 @@ namespace Engine13.Utilities.Attributes
                             velocityY = -velocityY * objectCollision.Restitution;
                             objectCollision.IsGrounded = false;
                         }
-                        objectCollision.Velocity = new Vector2(objectCollision.Velocity.X, velocityY);
+                        objectCollision.Velocity = new Vector2(
+                            objectCollision.Velocity.X,
+                            velocityY
+                        );
                     }
                     position.Y -= recovery;
                 }

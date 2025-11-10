@@ -21,7 +21,7 @@ namespace Engine13.Core
         private System.Collections.Generic.List<Mesh> _Meshes = new();
         private UpdateManager _UpdateManager;
         private SpatialGrid _Grid = new SpatialGrid(0.025f);
-        private const float _PhysicsTick = 120f;
+        private const float _PhysicsTick = 240f;
 
         public Engine(Sdl2Window _Window, GraphicsDevice _GD)
         {
@@ -128,7 +128,7 @@ namespace Engine13.Core
 
         public void Objects()
         {
-            const int particleCount = 200;
+            const int particleCount = 500;
             const int columns = 25;
             const float particleRadius = 0.01f;
             const float diameter = particleRadius * 2f;
@@ -147,7 +147,7 @@ namespace Engine13.Core
                     origin.X + column * horizontalSpacing,
                     origin.Y + row * verticalSpacing
                 );
-                particle.Mass = 1f;
+                particle.Mass = 100f;
 
                 particle.AddAttribute(
                     new Gravity(acceleration: 9.81f, initialVelocity: 0f, mass: particle.Mass)
@@ -162,14 +162,15 @@ namespace Engine13.Core
                 _Grid.AddMesh(particle);
             }
 
-            var EdgeLeft = QuadFactory.CreateQuad(GD, 0.15f, 100f);
-            EdgeLeft.Position = new Vector2(-0.25f, 0f);
-
-            EdgeLeft.AddAttribute(new ObjectCollision() { IsStatic = true, Restitution = 0.5f });
-
-            _UpdateManager.Register(EdgeLeft);
-            _Meshes.Add(EdgeLeft);
-            _Grid.AddMesh(EdgeLeft);
+            var WhiteQue = CircleFactory.CreateCircle(GD, 0.01f, 8, 8);
+            WhiteQue.Position = new Vector2(0.25f, 0f);
+            WhiteQue.Mass = 0.00001f;
+            WhiteQue.AddAttribute(new ObjectCollision() { IsStatic = true, Restitution = 0.5f });
+            WhiteQue.AddAttribute(new EdgeCollision(loop: false));
+            WhiteQue.AddAttribute(new Gravity(acceleration: 9.81f, initialVelocity: 0f, mass: WhiteQue.Mass));
+            _UpdateManager.Register(WhiteQue);
+            _Meshes.Add(WhiteQue);
+            _Grid.AddMesh(WhiteQue);
         }
     }
 }
