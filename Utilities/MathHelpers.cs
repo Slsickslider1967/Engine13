@@ -98,8 +98,101 @@ namespace Engine13.Utilities
             if (!aabbA.Intersects(aabbB))
                 return false;
 
+            if (
+                a.CollisionShape == Mesh.CollisionShapeType.Circle
+                && b.CollisionShape == Mesh.CollisionShapeType.Circle
+            )
+            {
+                return TryCircleCollision(a, b, out collisionInfo);
+            }
+
             // Narrow-phase: SAT
             return VertexCollisionSolver.Instance.TryFindContact(a, b, out collisionInfo);
+        }
+
+        private static bool TryCircleCollision(Mesh a, Mesh b, out CollisionInfo collisionInfo)
+        {
+            collisionInfo = null!;
+
+            float radiusA = a.CollisionRadius > 0f ? a.CollisionRadius : MathF.Max(a.Size.X, a.Size.Y) * 0.5f;
+            float radiusB = b.CollisionRadius > 0f ? b.CollisionRadius : MathF.Max(b.Size.X, b.Size.Y) * 0.5f;
+            if (!(radiusA > 0f) || !(radiusB > 0f))
+                return false;
+
+            Vector2 centerA = a.Position;
+            Vector2 centerB = b.Position;
+            Vector2 delta = centerB - centerA;
+            float distanceSq = delta.LengthSquared();
+            float radiusSum = radiusA + radiusB;
+            float radiusSumSq = radiusSum * radiusSum;
+            if (distanceSq >= radiusSumSq)
+                return false;
+
+            const float Epsilon = 1e-12f;
+            Vector2 normal;
+            float penetrationDepth;
+
+            if (distanceSq > Epsilon)
+            {
+                float distance = MathF.Sqrt(distanceSq);
+                normal = delta / distance;
+                penetrationDepth = radiusSum - distance;
+            }
+            else
+            {
+                normal = Vector2.Zero;
+
+                float absDx = MathF.Abs(delta.X);
+                float absDy = MathF.Abs(delta.Y);
+                if (absDx > absDy && absDx > Epsilon)
+                {
+                    normal = new Vector2(delta.X > 0f ? 1f : -1f, 0f);
+                }
+                else if (absDy > Epsilon)
+                {
+                    normal = new Vector2(0f, delta.Y > 0f ? 1f : -1f);
+                }
+
+                if (normal == Vector2.Zero)
+                {
+                    var attrA = a.GetAttribute<ObjectCollision>();
+                    var attrB = b.GetAttribute<ObjectCollision>();
+                    Vector2 relVel =
+                        (attrB?.Velocity ?? Vector2.Zero) - (attrA?.Velocity ?? Vector2.Zero);
+                    float absVx = MathF.Abs(relVel.X);
+                    float absVy = MathF.Abs(relVel.Y);
+                    if (absVx > absVy && absVx > Epsilon)
+                    {
+                        normal = new Vector2(relVel.X > 0f ? 1f : -1f, 0f);
+                    }
+                    else if (absVy > Epsilon)
+                    {
+                        normal = new Vector2(0f, relVel.Y > 0f ? 1f : -1f);
+                    }
+                }
+
+                if (normal == Vector2.Zero)
+                    normal = Vector2.UnitY;
+
+                if (normal.LengthSquared() > Epsilon)
+                    normal = Vector2.Normalize(normal);
+                else
+                    normal = Vector2.UnitY;
+
+                penetrationDepth = radiusSum;
+            }
+
+            if (penetrationDepth <= 0f)
+                return false;
+
+            Vector2 penetrationVec = normal * penetrationDepth;
+            Vector2 contactPoint =
+                distanceSq > Epsilon
+                    ? centerA + normal * (radiusA - penetrationDepth * 0.5f)
+                    : centerA + normal * radiusA;
+
+            collisionInfo = new CollisionInfo(a, b, contactPoint, penetrationVec, normal);
+            return true;
         }
     }
 
@@ -127,8 +220,10 @@ namespace Engine13.Utilities
             var objA = meshA.GetAttribute<ObjectCollision>();
             var objB = meshB.GetAttribute<ObjectCollision>();
 
-            float invMassA = (objA == null || objA.IsStatic || objA.Mass <= 0f) ? 0f : 1f / objA.Mass;
-            float invMassB = (objB == null || objB.IsStatic || objB.Mass <= 0f) ? 0f : 1f / objB.Mass;
+            float invMassA =
+                (objA == null || objA.IsStatic || objA.Mass <= 0f) ? 0f : 1f / objA.Mass;
+            float invMassB =
+                (objB == null || objB.IsStatic || objB.Mass <= 0f) ? 0f : 1f / objB.Mass;
             float invMassSum = invMassA + invMassB;
             if (invMassSum <= 1e-8f)
                 return;
@@ -176,7 +271,11 @@ namespace Engine13.Utilities
             if (objB != null)
                 restitutionCandidateB = objB.Restitution;
 
-            float restitution = Math.Clamp(MathF.Max(restitutionCandidateA, restitutionCandidateB), 0f, 1f);
+            float restitution = Math.Clamp(
+                MathF.Max(restitutionCandidateA, restitutionCandidateB),
+                0f,
+                1f
+            );
             if (MathF.Abs(relVelN) < RestitutionVelocityThreshold)
                 restitution = 0f;
 
@@ -476,22 +575,30 @@ namespace Engine13.Utilities
                 EdgeIndex = edgeIndex;
             }
 
-            public override string ToString()
-                => $"n={Normal}, src={(Source == 0 ? "A" : "B")}, edge={EdgeIndex}";
-
+            public override string ToString() =>
+                $"n={Normal}, src={(Source == 0 ? "A" : "B")}, edge={EdgeIndex}";
         }
 
-        private static void BuildAxes(ReadOnlySpan<Vector2> VertsA, ReadOnlySpan<Vector2> VertsB, System.Collections.Generic.List<SetAxis> axes)
+        private static void BuildAxes(
+            ReadOnlySpan<Vector2> VertsA,
+            ReadOnlySpan<Vector2> VertsB,
+            System.Collections.Generic.List<SetAxis> axes
+        )
         {
             axes.Clear();
             AddAxesFromPolygon(VertsA, 0, axes);
             AddAxesFromPolygon(VertsB, 1, axes);
         }
 
-        private static void AddAxesFromPolygon(ReadOnlySpan<Vector2> Vertices, int source, System.Collections.Generic.List<SetAxis> axes)
+        private static void AddAxesFromPolygon(
+            ReadOnlySpan<Vector2> Vertices,
+            int source,
+            System.Collections.Generic.List<SetAxis> axes
+        )
         {
             int n = Vertices.Length;
-            if (n < 2) return;
+            if (n < 2)
+                return;
 
             for (int i = 0; i < n; i++)
             {

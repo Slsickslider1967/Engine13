@@ -26,6 +26,12 @@ namespace Engine13.Graphics
         private VertexPosition[] _vertices;
         private ushort[] _indices;
 
+        public enum CollisionShapeType
+        {
+            ConvexPolygon,
+            Circle,
+        }
+
         public VertexPosition[] GetVertices() => _vertices;
 
         public ushort[] GetIndices() => _indices;
@@ -38,6 +44,8 @@ namespace Engine13.Graphics
         public Vector4 Color { get; set; } = new Vector4(1f, 1f, 1f, 1f);
         public float Mass { get; set; } = 1f;
         public Vector2 Size { get; set; }
+        public CollisionShapeType CollisionShape { get; set; } = CollisionShapeType.ConvexPolygon;
+        public float CollisionRadius { get; set; } = 0f;
         private readonly System.Collections.Generic.List<IMeshAttribute> _attributes = new();
         public System.Collections.Generic.IReadOnlyList<IMeshAttribute> Attributes => _attributes;
         public DeviceBuffer? PositionBuffer { get; private set; }
@@ -350,6 +358,8 @@ namespace Engine13.Primitives
 
             var mesh = BuildMesh(vertices.ToArray(), indices.ToArray());
             mesh.Size = new Vector2(Radius * 2f, Radius * 2f);
+            mesh.CollisionShape = Engine13.Graphics.Mesh.CollisionShapeType.Circle;
+            mesh.CollisionRadius = Radius;
             return mesh;
         }
 
@@ -363,6 +373,8 @@ namespace Engine13.Primitives
             var mesh = Circle(Radius, LatitudeSegments, LongitudeSegments);
             mesh.Color = color;
             mesh.Size = new Vector2(Radius * 2f, Radius * 2f);
+            mesh.CollisionShape = Engine13.Graphics.Mesh.CollisionShapeType.Circle;
+            mesh.CollisionRadius = Radius;
             return mesh;
         }
 
@@ -376,6 +388,8 @@ namespace Engine13.Primitives
             var newCircle = Circle(Radius, LatitudeSegments, LongitudeSegments);
             GD.UpdateBuffer(mesh.VertexBuffer, 0, newCircle.GetVertices());
             mesh.Size = new Vector2(Radius * 2f, Radius * 2f);
+            mesh.CollisionShape = Engine13.Graphics.Mesh.CollisionShapeType.Circle;
+            mesh.CollisionRadius = Radius;
         }
 
         public static Engine13.Graphics.Mesh CreateCircle(

@@ -31,5 +31,14 @@ namespace Engine13.Core
             TotalTime += DeltaTime;
             _LastTime = currentTime;
         }
+
+        public void OverrideDeltaTime(float deltaTime)
+        {
+            if (deltaTime < MinDeltaTime)
+                deltaTime = MinDeltaTime;
+            if (deltaTime > MaxDeltaTime)
+                deltaTime = MaxDeltaTime;
+            DeltaTime = deltaTime;
+        }
     }
 }
