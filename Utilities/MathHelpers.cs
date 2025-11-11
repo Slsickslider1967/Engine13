@@ -110,12 +110,70 @@ namespace Engine13.Utilities
             return VertexCollisionSolver.Instance.TryFindContact(a, b, out collisionInfo);
         }
 
+        /// <summary>
+        /// Basic circle collision detection - only checks if circles overlap (no depth/contact calculation)
+        /// Fast for broad-phase detection or simple overlap testing
+        /// </summary>
+        public static bool AreCirclesOverlapping(Mesh a, Mesh b)
+        {
+            if (a == null || b == null)
+                return false;
+
+           
+            if (
+                a.CollisionShape != Mesh.CollisionShapeType.Circle
+                || b.CollisionShape != Mesh.CollisionShapeType.Circle
+            )
+                return false;
+
+            
+            float radiusA =
+                a.CollisionRadius > 0f ? a.CollisionRadius : MathF.Max(a.Size.X, a.Size.Y) * 0.5f;
+            float radiusB =
+                b.CollisionRadius > 0f ? b.CollisionRadius : MathF.Max(b.Size.X, b.Size.Y) * 0.5f;
+            
+            if (radiusA <= 0f || radiusB <= 0f)
+                return false;
+
+            
+            Vector2 delta = b.Position - a.Position;
+            float distanceSq = delta.LengthSquared();
+            float radiusSum = radiusA + radiusB;
+            float radiusSumSq = radiusSum * radiusSum;
+
+            return distanceSq < radiusSumSq;
+        }
+
+        /// <summary>
+        /// Even more basic circle overlap - just takes positions and radii directly
+        /// Fastest possible circle collision check
+        /// </summary>
+        public static bool AreCirclesOverlapping(
+            Vector2 posA,
+            float radiusA,
+            Vector2 posB,
+            float radiusB
+        )
+        {
+            if (radiusA <= 0f || radiusB <= 0f)
+                return false;
+
+            Vector2 delta = posB - posA;
+            float distanceSq = delta.LengthSquared();
+            float radiusSum = radiusA + radiusB;
+            float radiusSumSq = radiusSum * radiusSum;
+
+            return distanceSq < radiusSumSq;
+        }
+
         private static bool TryCircleCollision(Mesh a, Mesh b, out CollisionInfo collisionInfo)
         {
             collisionInfo = null!;
 
-            float radiusA = a.CollisionRadius > 0f ? a.CollisionRadius : MathF.Max(a.Size.X, a.Size.Y) * 0.5f;
-            float radiusB = b.CollisionRadius > 0f ? b.CollisionRadius : MathF.Max(b.Size.X, b.Size.Y) * 0.5f;
+            float radiusA =
+                a.CollisionRadius > 0f ? a.CollisionRadius : MathF.Max(a.Size.X, a.Size.Y) * 0.5f;
+            float radiusB =
+                b.CollisionRadius > 0f ? b.CollisionRadius : MathF.Max(b.Size.X, b.Size.Y) * 0.5f;
             if (!(radiusA > 0f) || !(radiusB > 0f))
                 return false;
 
@@ -815,4 +873,71 @@ namespace Engine13.Utilities
     }
 
     public class MathHelpers { }
+
+    struct Frame
+    {
+        public Vector2[] Positions;
+        public float TimeStamp;
+        public int FrameIndex;
+
+        public Vector2[] Velocities;
+        public float[] Rotations;
+        public bool isValid;
+
+        public Frame(int MeshCount)
+        {
+            Positions = new Vector2[MeshCount];
+            Velocities = new Vector2[MeshCount];
+            Rotations = new float[MeshCount];
+            TimeStamp = 0f;
+            FrameIndex = 0;
+            isValid = false;
+        }
+
+        public void CaptureFrom(List<Mesh> meshes)
+        {
+            int Count = Math.Min(meshes.Count, Positions.Length);
+
+            for (int i = 0; i < Count; i++)
+            {
+                Positions[i] = meshes[i].Position;
+                Velocities[i] = meshes[i].GetAttribute<ObjectCollision>()?.Velocity ?? Vector2.Zero;
+            }
+
+            isValid = true;
+        }
+
+        public bool ApplyTo(List<Mesh> meshes)
+        {
+            if (!isValid)
+                return false;
+
+            int Count = Math.Min(meshes.Count, Positions.Length);
+
+            for (int i = 0; i < Count; i++)
+            {
+                meshes[i].Position = Positions[i];
+                var objCollision = meshes[i].GetAttribute<ObjectCollision>();
+                if (objCollision != null)
+                {
+                    objCollision.Velocity = Velocities[i];
+                }
+            }
+
+            return true;
+        }
+        
+        public void Clear()
+        {
+            for (int i = 0; i < Positions.Length; i++)
+            {
+                Positions[i] = Vector2.Zero;
+                Velocities[i] = Vector2.Zero;
+                Rotations[i] = 0f;
+            }
+            TimeStamp = 0f;
+            FrameIndex = 0;
+            isValid = false;
+        }
+    }
 }

@@ -1,37 +1,33 @@
-﻿using Veldrid;
+﻿using System;
+using Engine13.Core;
+using Veldrid;
 using Veldrid.Sdl2;
 using Veldrid.StartupUtilities;
-using System;
-using Engine13.Graphics;
-using Engine13.Core;
 
 class Program
 {
     static void Main()
     {
-        WindowCreateInfo Window_Create_Info = new WindowCreateInfo
+        WindowCreateInfo windowCreateInfo = new WindowCreateInfo
         {
-            WindowTitle = "Engine-13", // Window title
-            X = 100,         // X
-            Y = 100,         // Y
-            WindowWidth = 800,         // Width
-            WindowHeight = 600         // Height
+            WindowTitle = "Engine-13",
+            X = 100,
+            Y = 100,
+            WindowWidth = 800,
+            WindowHeight = 600,
         };
 
-        Sdl2Window window = VeldridStartup.CreateWindow(Window_Create_Info);
+        Sdl2Window window = VeldridStartup.CreateWindow(windowCreateInfo);
         GraphicsBackend backend = GraphicsBackend.Vulkan;
         GraphicsDeviceOptions gdOptions = new GraphicsDeviceOptions
         {
             Debug = true,
             SyncToVerticalBlank = true,
-            SwapchainDepthFormat = null
+            SwapchainDepthFormat = null,
         };
 
-    GraphicsDevice gd = VeldridStartup.CreateGraphicsDevice(window, gdOptions, backend);
-    CommandList cl = gd.ResourceFactory.CreateCommandList();
-
-    // Pass the already-created GraphicsDevice into the Engine to avoid creating duplicate surfaces
-    Engine engine = new Engine(window, gd);
-        engine.Run();
+        GraphicsDevice gd = VeldridStartup.CreateGraphicsDevice(window, gdOptions, backend);
+        Game game = new Game(window, gd);
+        game.Run();
     }
 }
