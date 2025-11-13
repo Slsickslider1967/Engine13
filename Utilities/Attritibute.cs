@@ -215,10 +215,6 @@ namespace Engine13.Utilities.Attributes
 
     public sealed class EdgeCollision : IMeshAttribute
     {
-        private float Top = -1f,
-            Left = -1f,
-            Right = 1f,
-            Bottom = 1f;
         private bool Loop;
 
         public EdgeCollision(bool loop)
@@ -226,28 +222,74 @@ namespace Engine13.Utilities.Attributes
             Loop = loop;
         }
 
+        private (float left, float right, float top, float bottom) GetBounds()
+        {
+            return WindowBounds.GetNormalizedBounds();
+        }
+
+        private void HandleWallCollision(ObjectCollision objectCollision, bool isXAxis, float sleepVelocity)
+        {
+            if (objectCollision == null) return;
+            
+            if (isXAxis)
+            {
+                float velocityX = objectCollision.Velocity.X;
+                if (MathF.Abs(velocityX) < sleepVelocity)
+                {
+                    velocityX = 0f;
+                }
+                else
+                {
+                    velocityX = -velocityX * objectCollision.Restitution;
+                }
+                objectCollision.Velocity = new Vector2(velocityX, objectCollision.Velocity.Y);
+            }
+            else
+            {
+                float velocityY = objectCollision.Velocity.Y;
+                if (MathF.Abs(velocityY) < sleepVelocity)
+                {
+                    velocityY = 0f;
+                }
+                else
+                {
+                    velocityY = -velocityY * objectCollision.Restitution;
+                }
+                objectCollision.Velocity = new Vector2(objectCollision.Velocity.X, velocityY);
+            }
+        }
+
         public void Update(Mesh mesh, GameTime gameTime)
         {
-            if (Loop == true)
+            var (left, right, top, bottom) = GetBounds();
+            
+            if (Loop)
             {
                 var position = mesh.Position;
-                if (position.X < Left)
+                var halfWidth = mesh.Size.X * 0.5f;
+                var halfHeight = mesh.Size.Y * 0.5f;
+                
+                // Horizontal boundaries
+                if (position.X < left + halfWidth)
                 {
-                    position.X = Left;
+                    position.X = left + halfWidth;
                 }
-                else if (position.X > Right)
+                else if (position.X > right - halfWidth)
                 {
-                    position.X = Right;
+                    position.X = right - halfWidth;
                 }
-                if (position.Y < Top)
+                
+                // Vertical boundaries
+                if (position.Y < top + halfHeight)
                 {
-                    position.Y = Top;
+                    position.Y = top + halfHeight;
                 }
-                else if (position.Y > Bottom)
+                else if (position.Y > bottom - halfHeight)
                 {
-                    position.Y = -1f;
+                    position.Y = bottom - halfHeight;
                 }
-                mesh.Position = new Vector2(position.X, position.Y);
+                
+                mesh.Position = position;
             }
             else
             {
@@ -255,95 +297,47 @@ namespace Engine13.Utilities.Attributes
                 var objectCollision = mesh.GetAttribute<ObjectCollision>();
                 const float sleepVelocity = 0.05f;
                 const float recovery = 0.0005f;
+                
+                var halfWidth = mesh.Size.X * 0.5f;
+                var halfHeight = mesh.Size.Y * 0.5f;
 
-                if (position.X < Left + (mesh.Size.X / 2))
+                if (position.X < left + halfWidth)
                 {
-                    position.X = Left + (mesh.Size.X / 2);
+                    position.X = left + halfWidth + recovery;
                     if (objectCollision != null)
-                    {
-                        float velocityX = objectCollision.Velocity.X;
-                        if (System.MathF.Abs(velocityX) < sleepVelocity)
-                        {
-                            velocityX = 0f;
-                        }
-                        else
-                        {
-                            velocityX = -velocityX * objectCollision.Restitution;
-                        }
-                        objectCollision.Velocity = new Vector2(
-                            velocityX,
-                            objectCollision.Velocity.Y
-                        );
-                    }
-                    position.X += recovery;
+                        HandleWallCollision(objectCollision, true, sleepVelocity);
                 }
-                else if (position.X > Right - (mesh.Size.X / 2))
+                // Right wall collision  
+                else if (position.X > right - halfWidth)
                 {
-                    position.X = Right - (mesh.Size.X / 2);
+                    position.X = right - halfWidth - recovery;
                     if (objectCollision != null)
-                    {
-                        float velocityX = objectCollision.Velocity.X;
-                        if (System.MathF.Abs(velocityX) < sleepVelocity)
-                        {
-                            velocityX = 0f;
-                        }
-                        else
-                        {
-                            velocityX = -velocityX * objectCollision.Restitution;
-                        }
-                        objectCollision.Velocity = new Vector2(
-                            velocityX,
-                            objectCollision.Velocity.Y
-                        );
-                    }
-                    position.X -= recovery;
+                        HandleWallCollision(objectCollision, true, sleepVelocity);
                 }
-                if (position.Y < Top + (mesh.Size.Y / 2))
+
+                // Top wall collision
+                if (position.Y < top + halfHeight)
                 {
-                    position.Y = Top + (mesh.Size.Y / 2);
+                    position.Y = top + halfHeight + recovery;
                     if (objectCollision != null)
                     {
-                        float velocityY = objectCollision.Velocity.Y;
-                        if (System.MathF.Abs(velocityY) < sleepVelocity)
-                        {
-                            velocityY = 0f;
-                        }
-                        else
-                        {
-                            velocityY = -velocityY * objectCollision.Restitution;
-                        }
-                        objectCollision.Velocity = new Vector2(
-                            objectCollision.Velocity.X,
-                            velocityY
-                        );
+                        HandleWallCollision(objectCollision, false, sleepVelocity);
                         objectCollision.IsGrounded = false;
                     }
-                    position.Y += recovery;
                 }
-                else if (position.Y > Bottom - (mesh.Size.Y / 2))
+                // Bottom wall collision (floor)
+                else if (position.Y > bottom - halfHeight)
                 {
-                    position.Y = Bottom - (mesh.Size.Y / 2);
+                    position.Y = bottom - halfHeight - recovery;
                     if (objectCollision != null)
                     {
-                        float velocityY = objectCollision.Velocity.Y;
-                        if (System.MathF.Abs(velocityY) < sleepVelocity)
-                        {
-                            velocityY = 0f;
-                            objectCollision.IsGrounded = true;
-                        }
-                        else
-                        {
-                            velocityY = -velocityY * objectCollision.Restitution;
-                            objectCollision.IsGrounded = false;
-                        }
-                        objectCollision.Velocity = new Vector2(
-                            objectCollision.Velocity.X,
-                            velocityY
-                        );
+                        HandleWallCollision(objectCollision, false, sleepVelocity);
+                        objectCollision.IsGrounded = 
+                            MathF.Abs(objectCollision.Velocity.Y) < sleepVelocity;
                     }
-                    position.Y -= recovery;
                 }
-                mesh.Position = new Vector2(position.X, position.Y);
+
+                mesh.Position = position;
             }
         }
     }

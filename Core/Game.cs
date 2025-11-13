@@ -18,13 +18,21 @@ namespace Engine13.Core
         private readonly List<Vector2[]> _tickPositions = new();
         private int _tickIndex;
         private int _bufferStart;
-        private const int NumberOfTicks = 250;
-        private const int BufferedFrames = 250;
-        private const int StepsPerFrame = 1;
+        private const int NumberOfTicks = 500;
+        private const int BufferedFrames = 500;
+        private const int StepsPerFrame = 2;
+        
+        // Tick counter
+        private int _tickCounter = 0;
+        private System.Diagnostics.Stopwatch _tickTimer = new System.Diagnostics.Stopwatch();
+        private double _lastTickTime = 0;
 
         public Game(Sdl2Window window, GraphicsDevice graphicsDevice)
             : base(window, graphicsDevice)
         {
+            _tickTimer.Start();
+            // Initialize window bounds for edge collision
+            WindowBounds.SetWindow(window);
         }
 
         protected override void Initialize()
@@ -42,6 +50,12 @@ namespace Engine13.Core
             {
                 for (int step = _tickPositions.Count; step < BufferedFrames; step++)
                 {
+                    double currentTime = _tickTimer.Elapsed.TotalMilliseconds;
+                    double timeBetweenTicks = currentTime - _lastTickTime;
+                    _lastTickTime = currentTime;
+
+                    _tickCounter++;
+                    
                     GameTime.OverrideDeltaTime(stepDelta);
                     _updateManager.Update(GameTime);
                     _grid.UpdateAllAabb(_meshes);
@@ -54,8 +68,7 @@ namespace Engine13.Core
                     }
 
                     _tickPositions.Add(snapshot);
-                    Console.WriteLine("Tick: " + step);
-                    Console.WriteLine("TickTime: " + stepDelta);
+                    Console.WriteLine($"Tick: {_tickCounter} | TickTime {timeBetweenTicks:F2} ms");
                 }
 
                 if (_tickPositions.Count > 0)
@@ -111,7 +124,7 @@ namespace Engine13.Core
                 }
             }
 
-            const int iterations = 12;
+            const int iterations = 50; 
             for (int iter = 0; iter < iterations; iter++)
             {
                 var collisionPairs = _grid.GetCollisionPairs();
@@ -175,7 +188,7 @@ namespace Engine13.Core
             }
 
             var whiteQue = CircleFactory.CreateCircle(GraphicsDevice, 0.01f, 8, 8);
-            whiteQue.Position = new Vector2(0.25f, 0f);
+            whiteQue.Position = new Vector2(0f, 0f);
             whiteQue.Mass = 0.01f;
             whiteQue.AddAttribute(new ObjectCollision { IsStatic = true, Restitution = 0.5f });
             whiteQue.AddAttribute(new EdgeCollision(false));

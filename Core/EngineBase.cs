@@ -1,4 +1,6 @@
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 using Engine13.Graphics;
 using Veldrid;
 using Veldrid.Sdl2;
@@ -13,7 +15,8 @@ namespace Engine13.Core
         protected PipeLineManager PipeLineManager { get; }
         protected Renderer Renderer { get; }
         protected Input.InputManager InputManager { get; }
-
+        private System.Diagnostics.Stopwatch _frameTimer;
+        private ThreadManager _threadManager;
         private bool _disposed;
 
         protected EngineBase(Sdl2Window window, GraphicsDevice graphicsDevice)
@@ -28,15 +31,30 @@ namespace Engine13.Core
             Renderer = new Renderer(GraphicsDevice, commandList, PipeLineManager);
             InputManager = new Input.InputManager();
             InputManager.Attach(Window);
+            _frameTimer = new System.Diagnostics.Stopwatch();
+
+            _threadManager = new ThreadManager(
+                () =>
+                {
+                    GameTime.Update();
+                    Update(GameTime);
+                },
+                () => Draw()
+            );
         }
 
         public void Run()
         {
             Initialize();
-            while (Window.Exists)
+            _frameTimer.Start();
+
+            _threadManager.Start();
+
+            while (Window.Exists && _threadManager.IsRunning)
             {
                 InputManager.Update(Window);
                 Window.PumpEvents();
+
                 if (!Window.Exists)
                 {
                     break;
@@ -50,10 +68,10 @@ namespace Engine13.Core
                     GraphicsDevice.ResizeMainWindow((uint)Window.Width, (uint)Window.Height);
                 }
 
-                GameTime.Update();
-                Update(GameTime);
-                Draw();
+                Thread.Sleep(1);
             }
+
+            _threadManager.Stop();
 
             Dispose();
         }
@@ -73,6 +91,7 @@ namespace Engine13.Core
 
             if (disposing)
             {
+                _threadManager?.Dispose();
                 GraphicsDevice.Dispose();
             }
 

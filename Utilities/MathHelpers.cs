@@ -2,9 +2,43 @@ using System;
 using System.Numerics;
 using Engine13.Graphics;
 using Engine13.Utilities.Attributes;
+using Veldrid.Sdl2;
 
 namespace Engine13.Utilities
 {
+    public static class WindowBounds
+    {
+        private static Sdl2Window? _window;
+        
+        public static void SetWindow(Sdl2Window window)
+        {
+            _window = window;
+        }
+        
+        public static (float left, float right, float top, float bottom) GetNormalizedBounds()
+        {
+            if (_window == null)
+            {
+                // Fallback to default bounds if no window is set
+                return (-1f, 1f, -1f, 1f);
+            }
+            
+            // Convert pixel coordinates to normalized world coordinates
+            // Assuming typical 2D projection where screen goes from -1 to 1
+            float aspectRatio = (float)_window.Width / _window.Height;
+            
+            return (-aspectRatio, aspectRatio, -1f, 1f);
+        }
+        
+        public static Vector2 GetWindowSize()
+        {
+            if (_window == null)
+                return new Vector2(800, 600); // Fallback size
+                
+            return new Vector2(_window.Width, _window.Height);
+        }
+    }
+
     public struct AABB
     {
         public Vector2 Min;
@@ -264,6 +298,7 @@ namespace Engine13.Utilities
         private const float StaticToDynamicFrictionRatio = 0.8f;
         private const float GroundNormalThreshold = 0.6f;
         private const float RestingRelativeVelocityThreshold = 0.4f;
+        private const float MassIgnoreRatio = 1000f;
 
         public static void ResolveCollision(CollisionInfo collision, float deltaTime)
         {
@@ -282,6 +317,23 @@ namespace Engine13.Utilities
                 (objA == null || objA.IsStatic || objA.Mass <= 0f) ? 0f : 1f / objA.Mass;
             float invMassB =
                 (objB == null || objB.IsStatic || objB.Mass <= 0f) ? 0f : 1f / objB.Mass;
+
+            // Really basic mass accountability to be updated
+            float massAVal = (objA == null || objA.IsStatic || objA.Mass <= 0f) ? float.PositiveInfinity : objA.Mass;
+            float massBVal = (objB == null || objB.IsStatic || objB.Mass <= 0f) ? float.PositiveInfinity : objB.Mass;
+
+            if (massAVal < float.PositiveInfinity && massBVal < float.PositiveInfinity)
+            {
+                if (massAVal > massBVal * MassIgnoreRatio)
+                {
+                    invMassA = 0f;
+                }
+                else if (massBVal > massAVal * MassIgnoreRatio)
+                {
+                    invMassB = 0f;
+                }
+            }
+
             float invMassSum = invMassA + invMassB;
             if (invMassSum <= 1e-8f)
                 return;
