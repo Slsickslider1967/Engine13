@@ -6,27 +6,26 @@ using Engine13.Utilities.Attributes;
 
 namespace Engine13.Core
 {
-    // Central manager that updates meshes and arbitrary updatable components each frame
     public class UpdateManager
     {
-        private readonly List<Mesh> _meshes = new();
+        private readonly List<Entity> _entities = new();
         private readonly List<IUpdatable> _updatables = new();
-        private readonly Dictionary<Mesh, Vector2> _prevPositions = new();
+        private readonly Dictionary<Entity, Vector2> _prevPositions = new();
 
-        public void Register(Mesh mesh)
+        public void Register(Entity entity)
         {
-            if (mesh != null)
+            if (entity != null)
             {
-                _meshes.Add(mesh);
-                _prevPositions[mesh] = mesh.Position;
-                mesh.Velocity = Vector2.Zero;
+                _entities.Add(entity);
+                _prevPositions[entity] = entity.Position;
+                entity.Velocity = Vector2.Zero;
             }
         }
 
-        public bool Unregister(Mesh mesh)
+        public bool Unregister(Entity entity)
         {
-            _prevPositions.Remove(mesh);
-            return _meshes.Remove(mesh);
+            _prevPositions.Remove(entity);
+            return _entities.Remove(entity);
         }
 
         public void Register(IUpdatable updatable)
@@ -39,7 +38,7 @@ namespace Engine13.Core
 
         public void Clear()
         {
-            _meshes.Clear();
+            _entities.Clear();
             _updatables.Clear();
             _prevPositions.Clear();
         }
@@ -48,27 +47,27 @@ namespace Engine13.Core
         {
             Forces.Reset();
 
-            var collisionUpdates = new List<(Mesh mesh, ObjectCollision attr)>();
-            var lateUpdates = new List<(Mesh mesh, IMeshAttribute attr)>();
+            var collisionUpdates = new List<(Entity entity, ObjectCollision attr)>();
+            var lateUpdates = new List<(Entity entity, IEntityComponent attr)>();
 
-            for (int i = 0; i < _meshes.Count; i++)
+            for (int i = 0; i < _entities.Count; i++)
             {
-                var mesh = _meshes[i];
-                var attributes = mesh.Attributes;
+                var entity = _entities[i];
+                var components = entity.Components;
 
-                for (int j = 0; j < attributes.Count; j++)
+                for (int j = 0; j < components.Count; j++)
                 {
-                    var attribute = attributes[j];
-                    switch (attribute)
+                    var component = components[j];
+                    switch (component)
                     {
                         case ObjectCollision objectCollision:
-                            collisionUpdates.Add((mesh, objectCollision));
+                            collisionUpdates.Add((entity, objectCollision));
                             break;
                         case EdgeCollision edgeCollision:
-                            lateUpdates.Add((mesh, edgeCollision));
+                            lateUpdates.Add((entity, edgeCollision));
                             break;
                         default:
-                            attribute.Update(mesh, gameTime);
+                            component.Update(entity, gameTime);
                             break;
                     }
                 }
@@ -78,26 +77,25 @@ namespace Engine13.Core
 
             for (int i = 0; i < collisionUpdates.Count; i++)
             {
-                var (mesh, attr) = collisionUpdates[i];
-                attr.Update(mesh, gameTime);
+                var (entity, attr) = collisionUpdates[i];
+                attr.Update(entity, gameTime);
             }
 
             for (int i = 0; i < lateUpdates.Count; i++)
             {
-                var (mesh, attr) = lateUpdates[i];
-                attr.Update(mesh, gameTime);
+                var (entity, attr) = lateUpdates[i];
+                attr.Update(entity, gameTime);
             }
 
-            // Update per-mesh instantaneous velocity from position delta
             double dt = gameTime.DeltaTime;
-            for (int i = 0; i < _meshes.Count; i++)
+            for (int i = 0; i < _entities.Count; i++)
             {
-                var mesh = _meshes[i];
-                Vector2 prev = _prevPositions.TryGetValue(mesh, out var p) ? p : mesh.Position;
-                Vector2 cur = mesh.Position;
+                var entity = _entities[i];
+                Vector2 prev = _prevPositions.TryGetValue(entity, out var p) ? p : entity.Position;
+                Vector2 cur = entity.Position;
                 Vector2 vel = (dt > 0.0) ? (cur - prev) / (float)dt : Vector2.Zero;
-                mesh.Velocity = vel;
-                _prevPositions[mesh] = cur;
+                entity.Velocity = vel;
+                _prevPositions[entity] = cur;
             }
             for (int i = 0; i < _updatables.Count; i++)
             {

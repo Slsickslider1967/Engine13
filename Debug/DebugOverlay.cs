@@ -8,10 +8,10 @@ namespace Engine13.Debug
 {
     public class DebugOverlay
     {
-        private readonly System.Collections.Generic.List<Mesh> _meshes;
+        private readonly System.Collections.Generic.List<Entity> _entities;
         private readonly Renderer _renderer;
-        private readonly System.Collections.Generic.Dictionary<Mesh, Vector2> _lastPositions =
-            new System.Collections.Generic.Dictionary<Mesh, Vector2>();
+        private readonly System.Collections.Generic.Dictionary<Entity, Vector2> _lastPositions =
+            new System.Collections.Generic.Dictionary<Entity, Vector2>();
         private System.Collections.Generic.List<CollisionInfo> _collisions =
             new System.Collections.Generic.List<CollisionInfo>();
 
@@ -28,12 +28,12 @@ namespace Engine13.Debug
         public float AabbThickness { get; set; } = 0.008f;
         public Vector4 OutlineAColor { get; set; } = new Vector4(0.2f, 1f, 0.2f, 1f);
         public Vector4 OutlineBColor { get; set; } = new Vector4(1f, 0.2f, 1f, 1f);
-    public Vector4 AabbAColor { get; set; } = new Vector4(0.2f, 0.6f, 0.2f, 1f);
-    public Vector4 AabbBColor { get; set; } = new Vector4(0.6f, 0.2f, 0.6f, 1f);
-    
-        public DebugOverlay(System.Collections.Generic.List<Mesh> meshes, Renderer renderer)
+        public Vector4 AabbAColor { get; set; } = new Vector4(0.2f, 0.6f, 0.2f, 1f);
+        public Vector4 AabbBColor { get; set; } = new Vector4(0.6f, 0.2f, 0.6f, 1f);
+
+        public DebugOverlay(System.Collections.Generic.List<Entity> entities, Renderer renderer)
         {
-            _meshes = meshes;
+            _entities = entities;
             _renderer = renderer;
         }
 
@@ -50,12 +50,12 @@ namespace Engine13.Debug
                 for (int i = 0; i < _collisions.Count; i++)
                 {
                     var c = _collisions[i];
-                    var a = c.MeshA;
-                    var b = c.MeshB;
+                    var a = c.EntityA;
+                    var b = c.EntityB;
                     if (ShowOutlines)
                     {
-                        DrawMeshOutline(a, OutlineAColor, OutlineThickness);
-                        DrawMeshOutline(b, OutlineBColor, OutlineThickness);
+                        DrawEntityOutline(a, OutlineAColor, OutlineThickness);
+                        DrawEntityOutline(b, OutlineBColor, OutlineThickness);
                     }
                     if (ShowAabbs)
                     {
@@ -118,7 +118,6 @@ namespace Engine13.Debug
                     );
                 }
             }
-
         }
 
         private void DrawLine(Vector2 start, Vector2 end, Vector4 color, float thickness)
@@ -140,16 +139,19 @@ namespace Engine13.Debug
             DrawLine(v3, v0, color, thickness);
         }
 
-        private void DrawMeshOutline(Mesh mesh, Vector4 color, float thickness)
+        private void DrawEntityOutline(Entity entity, Vector4 color, float thickness)
         {
-            if (mesh == null)
+            if (entity == null)
                 return;
-            var verts = mesh.GetVertices();
+            var verts = entity.GetVertices();
             if (verts == null || verts.Length < 2)
                 return;
 
             var world = new Vector2[verts.Length];
-            int count = VertexCollisionSolver.Instance.CopyWorldSpaceVertices(mesh, world.AsSpan());
+            int count = VertexCollisionSolver.Instance.CopyWorldSpaceVertices(
+                entity,
+                world.AsSpan()
+            );
             if (count < 2)
                 return;
 

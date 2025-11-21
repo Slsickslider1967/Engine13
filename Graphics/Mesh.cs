@@ -21,10 +21,54 @@ namespace Engine13.Graphics
         }
     }
 
-    public class Mesh
+    public sealed class RenderMesh
     {
-        private VertexPosition[] _vertices;
-        private ushort[] _indices;
+        public VertexPosition[] Vertices { get; }
+        public ushort[] Indices { get; }
+        public DeviceBuffer VertexBuffer { get; }
+        public DeviceBuffer IndexBuffer { get; }
+        public int IndexCount { get; }
+
+        public RenderMesh(GraphicsDevice device, VertexPosition[] vertices, ushort[] indices)
+        {
+            if (device == null)
+                throw new ArgumentNullException(nameof(device));
+            if (vertices == null || vertices.Length == 0)
+                throw new ArgumentException("Vertices cannot be null or empty", nameof(vertices));
+            if (indices == null || indices.Length == 0)
+                throw new ArgumentException("Indices cannot be null or empty", nameof(indices));
+
+            Vertices = vertices;
+            Indices = indices;
+            IndexCount = indices.Length;
+
+            VertexBuffer = device.ResourceFactory.CreateBuffer(
+                new BufferDescription(
+                    (uint)(vertices.Length * VertexPosition.SizeInBytes),
+                    BufferUsage.VertexBuffer
+                )
+            );
+            device.UpdateBuffer(VertexBuffer, 0, vertices);
+
+            IndexBuffer = device.ResourceFactory.CreateBuffer(
+                new BufferDescription(
+                    (uint)(indices.Length * sizeof(ushort)),
+                    BufferUsage.IndexBuffer
+                )
+            );
+            device.UpdateBuffer(IndexBuffer, 0, indices);
+        }
+
+        public void Dispose()
+        {
+            VertexBuffer?.Dispose();
+            IndexBuffer?.Dispose();
+        }
+    }
+
+    public class Entity
+    {
+        public RenderMesh RenderMesh { get; }
 
         public enum CollisionShapeType
         {
@@ -32,104 +76,126 @@ namespace Engine13.Graphics
             Circle,
         }
 
-        public VertexPosition[] GetVertices() => _vertices;
-
-        public ushort[] GetIndices() => _indices;
-
-        public DeviceBuffer VertexBuffer { get; private set; }
-        public DeviceBuffer IndexBuffer { get; private set; }
-        public int IndexCount { get; private set; }
-        public Vector2 Velocity { get; set; } = Vector2.Zero;
         public Vector2 Position { get; set; } = Vector2.Zero;
+        public Vector2 Velocity { get; set; } = Vector2.Zero;
         public Vector4 Color { get; set; } = new Vector4(1f, 1f, 1f, 1f);
         public float Mass { get; set; } = 1f;
         public Vector2 Size { get; set; }
         public CollisionShapeType CollisionShape { get; set; } = CollisionShapeType.ConvexPolygon;
         public float CollisionRadius { get; set; } = 0f;
-        private readonly System.Collections.Generic.List<IMeshAttribute> _attributes = new();
-        public System.Collections.Generic.IReadOnlyList<IMeshAttribute> Attributes => _attributes;
+
+        private readonly System.Collections.Generic.Dictionary<
+            Type,
+            IEntityComponent
+        > _componentCache = new();
+        private readonly System.Collections.Generic.List<IEntityComponent> _components = new();
+        public System.Collections.Generic.IReadOnlyList<IEntityComponent> Components => _components;
+
         public DeviceBuffer? PositionBuffer { get; private set; }
         public ResourceSet? PositionResourceSet { get; private set; }
         public DeviceBuffer? ColorBuffer { get; private set; }
         public ResourceSet? ColorResourceSet { get; private set; }
 
+        private AABB? _cachedAABB;
+        private Vector2 _cachedAABBPosition;
+
+        public VertexPosition[] GetVertices() => RenderMesh.Vertices;
+
+        public ushort[] GetIndices() => RenderMesh.Indices;
+
+        public DeviceBuffer VertexBuffer => RenderMesh.VertexBuffer;
+        public DeviceBuffer IndexBuffer => RenderMesh.IndexBuffer;
+        public int IndexCount => RenderMesh.IndexCount;
+
         public AABB GetAABB()
         {
-            if (_vertices == null || _vertices.Length == 0)
-                return new AABB(Vector2.Zero, Vector2.Zero);
+            if (_cachedAABB.HasValue && _cachedAABBPosition == Position)
+            {
+                return _cachedAABB.Value;
+            }
+
+            var vertices = RenderMesh.Vertices;
+            if (vertices == null || vertices.Length == 0)
+            {
+                var aabb = new AABB(Vector2.Zero, Vector2.Zero);
+                _cachedAABB = aabb;
+                _cachedAABBPosition = Position;
+                return aabb;
+            }
+
             Vector2 min = new Vector2(float.MaxValue);
             Vector2 max = new Vector2(float.MinValue);
-            foreach (var vertex in _vertices)
+            foreach (var vertex in vertices)
             {
                 Vector2 pos = new Vector2(vertex.X, vertex.Y) + Position;
                 min = Vector2.Min(min, pos);
                 max = Vector2.Max(max, pos);
             }
-            return new AABB(min, max);
+
+            var result = new AABB(min, max);
+            _cachedAABB = result;
+            _cachedAABBPosition = Position;
+            return result;
         }
 
-        public Mesh(GraphicsDevice GD, VertexPosition[] vertices, ushort[] indices)
+        public void InvalidateAABBCache()
         {
-            _vertices = vertices;
-            _indices = indices;
-
-            VertexBuffer = GD.ResourceFactory.CreateBuffer(
-                new BufferDescription(
-                    (uint)(vertices.Length * VertexPosition.SizeInBytes),
-                    BufferUsage.VertexBuffer
-                )
-            );
-
-            GD.UpdateBuffer(VertexBuffer, 0, vertices);
-
-            IndexBuffer = GD.ResourceFactory.CreateBuffer(
-                new BufferDescription(
-                    (uint)(indices.Length * sizeof(ushort)),
-                    BufferUsage.IndexBuffer
-                )
-            );
-
-            GD.UpdateBuffer(IndexBuffer, 0, indices);
-
-            IndexCount = indices.Length;
+            _cachedAABB = null;
         }
 
-        public void AddAttribute(IMeshAttribute attribute)
+        public Entity(RenderMesh renderMesh)
         {
-            if (attribute != null)
-                _attributes.Add(attribute);
+            RenderMesh = renderMesh ?? throw new ArgumentNullException(nameof(renderMesh));
         }
 
-        public bool RemoveAttribute<T>()
-            where T : IMeshAttribute
+        public void AddComponent(IEntityComponent component)
         {
-            int idx = _attributes.FindIndex(a => a is T);
-            if (idx >= 0)
+            if (component == null)
+                return;
+
+            var type = component.GetType();
+            if (!_componentCache.ContainsKey(type))
             {
-                _attributes.RemoveAt(idx);
+                _components.Add(component);
+                _componentCache[type] = component;
+            }
+        }
+
+        public bool RemoveComponent<T>()
+            where T : IEntityComponent
+        {
+            var type = typeof(T);
+            if (_componentCache.TryGetValue(type, out var component))
+            {
+                _components.Remove(component);
+                _componentCache.Remove(type);
                 return true;
             }
             return false;
         }
 
-        public T? GetAttribute<T>()
-            where T : IMeshAttribute
+        public T? GetComponent<T>()
+            where T : IEntityComponent
         {
-            for (int i = 0; i < _attributes.Count; i++)
+            var type = typeof(T);
+            if (_componentCache.TryGetValue(type, out var component))
             {
-                if (_attributes[i] is T attr)
-                    return attr;
+                return (T)component;
             }
             return default;
         }
 
-        public void ClearAttributes() => _attributes.Clear();
-
-        public void UpdateAttributes(GameTime gameTime)
+        public void ClearComponents()
         {
-            for (int i = 0; i < _attributes.Count; i++)
+            _components.Clear();
+            _componentCache.Clear();
+        }
+
+        public void UpdateComponents(GameTime gameTime)
+        {
+            for (int i = 0; i < _components.Count; i++)
             {
-                _attributes[i].Update(this, gameTime);
+                _components[i].Update(this, gameTime);
             }
         }
 
@@ -163,6 +229,25 @@ namespace Engine13.Graphics
                 );
             }
         }
+
+        [Obsolete("Use AddComponent instead")]
+        public void AddAttribute(IEntityComponent component) => AddComponent(component);
+
+        [Obsolete("Use RemoveComponent instead")]
+        public bool RemoveAttribute<T>()
+            where T : IEntityComponent => RemoveComponent<T>();
+
+        [Obsolete("Use GetComponent instead")]
+        public T? GetAttribute<T>()
+            where T : IEntityComponent => GetComponent<T>();
+
+        [Obsolete("Use ClearComponents instead")]
+        public void ClearAttributes() => ClearComponents();
+
+        [Obsolete("Use UpdateComponents instead")]
+        public void UpdateAttributes(GameTime gameTime) => UpdateComponents(gameTime);
+
+        public System.Collections.Generic.IReadOnlyList<IEntityComponent> Attributes => Components;
     }
 }
 
@@ -177,10 +262,14 @@ namespace Engine13.Primitives
             GD = gd;
         }
 
-        protected Engine13.Graphics.Mesh BuildMesh(
+        protected Engine13.Graphics.Entity BuildMesh(
             Engine13.Graphics.VertexPosition[] vertices,
             ushort[] indices
-        ) => new Engine13.Graphics.Mesh(GD, vertices, indices);
+        )
+        {
+            var renderMesh = new Engine13.Graphics.RenderMesh(GD, vertices, indices);
+            return new Engine13.Graphics.Entity(renderMesh);
+        }
     }
 
     public class QuadFactory : PrimitiveFactory
@@ -188,30 +277,30 @@ namespace Engine13.Primitives
         public QuadFactory(GraphicsDevice gd)
             : base(gd) { }
 
-        public Engine13.Graphics.Mesh Quad(float Width, float Height)
+        public Engine13.Graphics.Entity Quad(float Width, float Height)
         {
             var vertices = new Engine13.Graphics.VertexPosition[]
             {
-                new Engine13.Graphics.VertexPosition(-0.5f * Width, -0.5f * Height),
-                new Engine13.Graphics.VertexPosition(0.5f * Width, -0.5f * Height),
-                new Engine13.Graphics.VertexPosition(-0.5f * Width, 0.5f * Height),
-                new Engine13.Graphics.VertexPosition(0.5f * Width, 0.5f * Height),
+                new Graphics.VertexPosition(-0.5f * Width, -0.5f * Height),
+                new Graphics.VertexPosition(0.5f * Width, -0.5f * Height),
+                new Graphics.VertexPosition(-0.5f * Width, 0.5f * Height),
+                new Graphics.VertexPosition(0.5f * Width, 0.5f * Height),
             };
             ushort[] indices = { 0, 1, 2, 1, 3, 2 };
-            var mesh = BuildMesh(vertices, indices);
-            mesh.Size = new Vector2(Width, Height);
-            return mesh;
+            var entity = BuildMesh(vertices, indices);
+            entity.Size = new Vector2(Width, Height);
+            return entity;
         }
 
-        public Engine13.Graphics.Mesh Quad(float Width, float Height, Vector4 color)
+        public Engine13.Graphics.Entity Quad(float Width, float Height, Vector4 color)
         {
-            var mesh = Quad(Width, Height);
-            mesh.Color = color;
-            mesh.Size = new Vector2(Width, Height);
-            return mesh;
+            var entity = Quad(Width, Height);
+            entity.Color = color;
+            entity.Size = new Vector2(Width, Height);
+            return entity;
         }
 
-        public void Update(Engine13.Graphics.Mesh mesh, float Width, float Height)
+        public void Update(Engine13.Graphics.Entity entity, float Width, float Height)
         {
             float hx = 0.5f * Width;
             float hy = 0.5f * Height;
@@ -222,17 +311,17 @@ namespace Engine13.Primitives
                 new Engine13.Graphics.VertexPosition(-hx, hy),
                 new Engine13.Graphics.VertexPosition(hx, hy),
             };
-            GD.UpdateBuffer(mesh.VertexBuffer, 0, verts);
-            mesh.Size = new Vector2(Width, Height);
+            GD.UpdateBuffer(entity.VertexBuffer, 0, verts);
+            entity.Size = new Vector2(Width, Height);
         }
 
-        public static Engine13.Graphics.Mesh CreateQuad(
+        public static Engine13.Graphics.Entity CreateQuad(
             GraphicsDevice GD,
             float Width,
             float Height
         ) => new QuadFactory(GD).Quad(Width, Height);
 
-        public static Engine13.Graphics.Mesh CreateQuad(
+        public static Engine13.Graphics.Entity CreateQuad(
             GraphicsDevice GD,
             float Width,
             float Height,
@@ -240,11 +329,11 @@ namespace Engine13.Primitives
         ) => new QuadFactory(GD).Quad(Width, Height, color);
 
         public static void UpdateQuad(
-            Engine13.Graphics.Mesh mesh,
+            Engine13.Graphics.Entity entity,
             GraphicsDevice GD,
             float Width,
             float Height
-        ) => new QuadFactory(GD).Update(mesh, Width, Height);
+        ) => new QuadFactory(GD).Update(entity, Width, Height);
     }
 
     public class CubeFactory : PrimitiveFactory
@@ -252,7 +341,7 @@ namespace Engine13.Primitives
         public CubeFactory(GraphicsDevice gd)
             : base(gd) { }
 
-        public Engine13.Graphics.Mesh Cube(float Size)
+        public Engine13.Graphics.Entity Cube(float Size)
         {
             var vertices = new Engine13.Graphics.VertexPosition[]
             {
@@ -262,20 +351,20 @@ namespace Engine13.Primitives
                 new Engine13.Graphics.VertexPosition(0.5f * Size, 0.5f * Size),
             };
             ushort[] indices = { 0, 1, 2, 1, 3, 2 };
-            var mesh = BuildMesh(vertices, indices);
-            mesh.Size = new Vector2(Size, Size);
-            return mesh;
+            var entity = BuildMesh(vertices, indices);
+            entity.Size = new Vector2(Size, Size);
+            return entity;
         }
 
-        public Engine13.Graphics.Mesh Cube(float Size, Vector4 color)
+        public Engine13.Graphics.Entity Cube(float Size, Vector4 color)
         {
-            var mesh = Cube(Size);
-            mesh.Color = color;
-            mesh.Size = new Vector2(Size, Size);
-            return mesh;
+            var entity = Cube(Size);
+            entity.Color = color;
+            entity.Size = new Vector2(Size, Size);
+            return entity;
         }
 
-        private void Update(Engine13.Graphics.Mesh mesh, float Size)
+        private void Update(Engine13.Graphics.Entity entity, float Size)
         {
             float hs = 0.5f * Size;
             var verts = new Engine13.Graphics.VertexPosition[]
@@ -285,21 +374,24 @@ namespace Engine13.Primitives
                 new Engine13.Graphics.VertexPosition(-hs, hs),
                 new Engine13.Graphics.VertexPosition(hs, hs),
             };
-            GD.UpdateBuffer(mesh.VertexBuffer, 0, verts);
-            mesh.Size = new Vector2(Size, Size);
+            GD.UpdateBuffer(entity.VertexBuffer, 0, verts);
+            entity.Size = new Vector2(Size, Size);
         }
 
-        public static Engine13.Graphics.Mesh CreateCube(GraphicsDevice GD, float Size) =>
+        public static Engine13.Graphics.Entity CreateCube(GraphicsDevice GD, float Size) =>
             new CubeFactory(GD).Cube(Size);
 
-        public static Engine13.Graphics.Mesh CreateCube(
+        public static Engine13.Graphics.Entity CreateCube(
             GraphicsDevice GD,
             float Size,
             Vector4 color
         ) => new CubeFactory(GD).Cube(Size, color);
 
-        public static void UpdateCube(Engine13.Graphics.Mesh mesh, GraphicsDevice GD, float Size) =>
-            new CubeFactory(GD).Update(mesh, Size);
+        public static void UpdateCube(
+            Engine13.Graphics.Entity entity,
+            GraphicsDevice GD,
+            float Size
+        ) => new CubeFactory(GD).Update(entity, Size);
     }
 
     public class CircleFactory : PrimitiveFactory
@@ -307,7 +399,7 @@ namespace Engine13.Primitives
         public CircleFactory(GraphicsDevice gd)
             : base(gd) { }
 
-        public Engine13.Graphics.Mesh Circle(
+        public Engine13.Graphics.Entity Circle(
             float Radius,
             int LatitudeSegments = 16,
             int LongitudeSegments = 16
@@ -356,50 +448,50 @@ namespace Engine13.Primitives
                 }
             }
 
-            var mesh = BuildMesh(vertices.ToArray(), indices.ToArray());
-            mesh.Size = new Vector2(Radius * 2f, Radius * 2f);
-            mesh.CollisionShape = Engine13.Graphics.Mesh.CollisionShapeType.Circle;
-            mesh.CollisionRadius = Radius;
-            return mesh;
+            var entity = BuildMesh(vertices.ToArray(), indices.ToArray());
+            entity.Size = new Vector2(Radius * 2f, Radius * 2f);
+            entity.CollisionShape = Engine13.Graphics.Entity.CollisionShapeType.Circle;
+            entity.CollisionRadius = Radius;
+            return entity;
         }
 
-        public Engine13.Graphics.Mesh Circle(
+        public Engine13.Graphics.Entity Circle(
             float Radius,
             Vector4 color,
             int LatitudeSegments = 16,
             int LongitudeSegments = 16
         )
         {
-            var mesh = Circle(Radius, LatitudeSegments, LongitudeSegments);
-            mesh.Color = color;
-            mesh.Size = new Vector2(Radius * 2f, Radius * 2f);
-            mesh.CollisionShape = Engine13.Graphics.Mesh.CollisionShapeType.Circle;
-            mesh.CollisionRadius = Radius;
-            return mesh;
+            var entity = Circle(Radius, LatitudeSegments, LongitudeSegments);
+            entity.Color = color;
+            entity.Size = new Vector2(Radius * 2f, Radius * 2f);
+            entity.CollisionShape = Engine13.Graphics.Entity.CollisionShapeType.Circle;
+            entity.CollisionRadius = Radius;
+            return entity;
         }
 
         public void Update(
-            Engine13.Graphics.Mesh mesh,
+            Engine13.Graphics.Entity entity,
             float Radius,
             int LatitudeSegments = 16,
             int LongitudeSegments = 16
         )
         {
             var newCircle = Circle(Radius, LatitudeSegments, LongitudeSegments);
-            GD.UpdateBuffer(mesh.VertexBuffer, 0, newCircle.GetVertices());
-            mesh.Size = new Vector2(Radius * 2f, Radius * 2f);
-            mesh.CollisionShape = Engine13.Graphics.Mesh.CollisionShapeType.Circle;
-            mesh.CollisionRadius = Radius;
+            GD.UpdateBuffer(entity.VertexBuffer, 0, newCircle.GetVertices());
+            entity.Size = new Vector2(Radius * 2f, Radius * 2f);
+            entity.CollisionShape = Engine13.Graphics.Entity.CollisionShapeType.Circle;
+            entity.CollisionRadius = Radius;
         }
 
-        public static Engine13.Graphics.Mesh CreateCircle(
+        public static Engine13.Graphics.Entity CreateCircle(
             GraphicsDevice GD,
             float Radius,
             int LatitudeSegments = 16,
             int LongitudeSegments = 16
         ) => new CircleFactory(GD).Circle(Radius, LatitudeSegments, LongitudeSegments);
 
-        public static Engine13.Graphics.Mesh CreateCircle(
+        public static Engine13.Graphics.Entity CreateCircle(
             GraphicsDevice GD,
             float Radius,
             Vector4 color,
@@ -408,12 +500,12 @@ namespace Engine13.Primitives
         ) => new CircleFactory(GD).Circle(Radius, color, LatitudeSegments, LongitudeSegments);
 
         public static void UpdateCircle(
-            Engine13.Graphics.Mesh mesh,
+            Engine13.Graphics.Entity entity,
             GraphicsDevice GD,
             float Radius,
             int LatitudeSegments = 16,
             int LongitudeSegments = 16
-        ) => new CircleFactory(GD).Update(mesh, Radius, LatitudeSegments, LongitudeSegments);
+        ) => new CircleFactory(GD).Update(entity, Radius, LatitudeSegments, LongitudeSegments);
     }
 
     public class TriangleFactory : PrimitiveFactory

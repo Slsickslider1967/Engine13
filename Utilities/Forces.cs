@@ -45,29 +45,27 @@ namespace Engine13.Utilities
 
     public static class Forces
     {
-        private static readonly System.Collections.Generic.Dictionary<Mesh, Vec2> _acc =
-            new System.Collections.Generic.Dictionary<Mesh, Vec2>();
+        private static readonly System.Collections.Generic.Dictionary<Entity, Vec2> _acc =
+            new System.Collections.Generic.Dictionary<Entity, Vec2>();
 
         public static void Reset()
         {
             _acc.Clear();
         }
 
-        public static void AddForce(Mesh mesh, Vec2 Force)
+        public static void AddForce(Entity entity, Vec2 Force)
         {
-            if (_acc.TryGetValue(mesh, out var Cur))
-                _acc[mesh] = new Vec2(Cur.X + Force.X, Cur.Y + Force.Y);
+            if (_acc.TryGetValue(entity, out var Cur))
+                _acc[entity] = new Vec2(Cur.X + Force.X, Cur.Y + Force.Y);
             else
-                _acc[mesh] = Force;
+                _acc[entity] = Force;
         }
 
-        public static Vec2 GetForce(Mesh mesh)
+        public static Vec2 GetForce(Entity entity)
         {
-            return _acc.TryGetValue(mesh, out var f) ? f : new Vec2(0.0, 0.0);
+            return _acc.TryGetValue(entity, out var f) ? f : new Vec2(0.0, 0.0);
         }
 
-        // Apply accumulated forces to meshes by updating their ObjectCollision velocity.
-        // This should be called once per frame after all attributes have contributed forces.
         public static void Apply(Engine13.Core.GameTime gameTime)
         {
             double dt = gameTime.DeltaTime;
@@ -78,12 +76,12 @@ namespace Engine13.Utilities
 
             foreach (var kv in _acc)
             {
-                Mesh mesh = kv.Key;
+                Entity entity = kv.Key;
                 Vec2 f = kv.Value;
-                var obj = mesh.GetAttribute<Engine13.Utilities.Attributes.ObjectCollision>();
+                var obj = entity.GetComponent<Engine13.Utilities.Attributes.ObjectCollision>();
                 if (obj == null || obj.IsStatic)
                     continue;
-                double mass = (mesh.Mass > 0f) ? mesh.Mass : 1.0;
+                double mass = (entity.Mass > 0f) ? entity.Mass : 1.0;
                 var dv = new System.Numerics.Vector2(
                     (float)(f.X / mass * dt),
                     (float)(f.Y / mass * dt)

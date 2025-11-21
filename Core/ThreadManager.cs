@@ -6,7 +6,7 @@ namespace Engine13.Core
 {
     public delegate void UpdateTask();
     public delegate void RenderTask();
-    
+
     public class ThreadManager : IDisposable
     {
         private const int TargetFps = 30;
@@ -17,13 +17,15 @@ namespace Engine13.Core
         private Thread _renderThread;
         private volatile bool _isRunning;
         private readonly object _stateLock = new object();
-        
+
         // Queue-based task management
-        private readonly ConcurrentQueue<UpdateTask> _updateTaskQueue = new ConcurrentQueue<UpdateTask>();
-        private readonly ConcurrentQueue<RenderTask> _renderTaskQueue = new ConcurrentQueue<RenderTask>();
+        private readonly ConcurrentQueue<UpdateTask> _updateTaskQueue =
+            new ConcurrentQueue<UpdateTask>();
+        private readonly ConcurrentQueue<RenderTask> _renderTaskQueue =
+            new ConcurrentQueue<RenderTask>();
         private readonly AutoResetEvent _updateTaskAvailable = new AutoResetEvent(false);
         private readonly AutoResetEvent _renderTaskAvailable = new AutoResetEvent(false);
-        
+
         private System.Diagnostics.Stopwatch _frameTimer;
         private readonly Action _updateAction;
         private readonly Action _drawAction;
@@ -34,7 +36,7 @@ namespace Engine13.Core
             _updateAction = updateAction;
             _drawAction = drawAction;
             _frameTimer = new System.Diagnostics.Stopwatch();
-            
+
             _updateThread = new Thread(UpdateLoop) { Name = "Update Thread", IsBackground = true };
             _renderThread = new Thread(RenderLoop) { Name = "Render Thread", IsBackground = true };
             _bufferThread = new Thread(BufferLoop) { Name = "Buffer Thread", IsBackground = true };
@@ -51,11 +53,11 @@ namespace Engine13.Core
         public void Stop()
         {
             _isRunning = false;
-            
+
             // Signal threads to wake up and exit
             _updateTaskAvailable.Set();
             _renderTaskAvailable.Set();
-            
+
             _updateThread?.Join(1000);
             _renderThread?.Join(1000);
         }
@@ -82,7 +84,7 @@ namespace Engine13.Core
             while (_isRunning)
             {
                 double frameStartTime = _frameTimer.Elapsed.TotalSeconds;
-                
+
                 // Execute legacy update action if provided
                 if (_updateAction != null)
                 {
@@ -91,7 +93,7 @@ namespace Engine13.Core
                         _updateAction.Invoke();
                     }
                 }
-                
+
                 // Process queued update tasks
                 while (_updateTaskQueue.TryDequeue(out UpdateTask task))
                 {
@@ -100,11 +102,11 @@ namespace Engine13.Core
                         task?.Invoke();
                     }
                 }
-                
+
                 double frameEndTime = _frameTimer.Elapsed.TotalSeconds;
                 double frameTime = frameEndTime - frameStartTime;
                 double sleepTime = TargetFrameTime - frameTime;
-                
+
                 if (sleepTime > 0)
                 {
                     Thread.Sleep((int)(sleepTime * 1000));
@@ -144,19 +146,12 @@ namespace Engine13.Core
             }
         }
 
-        private void BufferLoop()
-        {
+        private void BufferLoop() { }
 
-        }
-        
         ///Using a seperate thread to log to console as it has a massive over head.
         private void LoggerLoop()
         {
-            while(_isRunning)
-            {
-
-            }
-
+            while (_isRunning) { }
         }
 
         protected virtual void Dispose(bool disposing)

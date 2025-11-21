@@ -12,17 +12,14 @@ namespace Engine13.Core
 {
     public class Game : EngineBase
     {
-        private readonly List<Mesh> _meshes = new();
+        private readonly List<Entity> _entities = new();
         private readonly UpdateManager _updateManager = new();
         private readonly SpatialGrid _grid = new SpatialGrid(0.025f);
         private readonly List<Vector2[]> _tickPositions = new();
         private int _tickIndex;
         private int _bufferStart;
-        private const int NumberOfTicks = 500;
-        private const int BufferedFrames = 500;
-        private const int StepsPerFrame = 2;
-        
-        // Tick counter
+        private const int BufferedFrames = 1000;
+        private const int StepsPerFrame = 1;
         private int _tickCounter = 0;
         private System.Diagnostics.Stopwatch _tickTimer = new System.Diagnostics.Stopwatch();
         private double _lastTickTime = 0;
@@ -31,7 +28,6 @@ namespace Engine13.Core
             : base(window, graphicsDevice)
         {
             _tickTimer.Start();
-            // Initialize window bounds for edge collision
             WindowBounds.SetWindow(window);
         }
 
@@ -43,11 +39,20 @@ namespace Engine13.Core
         protected override void Update(GameTime gameTime)
         {
             const float targetFps = 60f;
-            float simulationDuration = NumberOfTicks / targetFps;
-            float stepDelta = simulationDuration / NumberOfTicks;
+            float stepDelta = MathHelpers.ComputeStepDelta(targetFps);
 
             if (_tickPositions.Count == _bufferStart)
             {
+                // Initialize CSV logs
+                Logger.InitCSV(
+                    "Ticks",
+                    "TickCount",
+                    "TickTime(ms)",
+                    "KineticEnergy",
+                    "PotentialEnergy",
+                    "TotalEnergy"
+                );
+
                 for (int step = _tickPositions.Count; step < BufferedFrames; step++)
                 {
                     double currentTime = _tickTimer.Elapsed.TotalMilliseconds;
@@ -55,30 +60,40 @@ namespace Engine13.Core
                     _lastTickTime = currentTime;
 
                     _tickCounter++;
-                    
+
                     GameTime.OverrideDeltaTime(stepDelta);
                     _updateManager.Update(GameTime);
-                    _grid.UpdateAllAabb(_meshes);
+                    _grid.UpdateAllAabb(_entities);
                     RunCollisionDetection(stepDelta);
 
-                    var snapshot = new Vector2[_meshes.Count];
-                    for (int i = 0; i < _meshes.Count; i++)
-                    {
-                        snapshot[i] = _meshes[i].Position;
-                    }
-
+                    var snapshot = MathHelpers.CapturePositions(_entities);
                     _tickPositions.Add(snapshot);
-                    Console.WriteLine($"Tick: {_tickCounter} | TickTime {timeBetweenTicks:F2} ms");
+
+                    // Calculate energies
+                    float kineticEnergy = ParticleInteraction.CalculateKineticEnergy(_entities);
+                    float potentialEnergy = ParticleInteraction.CalculatePotentialEnergy(_entities);
+                    float totalEnergy = kineticEnergy + potentialEnergy;
+
+                    // Log tick data with energy
+                    Logger.LogCSV(
+                        "Ticks",
+                        _tickCounter,
+                        timeBetweenTicks,
+                        kineticEnergy,
+                        potentialEnergy,
+                        totalEnergy
+                    );
+                    Console.WriteLine(
+                        $"Tick: {_tickCounter} | Time: {timeBetweenTicks:F2}ms | KE: {kineticEnergy:F2} | PE: {potentialEnergy:F2} | Total: {totalEnergy:F2}"
+                    );
                 }
+
+                Logger.CloseAllCSV();
 
                 if (_tickPositions.Count > 0)
                 {
                     var initialPositions = _tickPositions[0];
-                    int meshCount = Math.Min(_meshes.Count, initialPositions.Length);
-                    for (int i = 0; i < meshCount; i++)
-                    {
-                        _meshes[i].Position = initialPositions[i];
-                    }
+                    MathHelpers.ApplyPositionsToEntities(_entities, initialPositions);
                 }
 
                 _bufferStart = _tickPositions.Count - BufferedFrames;
@@ -97,34 +112,34 @@ namespace Engine13.Core
                 return;
             }
 
-            _tickIndex %= tickCount;
+            _tickIndex = MathHelpers.WrapIndex(_tickIndex, tickCount);
 
             Renderer.BeginFrame(new RgbaFloat(0.1f, 0.1f, 0.1f, 1f));
             var tickPositions = _tickPositions[_tickIndex];
-            int count = Math.Min(_meshes.Count, tickPositions.Length);
+            int count = Math.Min(_entities.Count, tickPositions.Length);
             for (int i = 0; i < count; i++)
             {
-                _meshes[i].Position = tickPositions[i];
-                Renderer.DrawMesh(_meshes[i]);
+                _entities[i].Position = tickPositions[i];
+                Renderer.DrawMesh(_entities[i]);
             }
             Console.WriteLine(_tickIndex);
             Renderer.EndFrame();
             _tickIndex += StepsPerFrame;
-            _tickIndex %= tickCount;
+            _tickIndex = MathHelpers.WrapIndex(_tickIndex, tickCount);
         }
 
         private void RunCollisionDetection(float stepDelta)
         {
-            foreach (var mesh in _meshes)
+            foreach (var entity in _entities)
             {
-                var collision = mesh.GetAttribute<ObjectCollision>();
+                var collision = entity.GetComponent<ObjectCollision>();
                 if (collision != null)
                 {
                     collision.IsGrounded = false;
                 }
             }
 
-            const int iterations = 50; 
+            const int iterations = 50;
             for (int iter = 0; iter < iterations; iter++)
             {
                 var collisionPairs = _grid.GetCollisionPairs();
@@ -136,7 +151,13 @@ namespace Engine13.Core
                 bool anyContacts = false;
                 foreach (var pair in collisionPairs)
                 {
-                    if (CollisionInfo.AreColliding(pair.MeshA, pair.MeshB, out CollisionInfo collisionInfo))
+                    if (
+                        CollisionInfo.AreColliding(
+                            pair.EntityA,
+                            pair.EntityB,
+                            out CollisionInfo collisionInfo
+                        )
+                    )
                     {
                         anyContacts = true;
                         PhysicsSolver.ResolveCollision(collisionInfo, stepDelta);
@@ -150,14 +171,14 @@ namespace Engine13.Core
 
                 if (iter < iterations - 1)
                 {
-                    _grid.UpdateAllAabb(_meshes);
+                    _grid.UpdateAllAabb(_entities);
                 }
             }
         }
 
         private void CreateObjects()
         {
-            const int particleCount = 1500;
+            const int particleCount = 1000;
             const int columns = 25;
             const float particleRadius = 0.01f;
             const float diameter = particleRadius * 2f;
@@ -165,7 +186,7 @@ namespace Engine13.Core
             const float verticalSpacing = diameter * 1.35f;
             var origin = new Vector2(-0.3f, -0.4f);
 
-            _meshes.EnsureCapacity(_meshes.Count + particleCount + 1);
+            _entities.EnsureCapacity(_entities.Count + particleCount + 1);
 
             for (int i = 0; i < particleCount; i++)
             {
@@ -178,24 +199,31 @@ namespace Engine13.Core
                 );
                 particle.Mass = 100f;
 
-                particle.AddAttribute(new Gravity(9.81f, 0f, particle.Mass));
-                particle.AddAttribute(new ObjectCollision { Mass = particle.Mass, Restitution = 0.0f });
-                particle.AddAttribute(new EdgeCollision(false));
+                particle.AddComponent(new Gravity(9.81f, 0f, particle.Mass));
+                particle.AddComponent(
+                    new ObjectCollision { Mass = particle.Mass, Restitution = 0.0f }
+                );
+                particle.AddComponent(new EdgeCollision(false));
+
+                particle.AddComponent(
+                    new ParticleInteraction(_entities)
+                    {
+                        BondSpringConstant = 50f, // Spring stiffness
+                        BondEquilibriumLength = diameter, // Rest length = particle spacing
+                        BondCutoffDistance = diameter * 1.5f, // Form bonds if closer than 1.5x diameter
+                        EnableBonds = true,
+
+                        LJ_Epsilon = 0.005f,
+                        LJ_Sigma = diameter * 0.9f,
+                        LJ_CutoffRadius = diameter * 3f,
+                        EnableLennardJones = true,
+                    }
+                );
 
                 _updateManager.Register(particle);
-                _meshes.Add(particle);
-                _grid.AddMesh(particle);
+                _entities.Add(particle);
+                _grid.AddEntity(particle);
             }
-
-            var whiteQue = CircleFactory.CreateCircle(GraphicsDevice, 0.01f, 8, 8);
-            whiteQue.Position = new Vector2(0f, 0f);
-            whiteQue.Mass = 0.01f;
-            whiteQue.AddAttribute(new ObjectCollision { IsStatic = true, Restitution = 0.5f });
-            whiteQue.AddAttribute(new EdgeCollision(false));
-            whiteQue.AddAttribute(new Gravity(9.81f, 0f, whiteQue.Mass));
-            _updateManager.Register(whiteQue);
-            _meshes.Add(whiteQue);
-            _grid.AddMesh(whiteQue);
         }
     }
 }

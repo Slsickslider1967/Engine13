@@ -87,41 +87,40 @@ namespace Engine13.Utilities
 
     public struct CollisionPair
     {
-        public Mesh MeshA;
-        public Mesh MeshB;
+        public Entity EntityA;
+        public Entity EntityB;
 
-        public CollisionPair(Mesh a, Mesh b)
+        public CollisionPair(Entity a, Entity b)
         {
-            MeshA = a;
-            MeshB = b;
+            EntityA = a;
+            EntityB = b;
         }
     }
 
     public class CollisionInfo
     {
-        public Mesh MeshA;
-        public Mesh MeshB;
+        public Entity EntityA;
+        public Entity EntityB;
         public Vector2 ContactPoint;
         public Vector2 PenetrationDepth;
         public Vector2 SeparationDirection;
 
         public CollisionInfo(
-            Mesh a,
-            Mesh b,
+            Entity a,
+            Entity b,
             Vector2 contactPoint,
             Vector2 penetrationDepth,
             Vector2 separationDirection
         )
         {
-            MeshA = a;
-            MeshB = b;
+            EntityA = a;
+            EntityB = b;
             ContactPoint = contactPoint;
             PenetrationDepth = penetrationDepth;
             SeparationDirection = separationDirection;
-            // Debug logging removed to avoid spamming console during collisions
         }
 
-        public static bool AreColliding(Mesh a, Mesh b, out CollisionInfo collisionInfo)
+        public static bool AreColliding(Entity a, Entity b, out CollisionInfo collisionInfo)
         {
             collisionInfo = null!;
             if (a == null || b == null)
@@ -133,30 +132,25 @@ namespace Engine13.Utilities
                 return false;
 
             if (
-                a.CollisionShape == Mesh.CollisionShapeType.Circle
-                && b.CollisionShape == Mesh.CollisionShapeType.Circle
+                a.CollisionShape == Entity.CollisionShapeType.Circle
+                && b.CollisionShape == Entity.CollisionShapeType.Circle
             )
             {
                 return TryCircleCollision(a, b, out collisionInfo);
             }
 
-            // Narrow-phase: SAT
             return VertexCollisionSolver.Instance.TryFindContact(a, b, out collisionInfo);
         }
 
-        /// <summary>
-        /// Basic circle collision detection - only checks if circles overlap (no depth/contact calculation)
-        /// Fast for broad-phase detection or simple overlap testing
-        /// </summary>
-        public static bool AreCirclesOverlapping(Mesh a, Mesh b)
+        public static bool AreCirclesOverlapping(Entity a, Entity b)
         {
             if (a == null || b == null)
                 return false;
 
            
             if (
-                a.CollisionShape != Mesh.CollisionShapeType.Circle
-                || b.CollisionShape != Mesh.CollisionShapeType.Circle
+                a.CollisionShape != Entity.CollisionShapeType.Circle
+                || b.CollisionShape != Entity.CollisionShapeType.Circle
             )
                 return false;
 
@@ -200,7 +194,7 @@ namespace Engine13.Utilities
             return distanceSq < radiusSumSq;
         }
 
-        private static bool TryCircleCollision(Mesh a, Mesh b, out CollisionInfo collisionInfo)
+        private static bool TryCircleCollision(Entity a, Entity b, out CollisionInfo collisionInfo)
         {
             collisionInfo = null!;
 
@@ -247,8 +241,8 @@ namespace Engine13.Utilities
 
                 if (normal == Vector2.Zero)
                 {
-                    var attrA = a.GetAttribute<ObjectCollision>();
-                    var attrB = b.GetAttribute<ObjectCollision>();
+                    var attrA = a.GetComponent<ObjectCollision>();
+                    var attrB = b.GetComponent<ObjectCollision>();
                     Vector2 relVel =
                         (attrB?.Velocity ?? Vector2.Zero) - (attrA?.Velocity ?? Vector2.Zero);
                     float absVx = MathF.Abs(relVel.X);
@@ -305,20 +299,19 @@ namespace Engine13.Utilities
             if (collision == null)
                 return;
 
-            var meshA = collision.MeshA;
-            var meshB = collision.MeshB;
-            if (meshA == null || meshB == null)
+            var entityA = collision.EntityA;
+            var entityB = collision.EntityB;
+            if (entityA == null || entityB == null)
                 return;
 
-            var objA = meshA.GetAttribute<ObjectCollision>();
-            var objB = meshB.GetAttribute<ObjectCollision>();
+            var objA = entityA.GetComponent<ObjectCollision>();
+            var objB = entityB.GetComponent<ObjectCollision>();
 
             float invMassA =
                 (objA == null || objA.IsStatic || objA.Mass <= 0f) ? 0f : 1f / objA.Mass;
             float invMassB =
                 (objB == null || objB.IsStatic || objB.Mass <= 0f) ? 0f : 1f / objB.Mass;
 
-            // Really basic mass accountability to be updated
             float massAVal = (objA == null || objA.IsStatic || objA.Mass <= 0f) ? float.PositiveInfinity : objA.Mass;
             float massBVal = (objB == null || objB.IsStatic || objB.Mass <= 0f) ? float.PositiveInfinity : objB.Mass;
 
@@ -358,9 +351,9 @@ namespace Engine13.Utilities
                 float correctionMag = correctionSpeed * deltaTime;
                 Vector2 correction = (correctionMag / invMassSum) * normal;
                 if (objA != null && invMassA > 0f)
-                    meshA.Position -= correction * invMassA;
+                    entityA.Position -= correction * invMassA;
                 if (objB != null && invMassB > 0f)
-                    meshB.Position += correction * invMassB;
+                    entityB.Position += correction * invMassB;
             }
 
             Vector2 velocityA = Vector2.Zero;
@@ -484,24 +477,19 @@ namespace Engine13.Utilities
         }
     }
 
-    ///Turning the screan in a spatial grid
-    public class SpatialGrid
+        public class SpatialGrid
     {
         private float cellSize;
 
-        /// <summary>
-        /// (int, int) mesh cooirds in the grid
-        /// List<Mesh> list of corrisponding meshes in that cell
-        /// </summary>
         private System.Collections.Generic.Dictionary<
             (int, int),
-            System.Collections.Generic.List<Mesh>
+            System.Collections.Generic.List<Entity>
         > cells;
         private readonly System.Collections.Generic.Dictionary<
-            Mesh,
+            Entity,
             System.Collections.Generic.HashSet<(int, int)>
-        > meshCells = new System.Collections.Generic.Dictionary<
-            Mesh,
+        > entityCells = new System.Collections.Generic.Dictionary<
+            Entity,
             System.Collections.Generic.HashSet<(int, int)>
         >();
 
@@ -510,7 +498,7 @@ namespace Engine13.Utilities
             this.cellSize = cellSize;
             cells = new System.Collections.Generic.Dictionary<
                 (int, int),
-                System.Collections.Generic.List<Mesh>
+                System.Collections.Generic.List<Entity>
             >();
         }
 
@@ -521,19 +509,16 @@ namespace Engine13.Utilities
             return (x, y);
         }
 
-        /// <summary>
-        /// Register a mesh into every grid cell overlapped by its world-space AABB.
-        /// </summary>
-        public void AddMesh(Mesh mesh)
+        public void AddEntity(Entity entity)
         {
-            var aabb = mesh.GetAABB();
+            var aabb = entity.GetAABB();
             var minCell = GetCellCoords(aabb.Min);
             var maxCell = GetCellCoords(aabb.Max);
 
-            if (!meshCells.TryGetValue(mesh, out var occupied))
+            if (!entityCells.TryGetValue(entity, out var occupied))
             {
                 occupied = new System.Collections.Generic.HashSet<(int, int)>();
-                meshCells[mesh] = occupied;
+                entityCells[entity] = occupied;
             }
 
             for (int x = minCell.Item1; x <= maxCell.Item1; x++)
@@ -543,58 +528,56 @@ namespace Engine13.Utilities
                     var cell = (x, y);
                     if (!cells.TryGetValue(cell, out var list))
                     {
-                        list = new System.Collections.Generic.List<Mesh>();
+                        list = new System.Collections.Generic.List<Entity>();
                         cells[cell] = list;
                     }
-                    if (!list.Contains(mesh))
+                    if (!list.Contains(entity))
                     {
-                        list.Add(mesh);
+                        list.Add(entity);
                     }
                     occupied.Add(cell);
                 }
             }
         }
 
-        private void RemoveMesh(Mesh mesh)
+        private void RemoveEntity(Entity entity)
         {
-            if (meshCells.TryGetValue(mesh, out var OccupiedCells))
+            if (entityCells.TryGetValue(entity, out var OccupiedCells))
             {
                 foreach (var cellCoords in OccupiedCells)
                 {
                     if (cells.ContainsKey(cellCoords))
                     {
-                        cells[cellCoords].Remove(mesh);
+                        cells[cellCoords].Remove(entity);
                         if (cells[cellCoords].Count == 0)
                         {
                             cells.Remove(cellCoords);
                         }
                     }
                 }
-                meshCells.Remove(mesh);
+                entityCells.Remove(entity);
             }
         }
 
-        public void UpdateMeshPosition(Mesh mesh)
+        public void UpdateEntityPosition(Entity entity)
         {
-            // Re-register mesh into all cells overlapped by its current AABB
-            RemoveMesh(mesh);
-            AddMesh(mesh);
+            RemoveEntity(entity);
+            AddEntity(entity);
         }
 
-        public void UpdateAllAabb(System.Collections.Generic.IEnumerable<Mesh> meshes)
+        public void UpdateAllAabb(System.Collections.Generic.IEnumerable<Entity> entities)
         {
-            foreach (var m in meshes)
+            foreach (var e in entities)
             {
-                UpdateMeshPosition(m);
+                UpdateEntityPosition(e);
             }
         }
 
-        public System.Collections.Generic.List<Mesh> GetNearbyMeshes(Vector2 position)
+        public System.Collections.Generic.List<Entity> GetNearbyEntities(Vector2 position)
         {
             var cellCoords = GetCellCoords(position);
-            var nearbyMeshes = new System.Collections.Generic.List<Mesh>();
+            var nearbyEntities = new System.Collections.Generic.List<Entity>();
 
-            //Cheaking in a grid of 8
             for (int dx = -1; dx <= 1; dx++)
             {
                 for (int dy = -1; dy <= 1; dy++)
@@ -602,12 +585,12 @@ namespace Engine13.Utilities
                     var neighborCoords = (cellCoords.Item1 + dx, cellCoords.Item2 + dy);
                     if (cells.ContainsKey(neighborCoords))
                     {
-                        nearbyMeshes.AddRange(cells[neighborCoords]);
+                        nearbyEntities.AddRange(cells[neighborCoords]);
                     }
                 }
             }
 
-            return nearbyMeshes;
+            return nearbyEntities;
         }
 
         public AABB GetCellRange(AABB aabb)
@@ -620,9 +603,9 @@ namespace Engine13.Utilities
             );
         }
 
-        public System.Collections.Generic.HashSet<(int, int)> GetOccupiedCells(Mesh mesh)
+        public System.Collections.Generic.HashSet<(int, int)> GetOccupiedCells(Entity entity)
         {
-            return meshCells.TryGetValue(mesh, out var cells)
+            return entityCells.TryGetValue(entity, out var cells)
                 ? cells
                 : new System.Collections.Generic.HashSet<(int, int)>();
         }
@@ -630,23 +613,21 @@ namespace Engine13.Utilities
         public System.Collections.Generic.List<CollisionPair> GetCollisionPairs()
         {
             var pairs = new System.Collections.Generic.List<CollisionPair>();
-            var processedPairs = new System.Collections.Generic.HashSet<(Mesh, Mesh)>();
+            var processedPairs = new System.Collections.Generic.HashSet<(Entity, Entity)>();
 
             foreach (var cell in cells.Values)
             {
-                // Check all mesh pairs within each cell
                 for (int i = 0; i < cell.Count; i++)
                 {
                     for (int j = i + 1; j < cell.Count; j++)
                     {
-                        var meshA = cell[i];
-                        var meshB = cell[j];
+                        var entityA = cell[i];
+                        var entityB = cell[j];
 
-                        // Avoid duplicate pairs (A,B) and (B,A)
                         var pair =
-                            meshA.GetHashCode() < meshB.GetHashCode()
-                                ? (meshA, meshB)
-                                : (meshB, meshA);
+                            entityA.GetHashCode() < entityB.GetHashCode()
+                                ? (entityA, entityB)
+                                : (entityB, entityA);
                         if (processedPairs.Add(pair))
                         {
                             pairs.Add(new CollisionPair(pair.Item1, pair.Item2));
@@ -661,8 +642,17 @@ namespace Engine13.Utilities
         public void Clear()
         {
             cells.Clear();
-            meshCells.Clear();
+            entityCells.Clear();
         }
+
+        [Obsolete("Use AddEntity instead")]
+        public void AddMesh(Entity entity) => AddEntity(entity);
+
+        [Obsolete("Use UpdateEntityPosition instead")]
+        public void UpdateMeshPosition(Entity entity) => UpdateEntityPosition(entity);
+
+        [Obsolete("Use GetNearbyEntities instead")]
+        public System.Collections.Generic.List<Entity> GetNearbyMeshes(Vector2 position) => GetNearbyEntities(position);
     }
 
     public sealed class VertexCollisionSolver
@@ -770,15 +760,14 @@ namespace Engine13.Utilities
             axis.AddRange(outList);
         }
 
-        public bool TryFindContact(Mesh meshA, Mesh meshB, out CollisionInfo collision)
+        public bool TryFindContact(Entity entityA, Entity entityB, out CollisionInfo collision)
         {
             collision = null!;
-            if (meshA == null || meshB == null)
+            if (entityA == null || entityB == null)
                 return false;
 
-            // Copy world-space vertices
-            var rawA = meshA.GetVertices();
-            var rawB = meshB.GetVertices();
+            var rawA = entityA.GetVertices();
+            var rawB = entityB.GetVertices();
             if (rawA == null || rawB == null)
                 return false;
             if (rawA.Length < 2 || rawB.Length < 2)
@@ -786,8 +775,8 @@ namespace Engine13.Utilities
 
             var worldA = new Vector2[rawA.Length];
             var worldB = new Vector2[rawB.Length];
-            int countA = CopyWorldSpaceVertices(meshA, worldA.AsSpan());
-            int countB = CopyWorldSpaceVertices(meshB, worldB.AsSpan());
+            int countA = CopyWorldSpaceVertices(entityA, worldA.AsSpan());
+            int countB = CopyWorldSpaceVertices(entityB, worldB.AsSpan());
             if (countA < 2 || countB < 2)
                 return false;
 
@@ -804,14 +793,12 @@ namespace Engine13.Utilities
                 worldB = tmp;
             }
 
-            // Build and dedupe axes
             var axes = new System.Collections.Generic.List<SetAxis>(worldA.Length + worldB.Length);
             BuildAxes(worldA, worldB, axes);
             DedupeAxes(axes);
             if (axes.Count == 0)
                 return false;
 
-            // SAT projection to find minimum overlap axis
             float minOverlap = float.MaxValue;
             Vector2 minAxis = Vector2.Zero;
             int minAxisSource = -1;
@@ -846,7 +833,6 @@ namespace Engine13.Utilities
                 float overlap = System.MathF.Min(maxA, maxB) - System.MathF.Max(minA, minB);
                 if (overlap <= 0f)
                 {
-                    // Separating axis -> no collision
                     return false;
                 }
 
@@ -862,7 +848,6 @@ namespace Engine13.Utilities
             if (minOverlap == float.MaxValue)
                 return false;
 
-            // Orient normal from A to B
             Vector2 centerA = Vector2.Zero;
             for (int i = 0; i < worldA.Length; i++)
                 centerA += worldA[i];
@@ -876,7 +861,6 @@ namespace Engine13.Utilities
             if (Vector2.Dot(centerB - centerA, normal) < 0f)
                 normal = -normal;
 
-            // Support points along normal
             Vector2 supportA = worldA[0];
             float bestA = Vector2.Dot(supportA, normal);
             for (int i = 1; i < worldA.Length; i++)
@@ -904,27 +888,85 @@ namespace Engine13.Utilities
             Vector2 contactPoint = (supportA + supportB) * 0.5f;
             Vector2 penetrationVec = normal * minOverlap;
 
-            collision = new CollisionInfo(meshA, meshB, contactPoint, penetrationVec, normal);
+            collision = new CollisionInfo(entityA, entityB, contactPoint, penetrationVec, normal);
             return true;
         }
 
-        public int CopyWorldSpaceVertices(Mesh mesh, Span<Vector2> destination)
+        public int CopyWorldSpaceVertices(Entity entity, Span<Vector2> destination)
         {
-            if (mesh == null)
-                throw new ArgumentNullException(nameof(mesh));
+            if (entity == null)
+                throw new ArgumentNullException(nameof(entity));
 
-            var vertices = mesh.GetVertices();
+            var vertices = entity.GetVertices();
             int count = Math.Min(vertices.Length, destination.Length);
             for (int i = 0; i < count; i++)
             {
-                destination[i] = new Vector2(vertices[i].X, vertices[i].Y) + mesh.Position;
+                destination[i] = new Vector2(vertices[i].X, vertices[i].Y) + entity.Position;
             }
 
             return count;
         }
     }
 
-    public class MathHelpers { }
+    public static class MathHelpers
+    {
+        public static float ComputeTerminalVelocityMag(float mass, float acceleration, float dragCoefficient)
+        {
+            if (dragCoefficient <= 0f || acceleration == 0f)
+                return float.PositiveInfinity;
+            return MathF.Sqrt(MathF.Abs(mass * acceleration) / dragCoefficient);
+        }
+
+        public static float ComputeArea(Vector2 size)
+        {
+            return (size.X > 0f && size.Y > 0f) ? (size.X * size.Y) : 1f;
+        }
+
+        public static float ComputeStepDelta(float targetFps)
+        {
+            return 1f / MathF.Max(targetFps, 1f);
+        }
+
+        public static Vector2[] CapturePositions(System.Collections.Generic.IReadOnlyList<Entity> entities)
+        {
+            var snapshot = new Vector2[entities.Count];
+            for (int i = 0; i < entities.Count; i++)
+            {
+                snapshot[i] = entities[i].Position;
+            }
+            return snapshot;
+        }
+
+        public static void ApplyPositionsToEntities(System.Collections.Generic.IReadOnlyList<Entity> entities, Vector2[] positions)
+        {
+            if (positions == null) return;
+            int count = Math.Min(entities.Count, positions.Length);
+            for (int i = 0; i < count; i++)
+            {
+                entities[i].Position = positions[i];
+            }
+        }
+
+        [Obsolete("Use ApplyPositionsToEntities instead")]
+        public static void ApplyPositionsToMeshes(System.Collections.Generic.IReadOnlyList<Entity> entities, Vector2[] positions) 
+            => ApplyPositionsToEntities(entities, positions);
+
+        public static int WrapIndex(int index, int count)
+        {
+            if (count <= 0)
+            {
+                return 0;
+            }
+
+            int r = index % count;
+            if (r < 0)
+            {
+                r += count;
+            }
+
+            return r;
+        }
+    }
 
     struct Frame
     {
@@ -946,30 +988,30 @@ namespace Engine13.Utilities
             isValid = false;
         }
 
-        public void CaptureFrom(List<Mesh> meshes)
+        public void CaptureFrom(List<Entity> entities)
         {
-            int Count = Math.Min(meshes.Count, Positions.Length);
+            int Count = Math.Min(entities.Count, Positions.Length);
 
             for (int i = 0; i < Count; i++)
             {
-                Positions[i] = meshes[i].Position;
-                Velocities[i] = meshes[i].GetAttribute<ObjectCollision>()?.Velocity ?? Vector2.Zero;
+                Positions[i] = entities[i].Position;
+                Velocities[i] = entities[i].GetComponent<ObjectCollision>()?.Velocity ?? Vector2.Zero;
             }
 
             isValid = true;
         }
 
-        public bool ApplyTo(List<Mesh> meshes)
+        public bool ApplyTo(List<Entity> entities)
         {
             if (!isValid)
                 return false;
 
-            int Count = Math.Min(meshes.Count, Positions.Length);
+            int Count = Math.Min(entities.Count, Positions.Length);
 
             for (int i = 0; i < Count; i++)
             {
-                meshes[i].Position = Positions[i];
-                var objCollision = meshes[i].GetAttribute<ObjectCollision>();
+                entities[i].Position = Positions[i];
+                var objCollision = entities[i].GetComponent<ObjectCollision>();
                 if (objCollision != null)
                 {
                     objCollision.Velocity = Velocities[i];
