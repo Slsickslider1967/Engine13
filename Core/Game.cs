@@ -1,7 +1,6 @@
-using System;
-using System.Collections.Generic;
 using System.Numerics;
 using Engine13.Graphics;
+using Engine13.Input;
 using Engine13.Primitives;
 using Engine13.Utilities;
 using Engine13.Utilities.Attributes;
@@ -18,11 +17,12 @@ namespace Engine13.Core
         private readonly List<Vector2[]> _tickPositions = new();
         private int _tickIndex;
         private int _bufferStart;
-        private const int BufferedFrames = 1000;
-        private const int StepsPerFrame = 1;
+        private const int BufferedFrames = 250;
+        private const int StepsPerFrame = 2;
         private int _tickCounter = 0;
         private System.Diagnostics.Stopwatch _tickTimer = new System.Diagnostics.Stopwatch();
         private double _lastTickTime = 0;
+        private InputManager _Input = new InputManager();
 
         public Game(Sdl2Window window, GraphicsDevice graphicsDevice)
             : base(window, graphicsDevice)
@@ -70,8 +70,8 @@ namespace Engine13.Core
                     _tickPositions.Add(snapshot);
 
                     // Calculate energies
-                    float kineticEnergy = ParticleInteraction.CalculateKineticEnergy(_entities);
-                    float potentialEnergy = ParticleInteraction.CalculatePotentialEnergy(_entities);
+                    float kineticEnergy = MolecularDynamics.CalculateKineticEnergy(_entities);
+                    float potentialEnergy = MolecularDynamics.CalculatePotentialEnergy(_entities);
                     float totalEnergy = kineticEnergy + potentialEnergy;
 
                     // Log tick data with energy
@@ -105,6 +105,7 @@ namespace Engine13.Core
         protected override void Draw()
         {
             int tickCount = _tickPositions.Count;
+            bool Run = false;
             if (tickCount == 0)
             {
                 Renderer.BeginFrame(new RgbaFloat(0.1f, 0.1f, 0.1f, 1f));
@@ -115,6 +116,15 @@ namespace Engine13.Core
             _tickIndex = MathHelpers.WrapIndex(_tickIndex, tickCount);
 
             Renderer.BeginFrame(new RgbaFloat(0.1f, 0.1f, 0.1f, 1f));
+
+            while (!Run)
+            {
+                _Input.Update();
+                if (_Input.KeysDown(Key.Space))
+                {
+                    Run = true;
+                }
+
             var tickPositions = _tickPositions[_tickIndex];
             int count = Math.Min(_entities.Count, tickPositions.Length);
             for (int i = 0; i < count; i++)
@@ -178,7 +188,7 @@ namespace Engine13.Core
 
         private void CreateObjects()
         {
-            const int particleCount = 1000;
+            const int particleCount = 500;
             const int columns = 25;
             const float particleRadius = 0.01f;
             const float diameter = particleRadius * 2f;
@@ -205,20 +215,22 @@ namespace Engine13.Core
                 );
                 particle.AddComponent(new EdgeCollision(false));
 
-                particle.AddComponent(
-                    new ParticleInteraction(_entities)
-                    {
-                        BondSpringConstant = 50f, // Spring stiffness
-                        BondEquilibriumLength = diameter, // Rest length = particle spacing
-                        BondCutoffDistance = diameter * 1.5f, // Form bonds if closer than 1.5x diameter
-                        EnableBonds = true,
-
-                        LJ_Epsilon = 0.005f,
-                        LJ_Sigma = diameter * 0.9f,
-                        LJ_CutoffRadius = diameter * 3f,
-                        EnableLennardJones = true,
-                    }
-                );
+                var molecularDynamics = new MolecularDynamics(_entities)
+                {
+                    EnableAnchorOscillation = false,
+                    EnableInteractions = true,
+                    EnableBonds = true,
+                    BondSpringConstant = 15f,
+                    BondEquilibriumLength = diameter,
+                    BondCutoffDistance = diameter * 1.25f,
+                    MaxBondsPerEntity = 4,
+                    EnableLennardJones = true,
+                    LJ_Epsilon = 0.0025f,
+                    LJ_Sigma = diameter,
+                    LJ_CutoffRadius = diameter * 2f,
+                    MaxForceMagnitude = 12.5f,
+                };
+                particle.AddComponent(molecularDynamics);
 
                 _updateManager.Register(particle);
                 _entities.Add(particle);

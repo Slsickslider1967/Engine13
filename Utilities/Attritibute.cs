@@ -116,19 +116,44 @@ namespace Engine13.Utilities.Attributes
     public sealed class MolecularDynamics : IEntityComponent
     {
         private static readonly Random _random = new Random();
+        private static readonly HashSet<(Entity, Entity)> _globalBonds = new();
+        private static readonly Dictionary<Entity, int> _bondCounts = new();
+
+        private readonly List<Entity>? _allEntities;
 
         private Vector2 _restAnchor;
         private bool _restAnchorInitialized;
         private float _phaseX;
         private float _phaseY;
 
-        // Simplified MD parameters
+        // Local (single-particle) oscillator parameters
+        public bool EnableAnchorOscillation { get; set; } = false;
         public float SpringConstant { get; set; } = 10f;
         public float DampingRatio { get; set; } = 1.1f;
         public float DriveAmplitude { get; set; } = 0.005f;
         public float DriveFrequency { get; set; } = 4f;
         public bool EnableDrive { get; set; } = true;
-        public float MaxForceMagnitude { get; set; } = 5f;
+
+        // Multi-particle interaction parameters
+        public bool EnableInteractions { get; set; } = true;
+        public bool EnableBonds { get; set; } = true;
+        public bool EnableLennardJones { get; set; } = true;
+        public int MaxBondsPerEntity { get; set; } = 6;
+        public float BondSpringConstant { get; set; } = 50f;
+        public float BondEquilibriumLength { get; set; } = 0.025f;
+        public float BondCutoffDistance { get; set; } = 0.035f;
+        public float LJ_Epsilon { get; set; } = 0.005f;
+        public float LJ_Sigma { get; set; } = 0.02f;
+        public float LJ_CutoffRadius { get; set; } = 0.08f;
+
+        public float MaxForceMagnitude { get; set; } = 25f;
+
+        public MolecularDynamics() { }
+
+        public MolecularDynamics(List<Entity> allEntities)
+        {
+            _allEntities = allEntities;
+        }
 
         private void EnsureAnchorInitialized(Entity entity)
         {
@@ -143,16 +168,42 @@ namespace Engine13.Utilities.Attributes
 
         public void Update(Entity entity, GameTime gameTime)
         {
+            Vector2 totalForce = Vector2.Zero;
+
+            if (EnableAnchorOscillation)
+            {
+                totalForce += ComputeAnchorForce(entity, gameTime);
+            }
+
+            if (EnableInteractions && _allEntities != null && _allEntities.Count > 0)
+            {
+                totalForce += ComputeInteractionForces(entity);
+            }
+
+            if (totalForce == Vector2.Zero)
+                return;
+
+            if (MaxForceMagnitude > 0f)
+            {
+                float magnitude = totalForce.Length();
+                if (magnitude > MaxForceMagnitude)
+                {
+                    totalForce *= MaxForceMagnitude / magnitude;
+                }
+            }
+
+            Forces.AddForce(entity, new Vec2(totalForce.X, totalForce.Y));
+        }
+
+        private Vector2 ComputeAnchorForce(Entity entity, GameTime gameTime)
+        {
             EnsureAnchorInitialized(entity);
 
-            // Get mass (default to 1 if not set)
             float mass = (entity.Mass > 0f) ? entity.Mass : 1f;
 
-            // Calculate damping coefficient: c = 2 * sqrt(k * m) * ζ
             float k = MathF.Max(SpringConstant, 1e-4f);
             float c = 2f * MathF.Sqrt(k * mass) * MathF.Max(DampingRatio, 0f);
 
-            // Calculate driven oscillation target
             Vector2 targetPosition = _restAnchor;
             Vector2 targetVelocity = Vector2.Zero;
 
@@ -170,72 +221,26 @@ namespace Engine13.Utilities.Attributes
                 targetVelocity = new Vector2(velX, velY);
             }
 
-            // Calculate errors
             Vector2 posError = entity.Position - targetPosition;
             Vector2 velError = entity.Velocity - targetVelocity;
 
             Vector2 springForce = -k * posError;
             Vector2 dampingForce = -c * velError;
-            Vector2 totalForce = springForce + dampingForce;
-
-            // Clamp force magnitude if needed
-            if (MaxForceMagnitude > 0f)
-            {
-                float magnitude = totalForce.Length();
-                if (magnitude > MaxForceMagnitude)
-                {
-                    totalForce *= MaxForceMagnitude / magnitude;
-                }
-            }
-
-            // Add force to accumulator
-            Forces.AddForce(entity, new Vec2(totalForce.X, totalForce.Y));
-        }
-    }
-
-    /// <summary>
-    /// Molecular Dynamics with harmonic bonds and Lennard-Jones interactions
-    /// Simple physics: F = -k(r - r0) for bonds, F = LJ for non-bonded
-    /// </summary>
-    public sealed class ParticleInteraction : IEntityComponent
-    {
-        private readonly List<Entity> _allEntities;
-        private readonly HashSet<(Entity, Entity)> _bonds;
-        private static readonly HashSet<(Entity, Entity)> _globalBonds = new();
-
-        // Harmonic bond parameters (vibrations)
-        public float BondSpringConstant { get; set; } = 50f;
-        public float BondEquilibriumLength { get; set; } = 0.025f; // r0 (rest length)
-        public float BondCutoffDistance { get; set; } = 0.035f; // Max distance to form bonds
-
-        // Lennard-Jones parameters (non-bonded)
-        public float LJ_Epsilon { get; set; } = 0.005f; // Energy well depth
-        public float LJ_Sigma { get; set; } = 0.02f; // Zero-crossing distance
-        public float LJ_CutoffRadius { get; set; } = 0.08f;
-
-        public bool EnableBonds { get; set; } = true;
-        public bool EnableLennardJones { get; set; } = true;
-
-        public ParticleInteraction(List<Entity> allEntities)
-        {
-            _allEntities = allEntities;
-            _bonds = new HashSet<(Entity, Entity)>();
+            return springForce + dampingForce;
         }
 
-        public void Update(Entity entity, GameTime gameTime)
+        private Vector2 ComputeInteractionForces(Entity entity)
         {
             if (_allEntities == null || _allEntities.Count == 0)
-                return;
+                return Vector2.Zero;
 
             Vector2 totalForce = Vector2.Zero;
 
-            // Update bonds: form new bonds if particles are close
             if (EnableBonds)
             {
                 UpdateBonds(entity);
             }
 
-            // Calculate forces
             for (int i = 0; i < _allEntities.Count; i++)
             {
                 var other = _allEntities[i];
@@ -250,9 +255,9 @@ namespace Engine13.Utilities.Attributes
                 float dist = MathF.Sqrt(distSq);
                 Vector2 direction = delta / dist;
 
-                bool isBonded = IsBonded(entity, other);
+                bool isBonded = EnableBonds && IsBonded(entity, other);
 
-                if (isBonded && EnableBonds)
+                if (isBonded)
                 {
                     float displacement = dist - BondEquilibriumLength;
                     float forceMagnitude = BondSpringConstant * displacement;
@@ -260,7 +265,6 @@ namespace Engine13.Utilities.Attributes
                 }
                 else if (EnableLennardJones && dist < LJ_CutoffRadius)
                 {
-                    // Lennard-Jones for non-bonded: F = 24ε/r[(σ/r)^6 - 2(σ/r)^12]
                     float sigmaOverR = LJ_Sigma / dist;
                     float sr6 = sigmaOverR * sigmaOverR * sigmaOverR;
                     sr6 *= sr6;
@@ -271,33 +275,61 @@ namespace Engine13.Utilities.Attributes
                 }
             }
 
-            Forces.AddForce(entity, new Vec2(totalForce.X, totalForce.Y));
+            return totalForce;
         }
 
         private void UpdateBonds(Entity entity)
         {
-            // Form bonds with nearby particles
-            for (int i = 0; i < _allEntities.Count; i++)
+            if (_allEntities == null || _allEntities.Count == 0)
+                return;
+
+            int availableSlots = int.MaxValue;
+            if (MaxBondsPerEntity > 0)
+            {
+                int current = GetBondCount(entity);
+                if (current >= MaxBondsPerEntity)
+                    return;
+                availableSlots = MaxBondsPerEntity - current;
+            }
+
+            float bondCutoffSq = BondCutoffDistance * BondCutoffDistance;
+
+            for (int i = 0; i < _allEntities.Count && availableSlots > 0; i++)
             {
                 var other = _allEntities[i];
                 if (other == entity)
                     continue;
 
-                float distSq = (other.Position - entity.Position).LengthSquared();
-                float bondCutoffSq = BondCutoffDistance * BondCutoffDistance;
+                if (MaxBondsPerEntity > 0 && GetBondCount(other) >= MaxBondsPerEntity)
+                    continue;
 
-                if (distSq < bondCutoffSq)
+                float distSq = (other.Position - entity.Position).LengthSquared();
+                if (distSq >= bondCutoffSq)
+                    continue;
+
+                bool aFirst = entity.GetHashCode() < other.GetHashCode();
+                var bond = aFirst ? (entity, other) : (other, entity);
+
+                if (_globalBonds.Add(bond))
                 {
-                    var bond =
-                        entity.GetHashCode() < other.GetHashCode()
-                            ? (entity, other)
-                            : (other, entity);
-                    _globalBonds.Add(bond);
+                    IncrementBondCount(entity);
+                    IncrementBondCount(other);
+                    availableSlots--;
                 }
             }
         }
 
-        private bool IsBonded(Entity a, Entity b)
+        private static int GetBondCount(Entity entity)
+        {
+            return _bondCounts.TryGetValue(entity, out var count) ? count : 0;
+        }
+
+        private static void IncrementBondCount(Entity entity)
+        {
+            _bondCounts[entity] = GetBondCount(entity) + 1;
+        }
+
+        private static bool IsBonded(Entity a, Entity b)
         {
             var bond = a.GetHashCode() < b.GetHashCode() ? (a, b) : (b, a);
             return _globalBonds.Contains(bond);
@@ -316,44 +348,38 @@ namespace Engine13.Utilities.Attributes
             return totalKE;
         }
 
-        /// <summary>
-        /// Calculate total potential energy (bonds + LJ)
-        /// </summary>
-        public static float CalculatePotentialEnergy(
-            List<Entity> entities
-        )
+        public static float CalculatePotentialEnergy(List<Entity> entities)
         {
             float totalPE = 0f;
-
-            // Only calculate once per bond
-            var processedBonds = new HashSet<(Entity, Entity)>();
+            var processedPairs = new HashSet<(Entity, Entity)>();
 
             for (int i = 0; i < entities.Count; i++)
             {
                 var entity = entities[i];
-                var comp = entity.GetComponent<ParticleInteraction>();
+                var comp = entity.GetComponent<MolecularDynamics>();
                 if (comp == null)
                     continue;
 
                 for (int j = i + 1; j < entities.Count; j++)
                 {
                     var other = entities[j];
+                    if (!processedPairs.Add((entity, other)))
+                        continue;
+
                     Vector2 delta = other.Position - entity.Position;
                     float dist = delta.Length();
                     if (dist < 1e-8f)
                         continue;
 
-                    bool bonded = comp.IsBonded(entity, other);
+                    bool bonded = comp.EnableBonds && IsBonded(entity, other);
 
                     if (bonded && comp.EnableBonds)
                     {
-                        // Harmonic potential: U = 0.5 * k * (r - r0)^2
                         float displacement = dist - comp.BondEquilibriumLength;
                         totalPE += 0.5f * comp.BondSpringConstant * displacement * displacement;
                     }
                     else if (comp.EnableLennardJones && dist < comp.LJ_CutoffRadius)
                     {
-                        // LJ potential: U = 4ε[(σ/r)^12 - (σ/r)^6]
                         float sigmaOverR = comp.LJ_Sigma / dist;
                         float sr6 = sigmaOverR * sigmaOverR * sigmaOverR;
                         sr6 *= sr6;
@@ -369,6 +395,7 @@ namespace Engine13.Utilities.Attributes
         public static void ClearAllBonds()
         {
             _globalBonds.Clear();
+            _bondCounts.Clear();
         }
     }
 

@@ -9,12 +9,12 @@ namespace Engine13.Utilities
     public static class WindowBounds
     {
         private static Sdl2Window? _window;
-        
+
         public static void SetWindow(Sdl2Window window)
         {
             _window = window;
         }
-        
+
         public static (float left, float right, float top, float bottom) GetNormalizedBounds()
         {
             if (_window == null)
@@ -22,19 +22,17 @@ namespace Engine13.Utilities
                 // Fallback to default bounds if no window is set
                 return (-1f, 1f, -1f, 1f);
             }
-            
-            // Convert pixel coordinates to normalized world coordinates
-            // Assuming typical 2D projection where screen goes from -1 to 1
+
             float aspectRatio = (float)_window.Width / _window.Height;
-            
+
             return (-aspectRatio, aspectRatio, -1f, 1f);
         }
-        
+
         public static Vector2 GetWindowSize()
         {
             if (_window == null)
                 return new Vector2(800, 600); // Fallback size
-                
+
             return new Vector2(_window.Width, _window.Height);
         }
     }
@@ -147,23 +145,20 @@ namespace Engine13.Utilities
             if (a == null || b == null)
                 return false;
 
-           
             if (
                 a.CollisionShape != Entity.CollisionShapeType.Circle
                 || b.CollisionShape != Entity.CollisionShapeType.Circle
             )
                 return false;
 
-            
             float radiusA =
                 a.CollisionRadius > 0f ? a.CollisionRadius : MathF.Max(a.Size.X, a.Size.Y) * 0.5f;
             float radiusB =
                 b.CollisionRadius > 0f ? b.CollisionRadius : MathF.Max(b.Size.X, b.Size.Y) * 0.5f;
-            
+
             if (radiusA <= 0f || radiusB <= 0f)
                 return false;
 
-            
             Vector2 delta = b.Position - a.Position;
             float distanceSq = delta.LengthSquared();
             float radiusSum = radiusA + radiusB;
@@ -285,14 +280,15 @@ namespace Engine13.Utilities
     public static class PhysicsSolver
     {
         private const float PenetrationSlop = 0.0015f;
-        private const float PositionalCorrectionPercent = 0.6f;
-        private const float MaxPositionalCorrectionSpeed = 2.0f;
+        private const float PositionalCorrectionPercent = 0.2f;
+        private const float MaxPenetrationCorrection = 0.05f;
         private const float BaumgarteScalar = 0.25f;
         private const float RestitutionVelocityThreshold = 0.15f;
         private const float StaticToDynamicFrictionRatio = 0.8f;
         private const float GroundNormalThreshold = 0.6f;
         private const float RestingRelativeVelocityThreshold = 0.4f;
         private const float MassIgnoreRatio = 1000f;
+        private const float MaxLinearVelocity = 10f;
 
         public static void ResolveCollision(CollisionInfo collision, float deltaTime)
         {
@@ -312,8 +308,14 @@ namespace Engine13.Utilities
             float invMassB =
                 (objB == null || objB.IsStatic || objB.Mass <= 0f) ? 0f : 1f / objB.Mass;
 
-            float massAVal = (objA == null || objA.IsStatic || objA.Mass <= 0f) ? float.PositiveInfinity : objA.Mass;
-            float massBVal = (objB == null || objB.IsStatic || objB.Mass <= 0f) ? float.PositiveInfinity : objB.Mass;
+            float massAVal =
+                (objA == null || objA.IsStatic || objA.Mass <= 0f)
+                    ? float.PositiveInfinity
+                    : objA.Mass;
+            float massBVal =
+                (objB == null || objB.IsStatic || objB.Mass <= 0f)
+                    ? float.PositiveInfinity
+                    : objB.Mass;
 
             if (massAVal < float.PositiveInfinity && massBVal < float.PositiveInfinity)
             {
@@ -344,11 +346,10 @@ namespace Engine13.Utilities
             float penetrationDepth = MathF.Max(mtvLen - PenetrationSlop, 0f);
             if (penetrationDepth > 0f)
             {
-                float correctionSpeed = MathF.Min(
-                    (penetrationDepth / deltaTime) * PositionalCorrectionPercent,
-                    MaxPositionalCorrectionSpeed
+                float correctionMag = MathF.Min(
+                    penetrationDepth * PositionalCorrectionPercent,
+                    MaxPenetrationCorrection
                 );
-                float correctionMag = correctionSpeed * deltaTime;
                 Vector2 correction = (correctionMag / invMassSum) * normal;
                 if (objA != null && invMassA > 0f)
                     entityA.Position -= correction * invMassA;
@@ -385,10 +386,11 @@ namespace Engine13.Utilities
             float bias = 0f;
             if (penetrationDepth > 0f)
             {
-                bias = MathF.Min(
-                    BaumgarteScalar * penetrationDepth / deltaTime,
-                    MaxPositionalCorrectionSpeed
-                );
+                float maxBias =
+                    (MaxPenetrationCorrection > 0f)
+                        ? MaxPenetrationCorrection / deltaTime
+                        : float.PositiveInfinity;
+                bias = MathF.Min(BaumgarteScalar * penetrationDepth / deltaTime, maxBias);
             }
 
             float normalImpulseScalar = (-(1f + restitution) * relVelN + bias) / invMassSum;
@@ -456,6 +458,11 @@ namespace Engine13.Utilities
                 velocityB = objB.Velocity;
             relVelN = Vector2.Dot(velocityB - velocityA, normal);
 
+            if (objA != null)
+                objA.Velocity = ClampVelocity(objA.Velocity);
+            if (objB != null)
+                objB.Velocity = ClampVelocity(objB.Velocity);
+
             if (normal.Y > GroundNormalThreshold)
             {
                 if (objA != null && MathF.Abs(relVelN) < RestingRelativeVelocityThreshold)
@@ -475,9 +482,30 @@ namespace Engine13.Utilities
                 }
             }
         }
+
+        private static Vector2 ClampVelocity(Vector2 velocity)
+        {
+            float speedSq = velocity.LengthSquared();
+            float maxSpeedSq = MaxLinearVelocity * MaxLinearVelocity;
+            if (speedSq > maxSpeedSq)
+            {
+                float speed = MathF.Sqrt(speedSq);
+                if (speed > 1e-12f)
+                {
+                    float scale = MaxLinearVelocity / speed;
+                    velocity *= scale;
+                }
+                else
+                {
+                    velocity = Vector2.Zero;
+                }
+            }
+
+            return velocity;
+        }
     }
 
-        public class SpatialGrid
+    public class SpatialGrid
     {
         private float cellSize;
 
@@ -652,7 +680,8 @@ namespace Engine13.Utilities
         public void UpdateMeshPosition(Entity entity) => UpdateEntityPosition(entity);
 
         [Obsolete("Use GetNearbyEntities instead")]
-        public System.Collections.Generic.List<Entity> GetNearbyMeshes(Vector2 position) => GetNearbyEntities(position);
+        public System.Collections.Generic.List<Entity> GetNearbyMeshes(Vector2 position) =>
+            GetNearbyEntities(position);
     }
 
     public sealed class VertexCollisionSolver
@@ -910,7 +939,11 @@ namespace Engine13.Utilities
 
     public static class MathHelpers
     {
-        public static float ComputeTerminalVelocityMag(float mass, float acceleration, float dragCoefficient)
+        public static float ComputeTerminalVelocityMag(
+            float mass,
+            float acceleration,
+            float dragCoefficient
+        )
         {
             if (dragCoefficient <= 0f || acceleration == 0f)
                 return float.PositiveInfinity;
@@ -927,7 +960,9 @@ namespace Engine13.Utilities
             return 1f / MathF.Max(targetFps, 1f);
         }
 
-        public static Vector2[] CapturePositions(System.Collections.Generic.IReadOnlyList<Entity> entities)
+        public static Vector2[] CapturePositions(
+            System.Collections.Generic.IReadOnlyList<Entity> entities
+        )
         {
             var snapshot = new Vector2[entities.Count];
             for (int i = 0; i < entities.Count; i++)
@@ -937,9 +972,13 @@ namespace Engine13.Utilities
             return snapshot;
         }
 
-        public static void ApplyPositionsToEntities(System.Collections.Generic.IReadOnlyList<Entity> entities, Vector2[] positions)
+        public static void ApplyPositionsToEntities(
+            System.Collections.Generic.IReadOnlyList<Entity> entities,
+            Vector2[] positions
+        )
         {
-            if (positions == null) return;
+            if (positions == null)
+                return;
             int count = Math.Min(entities.Count, positions.Length);
             for (int i = 0; i < count; i++)
             {
@@ -948,8 +987,10 @@ namespace Engine13.Utilities
         }
 
         [Obsolete("Use ApplyPositionsToEntities instead")]
-        public static void ApplyPositionsToMeshes(System.Collections.Generic.IReadOnlyList<Entity> entities, Vector2[] positions) 
-            => ApplyPositionsToEntities(entities, positions);
+        public static void ApplyPositionsToMeshes(
+            System.Collections.Generic.IReadOnlyList<Entity> entities,
+            Vector2[] positions
+        ) => ApplyPositionsToEntities(entities, positions);
 
         public static int WrapIndex(int index, int count)
         {
@@ -995,7 +1036,8 @@ namespace Engine13.Utilities
             for (int i = 0; i < Count; i++)
             {
                 Positions[i] = entities[i].Position;
-                Velocities[i] = entities[i].GetComponent<ObjectCollision>()?.Velocity ?? Vector2.Zero;
+                Velocities[i] =
+                    entities[i].GetComponent<ObjectCollision>()?.Velocity ?? Vector2.Zero;
             }
 
             isValid = true;
@@ -1020,7 +1062,7 @@ namespace Engine13.Utilities
 
             return true;
         }
-        
+
         public void Clear()
         {
             for (int i = 0; i < Positions.Length; i++)
