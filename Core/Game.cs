@@ -117,14 +117,14 @@ namespace Engine13.Core
 
             Renderer.BeginFrame(new RgbaFloat(0.1f, 0.1f, 0.1f, 1f));
 
-            while (!Run)
-            {
-                _Input.Update();
-                if (_Input.KeysDown(Key.Space))
-                {
-                    Run = true;
-                }
-
+            // while (!Run)
+            // {
+            //     _Input.Update();
+            //     if (_Input.KeysDown(Key.Space))
+            //     {
+            //         Run = true;
+            //     }
+            // }
             var tickPositions = _tickPositions[_tickIndex];
             int count = Math.Min(_entities.Count, tickPositions.Length);
             for (int i = 0; i < count; i++)
@@ -215,21 +215,25 @@ namespace Engine13.Core
                 );
                 particle.AddComponent(new EdgeCollision(false));
 
-                var molecularDynamics = new MolecularDynamics(_entities)
-                {
-                    EnableAnchorOscillation = false,
-                    EnableInteractions = true,
-                    EnableBonds = true,
-                    BondSpringConstant = 15f,
-                    BondEquilibriumLength = diameter,
-                    BondCutoffDistance = diameter * 1.25f,
-                    MaxBondsPerEntity = 4,
-                    EnableLennardJones = true,
-                    LJ_Epsilon = 0.0025f,
-                    LJ_Sigma = diameter,
-                    LJ_CutoffRadius = diameter * 2f,
-                    MaxForceMagnitude = 12.5f,
-                };
+                // var molecularDynamics = MolecularDynamics.CreateLiquidParticle(_entities);
+                // molecularDynamics.BondSpringConstant = 15f;
+                // molecularDynamics.BondEquilibriumLength = diameter;
+                // molecularDynamics.BondCutoffDistance = diameter * 1.25f;
+                // molecularDynamics.LJ_Epsilon = 0.0025f;
+                // molecularDynamics.LJ_Sigma = diameter;
+                // molecularDynamics.LJ_CutoffRadius = diameter * 2f;
+                // molecularDynamics.MaxForceMagnitude = 12.5f;
+                // particle.AddComponent(molecularDynamics);
+
+                var molecularDynamics = MolecularDynamics.CreateSolidParticle(_entities);
+                molecularDynamics.BondSpringConstant = 2000f;          // Much stiffer!
+                //molecularDynamics.BondDampingConstant = 100f;          // Strong damping for stability
+                molecularDynamics.BondEquilibriumLength = diameter;
+                molecularDynamics.BondCutoffDistance = diameter * 1.05f; // Very tight cutoff
+                molecularDynamics.LJ_Epsilon = 0.05f;                  // Much stronger repulsion
+                molecularDynamics.LJ_Sigma = diameter * 0.9f;          // Tighter packing
+                molecularDynamics.LJ_CutoffRadius = diameter * 1.3f;
+                molecularDynamics.MaxForceMagnitude = 200f;            // Much higher force limit
                 particle.AddComponent(molecularDynamics);
 
                 _updateManager.Register(particle);

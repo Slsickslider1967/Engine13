@@ -7,41 +7,40 @@ namespace Engine13.Graphics
     {
         private GraphicsDevice GD;
         private GraphicsPipelineDescription PipelineDescription = new GraphicsPipelineDescription();
-    private Shader[] _Shaders = Array.Empty<Shader>();
-    private Pipeline _Pipeline = null!;
-    private CommandList CL = null!;
+        private Shader[] _Shaders = Array.Empty<Shader>();
+        private Pipeline _Pipeline = null!;
+        private CommandList CL = null!;
         private ResourceFactory factory;
-    public ResourceLayout? PositionLayout { get; private set; }
-    public ResourceLayout? ProjectionLayout { get; private set; }
+        public ResourceLayout? PositionLayout { get; private set; }
+        public ResourceLayout? ProjectionLayout { get; private set; }
         public ResourceLayout? ColorLayout { get; private set; }
 
         public void CreatePipeline()
         {
-
             if (_Shaders == null || _Shaders.Length == 0)
                 throw new Exception("No shaders added");
 
-            var vertexLayout = new VertexLayoutDescription
-            (
-                new VertexElementDescription("Position", VertexElementSemantic.Position, VertexElementFormat.Float2)
+            var vertexLayout = new VertexLayoutDescription(
+                new VertexElementDescription(
+                    "Position",
+                    VertexElementSemantic.Position,
+                    VertexElementFormat.Float2
+                )
             );
 
-            PipelineDescription.ShaderSet = new ShaderSetDescription
-            (
+            PipelineDescription.ShaderSet = new ShaderSetDescription(
                 new[] { vertexLayout },
                 _Shaders
             );
 
             PipelineDescription.BlendState = BlendStateDescription.SingleAlphaBlend;
-            PipelineDescription.DepthStencilState = new DepthStencilStateDescription
-            (
+            PipelineDescription.DepthStencilState = new DepthStencilStateDescription(
                 depthTestEnabled: false,
                 depthWriteEnabled: false,
                 comparisonKind: ComparisonKind.Always
             );
 
-            PipelineDescription.RasterizerState = new RasterizerStateDescription
-            (
+            PipelineDescription.RasterizerState = new RasterizerStateDescription(
                 cullMode: FaceCullMode.Back,
                 fillMode: PolygonFillMode.Solid,
                 frontFace: FrontFace.Clockwise,
@@ -50,19 +49,42 @@ namespace Engine13.Graphics
             );
 
             PipelineDescription.PrimitiveTopology = PrimitiveTopology.TriangleList;
-            PositionLayout = factory.CreateResourceLayout(new ResourceLayoutDescription(
-                new ResourceLayoutElementDescription("PositionBuffer", ResourceKind.UniformBuffer, ShaderStages.Vertex)
-            ));
+            PositionLayout = factory.CreateResourceLayout(
+                new ResourceLayoutDescription(
+                    new ResourceLayoutElementDescription(
+                        "PositionBuffer",
+                        ResourceKind.UniformBuffer,
+                        ShaderStages.Vertex
+                    )
+                )
+            );
 
-            ProjectionLayout = factory.CreateResourceLayout(new ResourceLayoutDescription(
-                new ResourceLayoutElementDescription("ProjectionBuffer", ResourceKind.UniformBuffer, ShaderStages.Vertex)
-            ));
+            ProjectionLayout = factory.CreateResourceLayout(
+                new ResourceLayoutDescription(
+                    new ResourceLayoutElementDescription(
+                        "ProjectionBuffer",
+                        ResourceKind.UniformBuffer,
+                        ShaderStages.Vertex
+                    )
+                )
+            );
 
-            ColorLayout = factory.CreateResourceLayout(new ResourceLayoutDescription(
-                new ResourceLayoutElementDescription("ColorBuffer", ResourceKind.UniformBuffer, ShaderStages.Fragment)
-            ));
+            ColorLayout = factory.CreateResourceLayout(
+                new ResourceLayoutDescription(
+                    new ResourceLayoutElementDescription(
+                        "ColorBuffer",
+                        ResourceKind.UniformBuffer,
+                        ShaderStages.Fragment
+                    )
+                )
+            );
 
-            PipelineDescription.ResourceLayouts = new[] { PositionLayout, ProjectionLayout, ColorLayout };
+            PipelineDescription.ResourceLayouts = new[]
+            {
+                PositionLayout,
+                ProjectionLayout,
+                ColorLayout,
+            };
             PipelineDescription.Outputs = GD.SwapchainFramebuffer.OutputDescription;
             _Pipeline = factory.CreateGraphicsPipeline(PipelineDescription);
 
@@ -91,15 +113,23 @@ namespace Engine13.Graphics
             string fragmentCode = System.IO.File.ReadAllText(fragPath);
 
             _Shaders = factory.CreateFromSpirv(
-                new ShaderDescription(ShaderStages.Vertex, System.Text.Encoding.UTF8.GetBytes(vertexCode), "main"),
-                new ShaderDescription(ShaderStages.Fragment, System.Text.Encoding.UTF8.GetBytes(fragmentCode), "main")
+                new ShaderDescription(
+                    ShaderStages.Vertex,
+                    System.Text.Encoding.UTF8.GetBytes(vertexCode),
+                    "main"
+                ),
+                new ShaderDescription(
+                    ShaderStages.Fragment,
+                    System.Text.Encoding.UTF8.GetBytes(fragmentCode),
+                    "main"
+                )
             );
         }
 
         public Pipeline GetPipeline()
         {
             return _Pipeline;
-        } 
+        }
 
         public void AddShader(Shader shader)
         {
@@ -107,6 +137,5 @@ namespace Engine13.Graphics
             Array.Resize(ref _Shaders, oldLength + 1);
             _Shaders[oldLength] = shader;
         }
-        
     }
 }

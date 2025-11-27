@@ -126,7 +126,6 @@ namespace Engine13.Utilities.Attributes
         private float _phaseX;
         private float _phaseY;
 
-        // Local (single-particle) oscillator parameters
         public bool EnableAnchorOscillation { get; set; } = false;
         public float SpringConstant { get; set; } = 10f;
         public float DampingRatio { get; set; } = 1.1f;
@@ -134,7 +133,6 @@ namespace Engine13.Utilities.Attributes
         public float DriveFrequency { get; set; } = 4f;
         public bool EnableDrive { get; set; } = true;
 
-        // Multi-particle interaction parameters
         public bool EnableInteractions { get; set; } = true;
         public bool EnableBonds { get; set; } = true;
         public bool EnableLennardJones { get; set; } = true;
@@ -153,6 +151,96 @@ namespace Engine13.Utilities.Attributes
         public MolecularDynamics(List<Entity> allEntities)
         {
             _allEntities = allEntities;
+        }
+
+        /// <summary>Creates a simple harmonic oscillator (no interactions)</summary>
+        public static MolecularDynamics CreateSimpleOscillator(
+            float springConstant = 10f,
+            float damping = 1.0f
+        )
+        {
+            return new MolecularDynamics
+            {
+                EnableAnchorOscillation = true,
+                SpringConstant = springConstant,
+                DampingRatio = damping,
+                EnableDrive = false,
+                EnableInteractions = false,
+            };
+        }
+
+        /// <summary>Creates a driven oscillator with external forcing</summary>
+        public static MolecularDynamics CreateDrivenOscillator(
+            float driveAmplitude = 0.005f,
+            float driveFrequency = 4f
+        )
+        {
+            return new MolecularDynamics
+            {
+                EnableAnchorOscillation = true,
+                EnableDrive = true,
+                DriveAmplitude = driveAmplitude,
+                DriveFrequency = driveFrequency,
+                EnableInteractions = false,
+            };
+        }
+
+        /// <summary>Creates a gas-like particle (Lennard-Jones only, no bonds)</summary>
+        public static MolecularDynamics CreateGasParticle(List<Entity> allEntities)
+        {
+            return new MolecularDynamics(allEntities)
+            {
+                EnableAnchorOscillation = false,
+                EnableInteractions = true,
+                EnableBonds = false,
+                EnableLennardJones = true,
+                LJ_Epsilon = 0.005f,
+                LJ_Sigma = 0.02f,
+            };
+        }
+
+        /// <summary>Creates a liquid-like particle (LJ + weak bonding)</summary>
+        public static MolecularDynamics CreateLiquidParticle(List<Entity> allEntities)
+        {
+            return new MolecularDynamics(allEntities)
+            {
+                EnableAnchorOscillation = false,
+                EnableInteractions = true,
+                EnableBonds = true,
+                EnableLennardJones = true,
+                MaxBondsPerEntity = 4,
+                BondSpringConstant = 30f,
+                BondEquilibriumLength = 0.025f,
+            };
+        }
+
+        /// <summary>Creates a solid-like particle (strong bonding)</summary>
+        public static MolecularDynamics CreateSolidParticle(List<Entity> allEntities)
+        {
+            return new MolecularDynamics(allEntities)
+            {
+                EnableAnchorOscillation = false,
+                EnableInteractions = true,
+                EnableBonds = true,
+                EnableLennardJones = true,
+                MaxBondsPerEntity = 6,
+                BondSpringConstant = 100f,
+                BondEquilibriumLength = 0.02f,
+                BondCutoffDistance = 0.03f,
+            };
+        }
+
+        /// <summary>Creates a full MD simulation particle with all features enabled</summary>
+        public static MolecularDynamics CreateFullMD(List<Entity> allEntities)
+        {
+            return new MolecularDynamics(allEntities)
+            {
+                EnableAnchorOscillation = true,
+                EnableInteractions = true,
+                EnableBonds = true,
+                EnableLennardJones = true,
+                EnableDrive = true,
+            };
         }
 
         private void EnsureAnchorInitialized(Entity entity)
@@ -335,6 +423,7 @@ namespace Engine13.Utilities.Attributes
             return _globalBonds.Contains(bond);
         }
 
+        /// <summary>Calculates total kinetic energy</summary>
         public static float CalculateKineticEnergy(List<Entity> entities)
         {
             float totalKE = 0f;
@@ -348,6 +437,7 @@ namespace Engine13.Utilities.Attributes
             return totalKE;
         }
 
+        /// <summary>Calculates total potential energy from bonds and LJ interactions</summary>
         public static float CalculatePotentialEnergy(List<Entity> entities)
         {
             float totalPE = 0f;
@@ -392,6 +482,30 @@ namespace Engine13.Utilities.Attributes
             return totalPE;
         }
 
+        /// <summary>Calculates total energy (kinetic + potential)</summary>
+        public static float CalculateTotalEnergy(List<Entity> entities)
+        {
+            return CalculateKineticEnergy(entities) + CalculatePotentialEnergy(entities);
+        }
+
+        /// <summary>Calculates system temperature from kinetic energy</summary>
+        public static float CalculateTemperature(List<Entity> entities, float kBoltzmann = 1.0f)
+        {
+            if (entities.Count == 0)
+                return 0f;
+
+            float ke = CalculateKineticEnergy(entities);
+            int degreesOfFreedom = 2;
+            return (2f * ke) / (entities.Count * kBoltzmann * degreesOfFreedom);
+        }
+
+        /// <summary>Gets the total number of bonds in the system</summary>
+        public static int GetBondCount()
+        {
+            return _globalBonds.Count;
+        }
+
+        /// <summary>Clears all bonds in the system</summary>
         public static void ClearAllBonds()
         {
             _globalBonds.Clear();
