@@ -4,6 +4,7 @@ using Engine13.Input;
 using Engine13.Primitives;
 using Engine13.Utilities;
 using Engine13.Utilities.Attributes;
+using Engine13.Utilities.JsonReader;
 using Veldrid;
 using Veldrid.Sdl2;
 
@@ -13,12 +14,12 @@ namespace Engine13.Core
     {
         private readonly List<Entity> _entities = new();
         private readonly UpdateManager _updateManager = new();
-        private readonly SpatialGrid _grid = new SpatialGrid(0.025f);
+        private readonly SpatialGrid _grid = new SpatialGrid(0.0025f);
         private readonly List<Vector2[]> _tickPositions = new();
         private int _tickIndex;
         private int _bufferStart;
         private const int BufferedFrames = 250;
-        private const int StepsPerFrame = 2;
+        private const int StepsPerFrame = 1;
         private int _tickCounter = 0;
         private System.Diagnostics.Stopwatch _tickTimer = new System.Diagnostics.Stopwatch();
         private double _lastTickTime = 0;
@@ -149,7 +150,7 @@ namespace Engine13.Core
                 }
             }
 
-            const int iterations = 50;
+            const int iterations = 20;
             for (int iter = 0; iter < iterations; iter++)
             {
                 var collisionPairs = _grid.GetCollisionPairs();
@@ -188,57 +189,187 @@ namespace Engine13.Core
 
         private void CreateObjects()
         {
-            const int particleCount = 500;
+            const int particleCount = 1000;
             const int columns = 25;
-            const float particleRadius = 0.01f;
-            const float diameter = particleRadius * 2f;
-            const float horizontalSpacing = diameter * 1.35f;
-            const float verticalSpacing = diameter * 1.35f;
             var origin = new Vector2(-0.3f, -0.4f);
 
             _entities.EnsureCapacity(_entities.Count + particleCount + 1);
 
-            for (int i = 0; i < particleCount; i++)
+            var preset = MDPresetReader.Load("Steel");
+
+            // PARTICLE-SCALE: Each entity is a macroscopic particle, not an atomd
+            // Use preset-defined radius, not atomic calculations
+            float particleRadius = preset.ParticleRadius;
+
+            float diameter = particleRadius * 2f;
+            // Increase spacing to 1.15x so bonds can work without constant collisions
+            float horizontalSpacing = diameter * 1.15f;
+            float verticalSpacing = diameter * 1.15f;
+
+            // Log particle info
+            Console.WriteLine($"Creating {preset.Name} particles:");
+            Console.WriteLine($"  Particle Type: {preset.Description}");
+            Console.WriteLine($"  Particle Mass: {preset.Mass:F3} units");
+            Console.WriteLine($"  Particle Radius: {particleRadius:F4} units");
+            Console.WriteLine($"  Total Particles: {particleCount}");
+
+            // If preset defines a composition, allocate particle counts per composition ratios.
+            if (preset.Composition != null && preset.Composition.Count > 0)
             {
-                var particle = CircleFactory.CreateCircle(GraphicsDevice, particleRadius, 8, 8);
-                int column = i % columns;
-                int row = i / columns;
-                particle.Position = new Vector2(
-                    origin.X + column * horizontalSpacing,
-                    origin.Y + row * verticalSpacing
-                );
-                particle.Mass = 100f;
+                int totalRatio = preset.Composition.Sum(c => Math.Max(1, c.Ratio));
+                var compCounts = new List<int>(preset.Composition.Count);
+                int remaining = particleCount;
 
-                particle.AddComponent(new Gravity(9.81f, 0f, particle.Mass));
-                particle.AddComponent(
-                    new ObjectCollision { Mass = particle.Mass, Restitution = 0.0f }
-                );
-                particle.AddComponent(new EdgeCollision(false));
+                // Compute per-composition counts (last gets remainder to ensure sum==particleCount)
+                for (int ci = 0; ci < preset.Composition.Count; ci++)
+                {
+                    var c = preset.Composition[ci];
+                    int count =
+                        (ci == preset.Composition.Count - 1)
+                            ? remaining
+                            : (int)Math.Round((double)particleCount * c.Ratio / totalRatio);
+                    compCounts.Add(Math.Max(0, count));
+                    remaining -= count;
+                }
 
-                // var molecularDynamics = MolecularDynamics.CreateLiquidParticle(_entities);
-                // molecularDynamics.BondSpringConstant = 15f;
-                // molecularDynamics.BondEquilibriumLength = diameter;
-                // molecularDynamics.BondCutoffDistance = diameter * 1.25f;
-                // molecularDynamics.LJ_Epsilon = 0.0025f;
-                // molecularDynamics.LJ_Sigma = diameter;
-                // molecularDynamics.LJ_CutoffRadius = diameter * 2f;
-                // molecularDynamics.MaxForceMagnitude = 12.5f;
-                // particle.AddComponent(molecularDynamics);
+                int index = 0;
+                for (int ci = 0; ci < preset.Composition.Count; ci++)
+                {
+                    var comp = preset.Composition[ci];
+                    int compCount = compCounts[ci];
 
-                var molecularDynamics = MolecularDynamics.CreateSolidParticle(_entities);
-                molecularDynamics.BondSpringConstant = 2000f;          // Much stiffer!
-                //molecularDynamics.BondDampingConstant = 100f;          // Strong damping for stability
-                molecularDynamics.BondEquilibriumLength = diameter;
-                molecularDynamics.BondCutoffDistance = diameter * 1.05f; // Very tight cutoff
-                molecularDynamics.LJ_Epsilon = 0.05f;                  // Much stronger repulsion
-                molecularDynamics.LJ_Sigma = diameter * 0.9f;          // Tighter packing
-                molecularDynamics.LJ_CutoffRadius = diameter * 1.3f;
-                molecularDynamics.MaxForceMagnitude = 200f;            // Much higher force limit
-                particle.AddComponent(molecularDynamics);
+                    for (int k = 0; k < compCount; k++, index++)
+                    {
+                        int i = index;
+                        var particle = CircleFactory.CreateCircle(
+                            GraphicsDevice,
+                            particleRadius,
+                            8,
+                            8
+                        );
+                        int column = i % columns;
+                        int row = i / columns;
+                        particle.Position = new Vector2(
+                            origin.X + column * horizontalSpacing,
+                            origin.Y + row * verticalSpacing
+                        );
 
-                _updateManager.Register(particle);
-                _entities.Add(particle);
-                _grid.AddEntity(particle);
+                        particle.CollisionRadius = particleRadius * 0.85f;
+                        particle.Mass = preset.Mass;
+
+                        particle.AddComponent(
+                            new Gravity(preset.GravityStrength, 0f, particle.Mass)
+                        );
+                        particle.AddComponent(
+                            new ObjectCollision
+                            {
+                                Mass = particle.Mass,
+                                Restitution = preset.Restitution,
+                                Friction = 0.1f,
+                            }
+                        );
+
+                        particle.AddComponent(
+                            preset.EnableEdgeCollision
+                                ? new EdgeCollision(false)
+                                : new EdgeCollision(true)
+                        );
+
+                        // Choose MD component based on composition MDType
+                        MolecularDynamics molecularDynamics;
+                        string mdType = comp.MDType?.ToLowerInvariant() ?? "solid";
+                        switch (mdType)
+                        {
+                            case "ion":
+                                float charge = comp.Charge.HasValue
+                                    ? comp.Charge.Value
+                                    : (preset.Charge ?? 0f);
+                                molecularDynamics = MolecularDynamics.CreateIon(_entities, charge);
+                                break;
+                            case "water":
+                                molecularDynamics = MolecularDynamics.CreateWaterMolecule(
+                                    _entities
+                                );
+                                break;
+                            case "gas":
+                                molecularDynamics = MolecularDynamics.CreateGasParticle(_entities);
+                                break;
+                            case "liquid":
+                                molecularDynamics = MolecularDynamics.CreateLiquidParticle(
+                                    _entities
+                                );
+                                break;
+                            case "solid":
+                            default:
+                                molecularDynamics = MolecularDynamics.CreateSolidParticle(
+                                    _entities
+                                );
+                                break;
+                        }
+
+                        // Apply top-level preset settings, then allow composition-specific overrides
+                        preset.ApplyTo(molecularDynamics);
+                        if (comp.Charge.HasValue)
+                            molecularDynamics.Charge = comp.Charge.Value;
+
+                        molecularDynamics.BondEquilibriumLength = horizontalSpacing;
+                        molecularDynamics.BondCutoffDistance = horizontalSpacing * 1.5f;
+                        molecularDynamics.LJ_Sigma = diameter * 0.9f;
+                        molecularDynamics.LJ_CutoffRadius = diameter * 2.0f;
+
+                        particle.AddComponent(molecularDynamics);
+
+                        _updateManager.Register(particle);
+                        _entities.Add(particle);
+                        _grid.AddEntity(particle);
+                    }
+                }
+            }
+            else
+            {
+                for (int i = 0; i < particleCount; i++)
+                {
+                    var particle = CircleFactory.CreateCircle(GraphicsDevice, particleRadius, 8, 8);
+                    int column = i % columns;
+                    int row = i / columns;
+                    particle.Position = new Vector2(
+                        origin.X + column * horizontalSpacing,
+                        origin.Y + row * verticalSpacing
+                    );
+
+                    particle.CollisionRadius = particleRadius * 0.85f;
+                    particle.Mass = preset.Mass;
+
+                    particle.AddComponent(new Gravity(preset.GravityStrength, 0f, particle.Mass));
+                    particle.AddComponent(
+                        new ObjectCollision
+                        {
+                            Mass = particle.Mass,
+                            Restitution = preset.Restitution,
+                            Friction = 0.1f,
+                        }
+                    );
+
+                    particle.AddComponent(
+                        preset.EnableEdgeCollision
+                            ? new EdgeCollision(false)
+                            : new EdgeCollision(true)
+                    );
+
+                    var molecularDynamics = MolecularDynamics.CreateSolidParticle(_entities);
+                    preset.ApplyTo(molecularDynamics);
+
+                    molecularDynamics.BondEquilibriumLength = horizontalSpacing;
+                    molecularDynamics.BondCutoffDistance = horizontalSpacing * 1.5f;
+                    molecularDynamics.LJ_Sigma = diameter * 0.9f;
+                    molecularDynamics.LJ_CutoffRadius = diameter * 2.0f;
+
+                    particle.AddComponent(molecularDynamics);
+
+                    _updateManager.Register(particle);
+                    _entities.Add(particle);
+                    _grid.AddEntity(particle);
+                }
             }
         }
     }

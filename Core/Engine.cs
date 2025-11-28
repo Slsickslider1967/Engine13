@@ -6,8 +6,6 @@ namespace Engine13.Core
     public class Engine : Game
     {
         public Engine(Sdl2Window window, GraphicsDevice graphicsDevice)
-            : base(window, graphicsDevice)
-        {
-        }
+            : base(window, graphicsDevice) { }
     }
 }

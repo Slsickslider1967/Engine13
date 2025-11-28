@@ -136,15 +136,34 @@ namespace Engine13.Utilities.Attributes
         public bool EnableInteractions { get; set; } = true;
         public bool EnableBonds { get; set; } = true;
         public bool EnableLennardJones { get; set; } = true;
+        public bool EnableCoulomb { get; set; } = false;  // NEW: Electrostatic forces
+        public bool EnableDipole { get; set; } = false;   // NEW: Dipole-dipole interactions
+        
         public int MaxBondsPerEntity { get; set; } = 6;
+        
+        // Bond forces (covalent-like)
         public float BondSpringConstant { get; set; } = 50f;
         public float BondEquilibriumLength { get; set; } = 0.025f;
         public float BondCutoffDistance { get; set; } = 0.035f;
+        
+        // Lennard-Jones (van der Waals)
         public float LJ_Epsilon { get; set; } = 0.005f;
         public float LJ_Sigma { get; set; } = 0.02f;
         public float LJ_CutoffRadius { get; set; } = 0.08f;
+        
+        //Coulomb electrostatic parameters
+        public float Charge { get; set; } = 0f;  // Electric charge (e.g., +1, -1, +2, etc.)
+        public float CoulombConstant { get; set; } = 8.99f;  // Scaled ke (normally 8.99e9)
+        public float CoulombCutoffRadius { get; set; } = 0.15f;
+        public float DielectricConstant { get; set; } = 1f;  // Medium permittivity (1=vacuum, 80=water)
+        
+        //Dipole-dipole parameters  
+        public Vector2 DipoleMoment { get; set; } = Vector2.Zero;  // Dipole moment vector
+        public float DipoleCutoffRadius { get; set; } = 0.1f;
 
         public float MaxForceMagnitude { get; set; } = 25f;
+        public float VelocityDamping { get; set; } = 0.05f;
+
 
         public MolecularDynamics() { }
 
@@ -224,9 +243,10 @@ namespace Engine13.Utilities.Attributes
                 EnableBonds = true,
                 EnableLennardJones = true,
                 MaxBondsPerEntity = 6,
-                BondSpringConstant = 100f,
+                BondSpringConstant = 80f,
                 BondEquilibriumLength = 0.02f,
                 BondCutoffDistance = 0.03f,
+                VelocityDamping = 1.0f,
             };
         }
 
@@ -266,6 +286,14 @@ namespace Engine13.Utilities.Attributes
             if (EnableInteractions && _allEntities != null && _allEntities.Count > 0)
             {
                 totalForce += ComputeInteractionForces(entity);
+            }
+
+            // Apply velocity damping to stabilize the system
+            if (VelocityDamping > 0f)
+            {
+                float mass = (entity.Mass > 0f) ? entity.Mass : 1f;
+                Vector2 dampingForce = -VelocityDamping * mass * entity.Velocity;
+                totalForce += dampingForce;
             }
 
             if (totalForce == Vector2.Zero)
@@ -319,7 +347,7 @@ namespace Engine13.Utilities.Attributes
 
         private Vector2 ComputeInteractionForces(Entity entity)
         {
-            if (_allEntities == null || _allEntities.Count == 0)
+                        if (_allEntities == null || _allEntities.Count == 0)
                 return Vector2.Zero;
 
             Vector2 totalForce = Vector2.Zero;
@@ -345,14 +373,61 @@ namespace Engine13.Utilities.Attributes
 
                 bool isBonded = EnableBonds && IsBonded(entity, other);
 
+                // 1. Bond forces (strongest, short-range, covalent-like)
                 if (isBonded)
                 {
                     float displacement = dist - BondEquilibriumLength;
                     float forceMagnitude = BondSpringConstant * displacement;
                     totalForce += direction * forceMagnitude;
                 }
-                else if (EnableLennardJones && dist < LJ_CutoffRadius)
+
+                // 2. Coulomb electrostatic forces (long-range, charge-charge)
+                if (EnableCoulomb && dist < CoulombCutoffRadius)
                 {
+                    var otherMD = other.GetComponent<MolecularDynamics>();
+                    if (otherMD != null && (Charge != 0f || otherMD.Charge != 0f))
+                    {
+                        // F = k * q1 * q2 / (ε * r²)
+                        float forceMagnitude = (CoulombConstant * Charge * otherMD.Charge) 
+                            / (DielectricConstant * distSq);
+                        
+                        // Positive charges repel, opposite charges attract
+                        totalForce += direction * forceMagnitude;
+                    }
+                }
+
+                // 3. Dipole-dipole forces (medium-range, orientation dependent)
+                if (EnableDipole && dist < DipoleCutoffRadius)
+                {
+                    var otherMD = other.GetComponent<MolecularDynamics>();
+                    if (otherMD != null && 
+                        (DipoleMoment.LengthSquared() > 0f || otherMD.DipoleMoment.LengthSquared() > 0f))
+                    {
+                        // Simplified dipole-dipole interaction
+                        // Full formula is orientation-dependent, this is a simplified version
+                        float p1 = DipoleMoment.Length();
+                        float p2 = otherMD.DipoleMoment.Length();
+                        if (p1 > 0f && p2 > 0f)
+                        {
+                            // F ∝ -p1*p2/r^4 (attractive for aligned dipoles)
+                            float r3 = dist * distSq;
+                            float r4 = distSq * distSq;
+                            float forceMagnitude = -(p1 * p2) / r4;
+                            
+                            // Consider dipole orientations
+                            float dot1 = Vector2.Dot(Vector2.Normalize(DipoleMoment), direction);
+                            float dot2 = Vector2.Dot(Vector2.Normalize(otherMD.DipoleMoment), direction);
+                            float orientationFactor = (1f + 3f * dot1 * dot2);
+                            
+                            totalForce += direction * forceMagnitude * orientationFactor;
+                        }
+                    }
+                }  
+
+                // 4. Lennard-Jones (van der Waals - short-range, always present)
+                if (EnableLennardJones && dist < LJ_CutoffRadius && !isBonded)
+                {
+                    // F = 24ε/r * (σ/r)^6 * [1 - 2(σ/r)^6]
                     float sigmaOverR = LJ_Sigma / dist;
                     float sr6 = sigmaOverR * sigmaOverR * sigmaOverR;
                     sr6 *= sr6;
@@ -480,6 +555,86 @@ namespace Engine13.Utilities.Attributes
             }
 
             return totalPE;
+        }
+
+        /// <summary>Creates a charged particle (ionic)</summary>
+        public static MolecularDynamics CreateIon(List<Entity> allEntities, float charge)
+        {
+            return new MolecularDynamics(allEntities)
+            {
+                EnableAnchorOscillation = false,
+                EnableInteractions = true,
+                EnableBonds = false,
+                EnableLennardJones = true,
+                EnableCoulomb = true,
+                Charge = charge,
+                CoulombConstant = 8.99f,
+                DielectricConstant = 1f,
+                LJ_Epsilon = 0.005f,
+                LJ_Sigma = 0.02f,
+                MaxForceMagnitude = 100f,
+            };
+        }
+
+        /// <summary>Creates a polar molecule (has dipole moment)</summary>
+        public static MolecularDynamics CreatePolarMolecule(List<Entity> allEntities, Vector2 dipoleMoment)
+        {
+            return new MolecularDynamics(allEntities)
+            {
+                EnableAnchorOscillation = false,
+                EnableInteractions = true,
+                EnableBonds = true,
+                EnableLennardJones = true,
+                EnableCoulomb = false,
+                EnableDipole = true,
+                DipoleMoment = dipoleMoment,
+                MaxBondsPerEntity = 4,
+                BondSpringConstant = 30f,
+                MaxForceMagnitude = 50f,
+            };
+        }
+
+        /// <summary>Creates a water-like molecule (polar + hydrogen bonding)</summary>
+        public static MolecularDynamics CreateWaterMolecule(List<Entity> allEntities)
+        {
+            return new MolecularDynamics(allEntities)
+            {
+                EnableAnchorOscillation = false,
+                EnableInteractions = true,
+                EnableBonds = true,
+                EnableLennardJones = true,
+                EnableCoulomb = true,
+                EnableDipole = true,
+                Charge = 0f,  // Neutral overall
+                DipoleMoment = new Vector2(0f, 0.01f),  // Has dipole moment
+                DielectricConstant = 80f,  // Water's high permittivity
+                MaxBondsPerEntity = 4,  // Can form up to 4 hydrogen bonds
+                BondSpringConstant = 20f,  // Weaker than covalent
+                BondEquilibriumLength = 0.028f,
+                MaxForceMagnitude = 75f,
+            };
+        }
+
+        /// <summary>Creates a salt crystal particle (strong ionic bonds)</summary>
+        public static MolecularDynamics CreateSaltCrystal(List<Entity> allEntities, float charge)
+        {
+            return new MolecularDynamics(allEntities)
+            {
+                EnableAnchorOscillation = false,
+                EnableInteractions = true,
+                EnableBonds = true,
+                EnableLennardJones = true,
+                EnableCoulomb = true,
+                Charge = charge,  // +1 or -1 typically
+                CoulombConstant = 15.0f,  // Stronger for ionic
+                DielectricConstant = 1f,
+                MaxBondsPerEntity = 6,
+                BondSpringConstant = 150f,  // Strong ionic bonds
+                BondEquilibriumLength = 0.02f,
+                BondCutoffDistance = 0.025f,
+                MaxForceMagnitude = 500f,
+                VelocityDamping = 2.0f,
+            };
         }
 
         /// <summary>Calculates total energy (kinetic + potential)</summary>
@@ -658,9 +813,9 @@ namespace Engine13.Utilities.Attributes
                 var pos = entity.Position;
                 pos += Velocity * gameTime.DeltaTime;
                 entity.Position = pos;
-                Velocity *= 0.99f;
+                // Removed Velocity *= 0.99f - this was destroying bond forces
+                // Damping is now handled by MolecularDynamics.VelocityDamping
             }
         }
     }
 }
-

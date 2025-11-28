@@ -1,16 +1,14 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net9.0</TargetFramework>
-  <RootNamespace>Engine13</RootNamespace>
+    <RootNamespace>Engine13</RootNamespace>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <!-- Use OS-conditional RIDs so each platform restores/copies only its native assets -->
     <RuntimeIdentifier Condition="'$(OS)' == 'Windows_NT'">win-x64</RuntimeIdentifier>
     <RuntimeIdentifier Condition="'$(OS)' != 'Windows_NT'">linux-x64</RuntimeIdentifier>
   </PropertyGroup>
-
   <ItemGroup>
     <PackageReference Include="Veldrid" Version="4.9.0" />
     <PackageReference Include="Veldrid.SDL2" Version="4.9.0" />
@@ -20,10 +18,12 @@
     <Compile Include="..\Graphics\**\*.cs" />
     <Compile Include="..\Input\**\*.cs" />
     <Compile Include="..\Utilities\**\*.cs" />
-  <Compile Include="..\Debug\**\*.cs" />
+    <Compile Include="..\Debug\**\*.cs" />
     <None Include="Shaders\**\*.*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update="Utilities\MDPresets.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
-
 </Project>

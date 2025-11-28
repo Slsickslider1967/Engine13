@@ -87,15 +87,29 @@ namespace Engine13.Core
                 attr.Update(entity, gameTime);
             }
 
+            // Update entity velocities only for entities without ObjectCollision component
+            // ObjectCollision manages its own velocity based on forces and collisions
             double dt = gameTime.DeltaTime;
             for (int i = 0; i < _entities.Count; i++)
             {
                 var entity = _entities[i];
-                Vector2 prev = _prevPositions.TryGetValue(entity, out var p) ? p : entity.Position;
-                Vector2 cur = entity.Position;
-                Vector2 vel = (dt > 0.0) ? (cur - prev) / (float)dt : Vector2.Zero;
-                entity.Velocity = vel;
-                _prevPositions[entity] = cur;
+                var objCollision = entity.GetComponent<ObjectCollision>();
+                
+                // Only calculate velocity from position for entities without physics component
+                if (objCollision == null)
+                {
+                    Vector2 prev = _prevPositions.TryGetValue(entity, out var p) ? p : entity.Position;
+                    Vector2 cur = entity.Position;
+                    Vector2 vel = (dt > 0.0) ? (cur - prev) / (float)dt : Vector2.Zero;
+                    entity.Velocity = vel;
+                }
+                else
+                {
+                    // For entities with ObjectCollision, sync Entity.Velocity with component velocity
+                    entity.Velocity = objCollision.Velocity;
+                }
+                
+                _prevPositions[entity] = entity.Position;
             }
             for (int i = 0; i < _updatables.Count; i++)
             {
