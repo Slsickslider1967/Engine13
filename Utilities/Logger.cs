@@ -22,6 +22,12 @@ namespace Engine13.Utilities
             Console.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] {message}");
         }
 
+        public static void LogSimKey(string Key)
+        {
+            Console.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] SIMKEY: {Key}");
+        }
+
+
         /// <summary>
         /// Log an error message to console with timestamp
         /// </summary>

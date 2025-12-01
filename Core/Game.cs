@@ -18,8 +18,8 @@ namespace Engine13.Core
         private readonly List<Vector2[]> _tickPositions = new();
         private int _tickIndex;
         private int _bufferStart;
-        private const int BufferedFrames = 250;
-        private const int StepsPerFrame = 1;
+        private const int BufferedFrames = 500;
+        private const int StepsPerFrame = 2;
         private int _tickCounter = 0;
         private System.Diagnostics.Stopwatch _tickTimer = new System.Diagnostics.Stopwatch();
         private double _lastTickTime = 0;
@@ -135,7 +135,7 @@ namespace Engine13.Core
             }
             Console.WriteLine(_tickIndex);
             Renderer.EndFrame();
-            _tickIndex += StepsPerFrame;
+            _tickIndex += 1;
             _tickIndex = MathHelpers.WrapIndex(_tickIndex, tickCount);
         }
 
@@ -195,7 +195,7 @@ namespace Engine13.Core
 
             _entities.EnsureCapacity(_entities.Count + particleCount + 1);
 
-            var preset = MDPresetReader.Load("Steel");
+            var preset = MDPresetReader.Load("Water");
 
             // PARTICLE-SCALE: Each entity is a macroscopic particle, not an atomd
             // Use preset-defined radius, not atomic calculations
@@ -205,6 +205,8 @@ namespace Engine13.Core
             // Increase spacing to 1.15x so bonds can work without constant collisions
             float horizontalSpacing = diameter * 1.15f;
             float verticalSpacing = diameter * 1.15f;
+
+
 
             // Log particle info
             Console.WriteLine($"Creating {preset.Name} particles:");
@@ -370,6 +372,46 @@ namespace Engine13.Core
                     _entities.Add(particle);
                     _grid.AddEntity(particle);
                 }
+            }
+        }
+
+        public static string GenKey(string Preset,  int ParticleCount, int frameCount, int tickstep)
+        {
+            string fullHash = GenerateHash(Preset, ParticleCount, frameCount, tickstep);
+            return fullHash.Substring(0, 16);
+        }
+
+        public static string GenerateHash(string preset, int particleCount, int frameCount, float tickStep)
+        {
+            var sb = new StringBuilder();
+            
+            // Add preset identifier
+            sb.Append($"preset:{preset.Name ?? "unknown"}_");
+            sb.Append($"mass:{preset.Mass:F6}_");
+            sb.Append($"radius:{preset.ParticleRadius:F6}_");
+            sb.Append($"restitution:{preset.Restitution:F6}_");
+            sb.Append($"gravity:{preset.GravityStrength:F6}_");
+            
+            // Add composition if available
+            if (preset.Composition != null && preset.Composition.Count > 0)
+            {
+                sb.Append("comp:");
+                foreach (var comp in preset.Composition)
+                {
+                    sb.Append($"{comp.MDType ?? "solid"}x{comp.Ratio}_");
+                }
+            }
+            
+            // Add simulation parameters
+            sb.Append($"particles:{particleCount}_");
+            sb.Append($"frames:{frameCount}_");
+            sb.Append($"tickstep:{tickStep:F6}");
+            
+            // Generate MD5 hash
+            using (var md5 = MD5.Create())
+            {
+                byte[] hashBytes = md5.ComputeHash(Encoding.UTF8.GetBytes(sb.ToString()));
+                return Convert.ToHexString(hashBytes).ToLower();
             }
         }
     }
