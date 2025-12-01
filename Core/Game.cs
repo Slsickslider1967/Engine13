@@ -189,7 +189,7 @@ namespace Engine13.Core
 
         private void CreateObjects()
         {
-            const int particleCount = 1000;
+            const int particleCount = 500;
             const int columns = 25;
             var origin = new Vector2(-0.3f, -0.4f);
 
@@ -254,7 +254,7 @@ namespace Engine13.Core
                             origin.Y + row * verticalSpacing
                         );
 
-                        particle.CollisionRadius = particleRadius * 0.85f;
+                        particle.CollisionRadius = particleRadius * 1.5f;
                         particle.Mass = preset.Mass;
 
                         particle.AddComponent(
@@ -337,7 +337,7 @@ namespace Engine13.Core
                         origin.Y + row * verticalSpacing
                     );
 
-                    particle.CollisionRadius = particleRadius * 0.85f;
+                    particle.CollisionRadius = particleRadius * 1.5f;
                     particle.Mass = preset.Mass;
 
                     particle.AddComponent(new Gravity(preset.GravityStrength, 0f, particle.Mass));
@@ -360,7 +360,7 @@ namespace Engine13.Core
                     preset.ApplyTo(molecularDynamics);
 
                     molecularDynamics.BondEquilibriumLength = horizontalSpacing;
-                    molecularDynamics.BondCutoffDistance = horizontalSpacing * 1.5f;
+                    molecularDynamics.BondCutoffDistance = horizontalSpacing * 3.0f;  
                     molecularDynamics.LJ_Sigma = diameter * 0.9f;
                     molecularDynamics.LJ_CutoffRadius = diameter * 2.0f;
 

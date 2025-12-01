@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Numerics;
+using System.Threading.Tasks;
 using Engine13.Graphics;
 using Engine13.Utilities;
 using Engine13.Utilities.Attributes;
@@ -11,6 +12,9 @@ namespace Engine13.Core
         private readonly List<Entity> _entities = new();
         private readonly List<IUpdatable> _updatables = new();
         private readonly Dictionary<Entity, Vector2> _prevPositions = new();
+        
+        public bool EnableParallelForces { get; set; } = true;
+        public int ParallelThreshold { get; set; } = 100;
 
         public void Register(Entity entity)
         {
@@ -49,26 +53,80 @@ namespace Engine13.Core
 
             var collisionUpdates = new List<(Entity entity, ObjectCollision attr)>();
             var lateUpdates = new List<(Entity entity, IEntityComponent attr)>();
+            
+            bool useParallel = EnableParallelForces && _entities.Count >= ParallelThreshold;
 
-            for (int i = 0; i < _entities.Count; i++)
+            if (useParallel)
             {
-                var entity = _entities[i];
-                var components = entity.Components;
-
-                for (int j = 0; j < components.Count; j++)
+                // Parallel path: Process force-generating components in parallel
+                var mdEntities = new List<(Entity entity, MolecularDynamics md)>();
+                var gravityEntities = new List<(Entity entity, Gravity gravity)>();
+                
+                // First pass: categorize components
+                for (int i = 0; i < _entities.Count; i++)
                 {
-                    var component = components[j];
-                    switch (component)
+                    var entity = _entities[i];
+                    var components = entity.Components;
+
+                    for (int j = 0; j < components.Count; j++)
                     {
-                        case ObjectCollision objectCollision:
-                            collisionUpdates.Add((entity, objectCollision));
-                            break;
-                        case EdgeCollision edgeCollision:
-                            lateUpdates.Add((entity, edgeCollision));
-                            break;
-                        default:
-                            component.Update(entity, gameTime);
-                            break;
+                        var component = components[j];
+                        switch (component)
+                        {
+                            case MolecularDynamics md:
+                                mdEntities.Add((entity, md));
+                                break;
+                            case Gravity gravity:
+                                gravityEntities.Add((entity, gravity));
+                                break;
+                            case ObjectCollision objectCollision:
+                                collisionUpdates.Add((entity, objectCollision));
+                                break;
+                            case EdgeCollision edgeCollision:
+                                lateUpdates.Add((entity, edgeCollision));
+                                break;
+                            default:
+                                component.Update(entity, gameTime);
+                                break;
+                        }
+                    }
+                }
+
+                // Parallel force calculation for MolecularDynamics
+                Parallel.ForEach(mdEntities, pair =>
+                {
+                    pair.md.Update(pair.entity, gameTime);
+                });
+                
+                // Parallel force calculation for Gravity
+                Parallel.ForEach(gravityEntities, pair =>
+                {
+                    pair.gravity.Update(pair.entity, gameTime);
+                });
+            }
+            else
+            {
+                // Sequential path: Original behavior for smaller entity counts
+                for (int i = 0; i < _entities.Count; i++)
+                {
+                    var entity = _entities[i];
+                    var components = entity.Components;
+
+                    for (int j = 0; j < components.Count; j++)
+                    {
+                        var component = components[j];
+                        switch (component)
+                        {
+                            case ObjectCollision objectCollision:
+                                collisionUpdates.Add((entity, objectCollision));
+                                break;
+                            case EdgeCollision edgeCollision:
+                                lateUpdates.Add((entity, edgeCollision));
+                                break;
+                            default:
+                                component.Update(entity, gameTime);
+                                break;
+                        }
                     }
                 }
             }

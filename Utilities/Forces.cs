@@ -45,8 +45,8 @@ namespace Engine13.Utilities
 
     public static class Forces
     {
-        private static readonly System.Collections.Generic.Dictionary<Entity, Vec2> _acc =
-            new System.Collections.Generic.Dictionary<Entity, Vec2>();
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<Entity, Vec2> _acc =
+            new System.Collections.Concurrent.ConcurrentDictionary<Entity, Vec2>();
 
         public static void Reset()
         {
@@ -55,10 +55,11 @@ namespace Engine13.Utilities
 
         public static void AddForce(Entity entity, Vec2 Force)
         {
-            if (_acc.TryGetValue(entity, out var Cur))
-                _acc[entity] = new Vec2(Cur.X + Force.X, Cur.Y + Force.Y);
-            else
-                _acc[entity] = Force;
+            _acc.AddOrUpdate(
+                entity,
+                Force,
+                (key, existing) => new Vec2(existing.X + Force.X, existing.Y + Force.Y)
+            );
         }
 
         public static Vec2 GetForce(Entity entity)
