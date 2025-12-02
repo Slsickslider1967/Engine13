@@ -1,4 +1,6 @@
 using System.Numerics;
+using System.Security.Cryptography;
+using System.Text;
 using Engine13.Graphics;
 using Engine13.Input;
 using Engine13.Primitives;
@@ -18,7 +20,7 @@ namespace Engine13.Core
         private readonly List<Vector2[]> _tickPositions = new();
         private int _tickIndex;
         private int _bufferStart;
-        private const int BufferedFrames = 500;
+        private const int BufferedFrames = 250;
         private const int StepsPerFrame = 2;
         private int _tickCounter = 0;
         private System.Diagnostics.Stopwatch _tickTimer = new System.Diagnostics.Stopwatch();
@@ -59,22 +61,24 @@ namespace Engine13.Core
                     double currentTime = _tickTimer.Elapsed.TotalMilliseconds;
                     double timeBetweenTicks = currentTime - _lastTickTime;
                     _lastTickTime = currentTime;
-
                     _tickCounter++;
 
-                    GameTime.OverrideDeltaTime(stepDelta);
-                    _updateManager.Update(GameTime);
-                    _grid.UpdateAllAabb(_entities);
-                    RunCollisionDetection(stepDelta);
+                    for (int i = 0; i < StepsPerFrame; i++)
+                    {
+                        GameTime.OverrideDeltaTime(stepDelta);
+                        _updateManager.Update(GameTime);
+                        _grid.UpdateAllAabb(_entities);
+                        RunCollisionDetection(stepDelta);
 
-                    var snapshot = MathHelpers.CapturePositions(_entities);
-                    _tickPositions.Add(snapshot);
-
-                    // Calculate energies
-                    float kineticEnergy = MolecularDynamics.CalculateKineticEnergy(_entities);
-                    float potentialEnergy = MolecularDynamics.CalculatePotentialEnergy(_entities);
-                    float totalEnergy = kineticEnergy + potentialEnergy;
-
+                        var snapshot = MathHelpers.CapturePositions(_entities);
+                        _tickPositions.Add(snapshot);
+                    }
+                        // Calculate energies
+                        float kineticEnergy = MolecularDynamics.CalculateKineticEnergy(_entities);
+                        float potentialEnergy = MolecularDynamics.CalculatePotentialEnergy(
+                            _entities
+                        );
+                        float totalEnergy = kineticEnergy + potentialEnergy;
                     // Log tick data with energy
                     Logger.LogCSV(
                         "Ticks",
@@ -195,7 +199,27 @@ namespace Engine13.Core
 
             _entities.EnsureCapacity(_entities.Count + particleCount + 1);
 
-            var preset = MDPresetReader.Load("Water");
+            var preset = MDPresetReader.Load("Wood");
+
+            Console.WriteLine("\n========== MD PRESET DIAGNOSTIC ==========");
+            Console.WriteLine($"Loaded Preset: {preset.Name}");
+            Console.WriteLine("\nBond Parameters:");
+            Console.WriteLine($"  BondSpringConstant:      {preset.BondSpringConstant:F1}");
+            Console.WriteLine($"  BondDampingConstant:     {preset.BondDampingConstant:F1}");
+            Console.WriteLine($"  BondEquilibriumLength:   {preset.BondEquilibriumLength:F4}");
+            Console.WriteLine($"  BondCutoffDistance:      {preset.BondCutoffDistance:F4}");
+            Console.WriteLine($"  MaxBondsPerParticle:     {preset.MaxBondsPerParticle}");
+            Console.WriteLine("\nForce Parameters:");
+            Console.WriteLine($"  MaxForceMagnitude:       {preset.MaxForceMagnitude:F1}");
+            Console.WriteLine($"  Restitution:             {preset.Restitution:F2}");
+            Console.WriteLine("\nMolecular Interactions:");
+            Console.WriteLine($"  EnableDipole:            {preset.EnableDipole?.ToString() ?? "null"}");
+            if (preset.EnableDipole == true)
+            {
+                Console.WriteLine($"  DipoleMomentY:           {preset.DipoleMomentY:F4}");
+            }
+            Console.WriteLine($"  EnableCoulomb:           {preset.EnableCoulomb?.ToString() ?? "null"}");
+            Console.WriteLine("=========================================\n");
 
             // PARTICLE-SCALE: Each entity is a macroscopic particle, not an atomd
             // Use preset-defined radius, not atomic calculations
@@ -205,8 +229,6 @@ namespace Engine13.Core
             // Increase spacing to 1.15x so bonds can work without constant collisions
             float horizontalSpacing = diameter * 1.15f;
             float verticalSpacing = diameter * 1.15f;
-
-
 
             // Log particle info
             Console.WriteLine($"Creating {preset.Name} particles:");
@@ -267,7 +289,7 @@ namespace Engine13.Core
                             {
                                 Mass = particle.Mass,
                                 Restitution = preset.Restitution,
-                                Friction = 0.1f,
+                                Friction = preset.Friction,
                             }
                         );
 
@@ -314,10 +336,32 @@ namespace Engine13.Core
                         if (comp.Charge.HasValue)
                             molecularDynamics.Charge = comp.Charge.Value;
 
-                        molecularDynamics.BondEquilibriumLength = horizontalSpacing;
-                        molecularDynamics.BondCutoffDistance = horizontalSpacing * 1.5f;
-                        molecularDynamics.LJ_Sigma = diameter * 0.9f;
-                        molecularDynamics.LJ_CutoffRadius = diameter * 2.0f;
+                        // ===== DIAGNOSTIC: Show what MD component actually has =====
+                        if (i == 0) // Only log first particle to avoid spam
+                        {
+                            Console.WriteLine("\n===== APPLIED MD VALUES (First Particle) =====");
+                            Console.WriteLine($"BondSpringConstant:      {molecularDynamics.BondSpringConstant:F1}");
+                            Console.WriteLine($"BondEquilibriumLength:   {molecularDynamics.BondEquilibriumLength:F4}");
+                            Console.WriteLine($"BondCutoffDistance:      {molecularDynamics.BondCutoffDistance:F4}");
+                            Console.WriteLine($"MaxBondsPerEntity:       {molecularDynamics.MaxBondsPerEntity}");
+                            Console.WriteLine($"MaxForceMagnitude:       {molecularDynamics.MaxForceMagnitude:F1}");
+                            Console.WriteLine($"LJ_Epsilon:              {molecularDynamics.LJ_Epsilon:F4}");
+                            Console.WriteLine($"LJ_Sigma:                {molecularDynamics.LJ_Sigma:F4}");
+                            Console.WriteLine($"LJ_CutoffRadius:         {molecularDynamics.LJ_CutoffRadius:F4}");
+                            Console.WriteLine($"EnableDipole:            {molecularDynamics.EnableDipole}");
+                            Console.WriteLine($"DipoleMoment:            ({molecularDynamics.DipoleMoment.X:F4}, {molecularDynamics.DipoleMoment.Y:F4})");
+                            Console.WriteLine($"EnableCoulomb:           {molecularDynamics.EnableCoulomb}");
+                            Console.WriteLine($"EnableBonds:             {molecularDynamics.EnableBonds}");
+                            Console.WriteLine($"EnableLennardJones:      {molecularDynamics.EnableLennardJones}");
+                            Console.WriteLine($"VelocityDamping:         {molecularDynamics.VelocityDamping:F2}");
+                            Console.WriteLine("=============================================\n");
+                        }
+
+                        // REMOVED: Don't override preset values - let the preset define these
+                        // molecularDynamics.BondEquilibriumLength = horizontalSpacing;
+                        // molecularDynamics.BondCutoffDistance = horizontalSpacing * 1.5f;
+                        // molecularDynamics.LJ_Sigma = diameter * 0.9f;
+                        // molecularDynamics.LJ_CutoffRadius = diameter * 2.0f;
 
                         particle.AddComponent(molecularDynamics);
 
@@ -361,10 +405,32 @@ namespace Engine13.Core
                     var molecularDynamics = MolecularDynamics.CreateSolidParticle(_entities);
                     preset.ApplyTo(molecularDynamics);
 
-                    molecularDynamics.BondEquilibriumLength = horizontalSpacing;
-                    molecularDynamics.BondCutoffDistance = horizontalSpacing * 3.0f;  
-                    molecularDynamics.LJ_Sigma = diameter * 0.9f;
-                    molecularDynamics.LJ_CutoffRadius = diameter * 2.0f;
+                    // ===== DIAGNOSTIC: Show what MD component actually has =====
+                    if (i == 0) // Only log first particle to avoid spam
+                    {
+                        Console.WriteLine("\n===== APPLIED MD VALUES (First Particle) =====");
+                        Console.WriteLine($"BondSpringConstant:      {molecularDynamics.BondSpringConstant:F1}");
+                        Console.WriteLine($"BondEquilibriumLength:   {molecularDynamics.BondEquilibriumLength:F4}");
+                        Console.WriteLine($"BondCutoffDistance:      {molecularDynamics.BondCutoffDistance:F4}");
+                        Console.WriteLine($"MaxBondsPerEntity:       {molecularDynamics.MaxBondsPerEntity}");
+                        Console.WriteLine($"MaxForceMagnitude:       {molecularDynamics.MaxForceMagnitude:F1}");
+                        Console.WriteLine($"LJ_Epsilon:              {molecularDynamics.LJ_Epsilon:F4}");
+                        Console.WriteLine($"LJ_Sigma:                {molecularDynamics.LJ_Sigma:F4}");
+                        Console.WriteLine($"LJ_CutoffRadius:         {molecularDynamics.LJ_CutoffRadius:F4}");
+                        Console.WriteLine($"EnableDipole:            {molecularDynamics.EnableDipole}");
+                        Console.WriteLine($"DipoleMoment:            ({molecularDynamics.DipoleMoment.X:F4}, {molecularDynamics.DipoleMoment.Y:F4})");
+                        Console.WriteLine($"EnableCoulomb:           {molecularDynamics.EnableCoulomb}");
+                        Console.WriteLine($"EnableBonds:             {molecularDynamics.EnableBonds}");
+                        Console.WriteLine($"EnableLennardJones:      {molecularDynamics.EnableLennardJones}");
+                        Console.WriteLine($"VelocityDamping:         {molecularDynamics.VelocityDamping:F2}");
+                        Console.WriteLine("=============================================\n");
+                    }
+
+                    // REMOVED: Don't override preset values - let the preset define these
+                    // molecularDynamics.BondEquilibriumLength = horizontalSpacing;
+                    // molecularDynamics.BondCutoffDistance = horizontalSpacing * 3.0f;
+                    // molecularDynamics.LJ_Sigma = diameter * 0.9f;
+                    // molecularDynamics.LJ_CutoffRadius = diameter * 2.0f;
 
                     particle.AddComponent(molecularDynamics);
 
@@ -375,23 +441,33 @@ namespace Engine13.Core
             }
         }
 
-        public static string GenKey(string Preset,  int ParticleCount, int frameCount, int tickstep)
+        public static string GenKey(
+            MDPresetReader Preset,
+            int ParticleCount,
+            int frameCount,
+            float tickstep
+        )
         {
             string fullHash = GenerateHash(Preset, ParticleCount, frameCount, tickstep);
             return fullHash.Substring(0, 16);
         }
 
-        public static string GenerateHash(string preset, int particleCount, int frameCount, float tickStep)
+        public static string GenerateHash(
+            MDPresetReader preset,
+            int particleCount,
+            int frameCount,
+            float tickStep
+        )
         {
             var sb = new StringBuilder();
-            
+
             // Add preset identifier
             sb.Append($"preset:{preset.Name ?? "unknown"}_");
             sb.Append($"mass:{preset.Mass:F6}_");
             sb.Append($"radius:{preset.ParticleRadius:F6}_");
             sb.Append($"restitution:{preset.Restitution:F6}_");
             sb.Append($"gravity:{preset.GravityStrength:F6}_");
-            
+
             // Add composition if available
             if (preset.Composition != null && preset.Composition.Count > 0)
             {
@@ -401,12 +477,12 @@ namespace Engine13.Core
                     sb.Append($"{comp.MDType ?? "solid"}x{comp.Ratio}_");
                 }
             }
-            
+
             // Add simulation parameters
             sb.Append($"particles:{particleCount}_");
             sb.Append($"frames:{frameCount}_");
             sb.Append($"tickstep:{tickStep:F6}");
-            
+
             // Generate MD5 hash
             using (var md5 = MD5.Create())
             {

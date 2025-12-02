@@ -22,6 +22,7 @@ namespace Engine13.Utilities.JsonReader
 
         public float GravityStrength { get; set; } = 9.81f;
         public float Restitution { get; set; } = 0.0f;
+        public float Friction { get; set; } = 0.1f;
         public bool EnableEdgeCollision { get; set; } = true;
         public float BondSpringConstant { get; set; } = 100f;
         public float BondDampingConstant { get; set; } = 10f;
@@ -82,15 +83,28 @@ namespace Engine13.Utilities.JsonReader
             md.BondSpringConstant = BondSpringConstant;
             md.BondEquilibriumLength = BondEquilibriumLength;
             md.BondCutoffDistance = BondCutoffDistance;
-            md.LJ_Epsilon = LJ_Epsilon;
-            md.LJ_Sigma = LJ_Sigma;
-            md.LJ_CutoffRadius = LJ_CutoffRadius;
             md.MaxForceMagnitude = MaxForceMagnitude;
             md.MaxBondsPerEntity = MaxBondsPerParticle;
 
-            // Apply new intermolecular force parameters
+            // Apply velocity damping - scale with bond damping constant
+            // This ensures materials with high bond damping also have velocity damping
+            // But keep it reasonable so objects still fall at normal speed
+            float dampingRatio = BondDampingConstant / BondSpringConstant;
+            md.VelocityDamping = Math.Clamp(dampingRatio * 2.0f, 0.3f, 1.5f);
+
+            // CRITICAL: For solid materials with strong bonds, disable Lennard-Jones to prevent instability
+            // LJ forces combined with strong spring forces cause energy explosion
+            if (BondSpringConstant > 1000f)
+            {
+                md.EnableLennardJones = false;
+            }
+
+            // Apply intermolecular force parameters only if specified
             if (EnableCoulomb.HasValue)
                 md.EnableCoulomb = EnableCoulomb.Value;
+            else
+                md.EnableCoulomb = false;
+
             if (Charge.HasValue)
                 md.Charge = Charge.Value;
             if (CoulombConstant.HasValue)
@@ -98,10 +112,19 @@ namespace Engine13.Utilities.JsonReader
             if (DielectricConstant.HasValue)
                 md.DielectricConstant = DielectricConstant.Value;
 
-            if (EnableDipole.HasValue)
-                md.EnableDipole = EnableDipole.Value;
-            if (DipoleMomentX.HasValue && DipoleMomentY.HasValue)
-                md.DipoleMoment = new Vector2(DipoleMomentX.Value, DipoleMomentY.Value);
+            // Handle dipole - only enable if specified
+            if (EnableDipole.HasValue && EnableDipole.Value)
+            {
+                md.EnableDipole = true;
+                float dipoleX = DipoleMomentX ?? 0f;
+                float dipoleY = DipoleMomentY ?? 0f;
+                md.DipoleMoment = new Vector2(dipoleX, dipoleY);
+            }
+            else
+            {
+                md.EnableDipole = false;
+                md.DipoleMoment = Vector2.Zero;
+            }
         }
 
         private class PresetCollection
