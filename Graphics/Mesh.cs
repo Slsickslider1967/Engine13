@@ -229,25 +229,6 @@ namespace Engine13.Graphics
                 );
             }
         }
-
-        [Obsolete("Use AddComponent instead")]
-        public void AddAttribute(IEntityComponent component) => AddComponent(component);
-
-        [Obsolete("Use RemoveComponent instead")]
-        public bool RemoveAttribute<T>()
-            where T : IEntityComponent => RemoveComponent<T>();
-
-        [Obsolete("Use GetComponent instead")]
-        public T? GetAttribute<T>()
-            where T : IEntityComponent => GetComponent<T>();
-
-        [Obsolete("Use ClearComponents instead")]
-        public void ClearAttributes() => ClearComponents();
-
-        [Obsolete("Use UpdateComponents instead")]
-        public void UpdateAttributes(GameTime gameTime) => UpdateComponents(gameTime);
-
-        public System.Collections.Generic.IReadOnlyList<IEntityComponent> Attributes => Components;
     }
 }
 

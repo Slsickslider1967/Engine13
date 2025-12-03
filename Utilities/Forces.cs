@@ -1,11 +1,17 @@
 using System;
-using System.Collections.ObjectModel;
+using System.Collections.Concurrent;
+using System.Numerics;
 using Engine13.Graphics;
 
 namespace Engine13.Utilities
 {
+    /// <summary>
+    /// Immutable 2D vector using double precision for physics calculations.
+    /// </summary>
     public readonly struct Vec2
     {
+        public static readonly Vec2 Zero = new(0.0, 0.0);
+
         public double X { get; }
         public double Y { get; }
 
@@ -15,79 +21,80 @@ namespace Engine13.Utilities
             Y = y;
         }
 
-        public static Vec2 operator +(Vec2 a, Vec2 b)
-        {
-            return new Vec2(a.X + b.X, a.Y + b.Y);
-        }
+        public static Vec2 operator +(Vec2 a, Vec2 b) => new(a.X + b.X, a.Y + b.Y);
+        public static Vec2 operator -(Vec2 a, Vec2 b) => new(a.X - b.X, a.Y - b.Y);
+        public static Vec2 operator *(Vec2 a, double b) => new(a.X * b, a.Y * b);
+        public static Vec2 operator *(double b, Vec2 a) => new(a.X * b, a.Y * b);
+        public static Vec2 operator /(Vec2 a, double b) => new(a.X / b, a.Y / b);
 
-        public static Vec2 operator -(Vec2 a, Vec2 b)
-        {
-            return new Vec2(a.X - b.X, a.Y - b.Y);
-        }
-
-        public static Vec2 operator *(Vec2 a, double b)
-        {
-            return new Vec2(a.X * b, a.Y * b);
-        }
-
-        public static Vec2 operator *(double b, Vec2 a)
-        {
-            return new Vec2(a.X * b, a.Y * b);
-        }
-
-        public static Vec2 operator /(Vec2 a, double b)
-        {
-            return new Vec2(a.X / b, a.Y / b);
-        }
-
-        public double Norm2() => X * X + Y * Y;
+        public double LengthSquared() => X * X + Y * Y;
+        public double Length() => Math.Sqrt(LengthSquared());
     }
 
+    /// <summary>
+    /// Thread-safe force accumulator for physics simulation.
+    /// Collects forces during update and applies them at the end of the physics step.
+    /// </summary>
     public static class Forces
     {
-        private static readonly System.Collections.Concurrent.ConcurrentDictionary<Entity, Vec2> _acc =
-            new System.Collections.Concurrent.ConcurrentDictionary<Entity, Vec2>();
+        private static readonly ConcurrentDictionary<Entity, Vec2> _accumulator = new();
 
-        public static void Reset()
-        {
-            _acc.Clear();
-        }
+        /// <summary>Maximum velocity magnitude to prevent simulation instability.</summary>
+        public static float MaxVelocity { get; set; } = 1.5f;
 
-        public static void AddForce(Entity entity, Vec2 Force)
+        /// <summary>Per-frame velocity damping factor (0.0-1.0).</summary>
+        public static float VelocityDamping { get; set; } = 0.95f;
+
+        /// <summary>Clears all accumulated forces. Call at the start of each physics step.</summary>
+        public static void Reset() => _accumulator.Clear();
+
+        /// <summary>Adds a force to the specified entity's accumulator.</summary>
+        public static void AddForce(Entity entity, Vec2 force)
         {
-            _acc.AddOrUpdate(
+            if (entity == null) return;
+            
+            _accumulator.AddOrUpdate(
                 entity,
-                Force,
-                (key, existing) => new Vec2(existing.X + Force.X, existing.Y + Force.Y)
+                force,
+                (_, existing) => existing + force
             );
         }
 
+        /// <summary>Gets the currently accumulated force for an entity.</summary>
         public static Vec2 GetForce(Entity entity)
         {
-            return _acc.TryGetValue(entity, out var f) ? f : new Vec2(0.0, 0.0);
+            if (entity == null) return Vec2.Zero;
+            return _accumulator.TryGetValue(entity, out var force) ? force : Vec2.Zero;
         }
 
+        /// <summary>Applies all accumulated forces to entities and updates their velocities.</summary>
         public static void Apply(Engine13.Core.GameTime gameTime)
         {
             double dt = gameTime.DeltaTime;
-            if (dt <= 0.0)
-                return;
-            if (_acc.Count == 0)
+            if (dt <= 0.0 || _accumulator.IsEmpty)
                 return;
 
-            foreach (var kv in _acc)
+            foreach (var (entity, force) in _accumulator)
             {
-                Entity entity = kv.Key;
-                Vec2 f = kv.Value;
-                var obj = entity.GetComponent<Engine13.Utilities.Attributes.ObjectCollision>();
-                if (obj == null || obj.IsStatic)
+                var collision = entity.GetComponent<Engine13.Utilities.Attributes.ObjectCollision>();
+                if (collision == null || collision.IsStatic)
                     continue;
-                double mass = (entity.Mass > 0f) ? entity.Mass : 1.0;
-                var dv = new System.Numerics.Vector2(
-                    (float)(f.X / mass * dt),
-                    (float)(f.Y / mass * dt)
+
+                double mass = entity.Mass > 0f ? entity.Mass : 1.0;
+                var deltaVelocity = new Vector2(
+                    (float)(force.X / mass * dt),
+                    (float)(force.Y / mass * dt)
                 );
-                obj.Velocity += dv;
+
+                collision.Velocity *= VelocityDamping;
+                collision.Velocity += deltaVelocity;
+
+                // Clamp velocity magnitude to prevent simulation explosion
+                float speed = collision.Velocity.Length();
+                if (speed > MaxVelocity)
+                {
+                    collision.Velocity *= MaxVelocity / speed;
+                }
             }
         }
     }

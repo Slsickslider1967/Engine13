@@ -17,22 +17,22 @@ namespace Engine13.Utilities.JsonReader
 
         public string Name { get; set; } = "Unknown";
         public string Description { get; set; } = "Generic particle";
-        public float Mass { get; set; } = 1f;
+        public float Mass { get; set; } = 0.004f;
         public float ParticleRadius { get; set; } = 0.01f;
 
-        public float GravityStrength { get; set; } = 9.81f;
-        public float Restitution { get; set; } = 0.0f;
-        public float Friction { get; set; } = 0.1f;
+        public float GravityStrength { get; set; } = 2.0f;
+        public float Restitution { get; set; } = 0.1f;
+        public float Friction { get; set; } = 0.5f;
         public bool EnableEdgeCollision { get; set; } = true;
-        public float BondSpringConstant { get; set; } = 100f;
-        public float BondDampingConstant { get; set; } = 10f;
-        public float BondEquilibriumLength { get; set; } = 0.2f;
-        public float BondCutoffDistance { get; set; } = 0.025f;
-        public float LJ_Epsilon { get; set; } = 0.005f;
+        public float BondSpringConstant { get; set; } = 1000f;
+        public float BondDampingConstant { get; set; } = 100f;
+        public float BondEquilibriumLength { get; set; } = 0.023f;
+        public float BondCutoffDistance { get; set; } = 0.028f;
+        public float LJ_Epsilon { get; set; } = 0.001f;
         public float LJ_Sigma { get; set; } = 0.02f;
-        public float LJ_CutoffRadius { get; set; } = 0.4f;
-        public float MaxForceMagnitude { get; set; } = 25f;
-        public int MaxBondsPerParticle { get; set; } = 4;
+        public float LJ_CutoffRadius { get; set; } = 0.05f;
+        public float MaxForceMagnitude { get; set; } = 2000f;
+        public int MaxBondsPerParticle { get; set; } = 8;
         public List<CompositionItem>? Composition { get; set; }
         public bool? EnableCoulomb { get; set; }
         public float? Charge { get; set; }
@@ -44,9 +44,6 @@ namespace Engine13.Utilities.JsonReader
         public float? DipoleMomentY { get; set; }
 
         private static Dictionary<string, MDPresetReader>? _Presets;
-
-        // Element-composition functionality removed. Presets now use explicit particle-level
-        // parameters (Mass, LJ_Epsilon, LJ_Sigma, etc.) instead of per-element aggregation.
 
         public static MDPresetReader Load(string presetName)
         {
@@ -81,25 +78,20 @@ namespace Engine13.Utilities.JsonReader
         public void ApplyTo(MolecularDynamics md)
         {
             md.BondSpringConstant = BondSpringConstant;
+            md.BondDampingConstant = BondDampingConstant;  // Apply bond damping!
             md.BondEquilibriumLength = BondEquilibriumLength;
             md.BondCutoffDistance = BondCutoffDistance;
             md.MaxForceMagnitude = MaxForceMagnitude;
             md.MaxBondsPerEntity = MaxBondsPerParticle;
 
-            // Apply velocity damping - scale with bond damping constant
-            // This ensures materials with high bond damping also have velocity damping
-            // But keep it reasonable so objects still fall at normal speed
-            float dampingRatio = BondDampingConstant / BondSpringConstant;
-            md.VelocityDamping = Math.Clamp(dampingRatio * 2.0f, 0.3f, 1.5f);
+            float dampingRatio = BondDampingConstant / (2.0f * MathF.Sqrt(BondSpringConstant * 0.004f));
+            md.VelocityDamping = Math.Clamp(dampingRatio * 0.5f, 0.1f, 0.8f);
 
-            // CRITICAL: For solid materials with strong bonds, disable Lennard-Jones to prevent instability
-            // LJ forces combined with strong spring forces cause energy explosion
-            if (BondSpringConstant > 1000f)
+            if (BondSpringConstant > 2000f)
             {
                 md.EnableLennardJones = false;
             }
 
-            // Apply intermolecular force parameters only if specified
             if (EnableCoulomb.HasValue)
                 md.EnableCoulomb = EnableCoulomb.Value;
             else
@@ -133,8 +125,4 @@ namespace Engine13.Utilities.JsonReader
             public Dictionary<string, MDPresetReader> Presets { get; set; } = new();
         }
     }
-
-    // Element class removed. If you need to reintroduce element-based aggregation later,
-    // consider adding a separate utility class that computes derived properties from
-    // per-element data. For now presets must include explicit particle-level parameters.
 }

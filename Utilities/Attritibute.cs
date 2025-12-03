@@ -42,6 +42,7 @@ namespace Engine13.Utilities.Attributes
             var molecularDynamics = entity.GetComponent<MolecularDynamics>();
             if (molecularDynamics != null)
             {
+                // Simple gravity for MD particles
                 double effectiveMass = (entity.Mass > 0f) ? entity.Mass : 1.0;
                 Forces.AddForce(entity, new Vec2(0.0, effectiveMass * Acceleration));
                 return;
@@ -125,6 +126,22 @@ namespace Engine13.Utilities.Attributes
             int
         > _bondCounts = new();
 
+        private static float _simulationTime = 0f;
+        private const float WarmupDuration = 3.0f;
+        private const float FreezeDuration = 0.5f;
+
+        /// <summary>Returns the warmup factor (0 to 1.0) for ramping up forces</summary>
+        public static float GetWarmupFactor()
+        {
+            if (_simulationTime < FreezeDuration)
+                return 0f; // Completely frozen
+            float adjustedTime = _simulationTime - FreezeDuration;
+            float adjustedDuration = WarmupDuration - FreezeDuration;
+            // Use quadratic ramp for gentler transition
+            float linearProgress = MathF.Min(adjustedTime / adjustedDuration, 1f);
+            return linearProgress * linearProgress;
+        }
+
         private readonly List<Entity>? _allEntities;
 
         private Vector2 _restAnchor;
@@ -147,24 +164,22 @@ namespace Engine13.Utilities.Attributes
 
         public int MaxBondsPerEntity { get; set; } = 6;
 
-        // Bond forces (covalent-like)
         public float BondSpringConstant { get; set; } = 50f;
+        public float BondDampingConstant { get; set; } = 10f; // Damping for bond oscillations
         public float BondEquilibriumLength { get; set; } = 0.025f;
         public float BondCutoffDistance { get; set; } = 0.035f;
 
-        // Lennard-Jones (van der Waals)
         public float LJ_Epsilon { get; set; } = 0.005f;
         public float LJ_Sigma { get; set; } = 0.02f;
         public float LJ_CutoffRadius { get; set; } = 0.08f;
 
-        //Coulomb electrostatic parameters
-        public float Charge { get; set; } = 0f; // Electric charge (e.g., +1, -1, +2, etc.)
-        public float CoulombConstant { get; set; } = 8.99f; // Scaled ke (normally 8.99e9)
+        public float Charge { get; set; } = 0f; // Electric charge
+        public float CoulombConstant { get; set; } = 8.99f;
         public float CoulombCutoffRadius { get; set; } = 0.15f;
-        public float DielectricConstant { get; set; } = 1f; // Medium permittivity (1=vacuum, 80=water)
+        public float DielectricConstant { get; set; } = 1f;
 
         //Dipole-dipole parameters
-        public Vector2 DipoleMoment { get; set; } = Vector2.Zero; // Dipole moment vector
+        public Vector2 DipoleMoment { get; set; } = Vector2.Zero;
         public float DipoleCutoffRadius { get; set; } = 0.1f;
 
         public float MaxForceMagnitude { get; set; } = 25f;
@@ -247,7 +262,7 @@ namespace Engine13.Utilities.Attributes
                 EnableInteractions = true,
                 EnableBonds = true,
                 EnableLennardJones = true,
-                MaxBondsPerEntity = 6,
+                MaxBondsPerEntity = 60,
                 BondSpringConstant = 80f,
                 BondEquilibriumLength = 0.02f,
                 BondCutoffDistance = 0.03f,
@@ -281,6 +296,7 @@ namespace Engine13.Utilities.Attributes
 
         public void Update(Entity entity, GameTime gameTime)
         {
+            _simulationTime += gameTime.DeltaTime;
             Vector2 totalForce = Vector2.Zero;
 
             if (EnableAnchorOscillation)
@@ -290,20 +306,33 @@ namespace Engine13.Utilities.Attributes
 
             if (EnableInteractions && _allEntities != null && _allEntities.Count > 0)
             {
-                totalForce += ComputeInteractionForces(entity);
+                if (EnableBonds)
+                {
+                    UpdateBonds(entity);
+
+                    for (int iter = 0; iter < 10; iter++)
+                    {
+                        ApplyPositionConstraints(entity);
+                    }
+                }
+
+                totalForce += ComputeNonBondForces(entity);
             }
 
-            // Apply velocity damping to stabilize the system
-            if (VelocityDamping > 0f)
+            float warmupFactor = GetWarmupFactor();
+            float effectiveDamping =
+                VelocityDamping * (warmupFactor < 1f ? (1f + 9f * (1f - warmupFactor)) : 1f);
+
+            if (effectiveDamping > 0f)
             {
                 float mass = (entity.Mass > 0f) ? entity.Mass : 1f;
-                Vector2 dampingForce = -VelocityDamping * mass * entity.Velocity;
-                totalForce += dampingForce;
+                totalForce -= effectiveDamping * mass * entity.Velocity;
             }
 
             if (totalForce == Vector2.Zero)
                 return;
 
+            // Clamp force magnitude
             if (MaxForceMagnitude > 0f)
             {
                 float magnitude = totalForce.Length();
@@ -314,6 +343,121 @@ namespace Engine13.Utilities.Attributes
             }
 
             Forces.AddForce(entity, new Vec2(totalForce.X, totalForce.Y));
+        }
+
+        /// <summary>
+        /// Position-based constraint solving for bonds.
+        /// </summary>
+        private void ApplyPositionConstraints(Entity entity)
+        {
+            if (_allEntities == null || !EnableBonds)
+                return;
+
+            float warmupFactor = GetWarmupFactor();
+            if (warmupFactor < 0.1f)
+                return;
+
+            const float stiffness = 0.3f;
+
+            foreach (var other in _allEntities)
+            {
+                if (other == entity || !IsBonded(entity, other))
+                    continue;
+
+                Vector2 delta = other.Position - entity.Position;
+                float dist = delta.Length();
+                if (dist < 1e-6f)
+                    continue;
+
+                float error = dist - BondEquilibriumLength;
+                if (MathF.Abs(error) < 0.0001f)
+                    continue;
+
+                Vector2 dir = delta / dist;
+
+                // Move position toward equilibrium
+                entity.Position += dir * (error * stiffness * warmupFactor * 0.5f);
+
+                // Dampen velocity along bond
+                float velAlongBond = Vector2.Dot(entity.Velocity - other.Velocity, dir);
+                entity.Velocity -= dir * (velAlongBond * 0.5f * warmupFactor);
+            }
+        }
+
+        /// <summary>
+        /// Compute non-bond forces (Lennard-Jones, Coulomb, Dipole).
+        /// </summary>
+        private Vector2 ComputeNonBondForces(Entity entity)
+        {
+            if (_allEntities == null || _allEntities.Count == 0)
+                return Vector2.Zero;
+
+            Vector2 totalForce = Vector2.Zero;
+
+            foreach (var other in _allEntities)
+            {
+                if (other == entity)
+                    continue;
+
+                Vector2 delta = other.Position - entity.Position;
+                float distSq = delta.LengthSquared();
+                if (distSq < 1e-8f)
+                    continue;
+
+                float dist = MathF.Sqrt(distSq);
+                Vector2 dir = delta / dist;
+
+                // Skip bonded particles
+                if (EnableBonds && IsBonded(entity, other))
+                    continue;
+
+                // Coulomb force
+                if (EnableCoulomb && dist < CoulombCutoffRadius)
+                {
+                    var otherMD = other.GetComponent<MolecularDynamics>();
+                    if (otherMD != null && (Charge != 0f || otherMD.Charge != 0f))
+                    {
+                        float force =
+                            (CoulombConstant * Charge * otherMD.Charge)
+                            / (DielectricConstant * distSq);
+                        totalForce += dir * force;
+                    }
+                }
+
+                // Dipole force
+                if (EnableDipole && dist < DipoleCutoffRadius)
+                {
+                    var otherMD = other.GetComponent<MolecularDynamics>();
+                    if (
+                        otherMD != null
+                        && (
+                            DipoleMoment.LengthSquared() > 0f
+                            || otherMD.DipoleMoment.LengthSquared() > 0f
+                        )
+                    )
+                    {
+                        Vector2 mu1 = DipoleMoment,
+                            mu2 = otherMD.DipoleMoment;
+                        float distPow5 = distSq * distSq * dist;
+                        float mu1DotR = Vector2.Dot(mu1, dir);
+                        float mu2DotR = Vector2.Dot(mu2, dir);
+                        float radialTerm = 3f * mu1DotR * mu2DotR - Vector2.Dot(mu1, mu2);
+                        totalForce += dir * (radialTerm / distPow5);
+                    }
+                }
+
+                // Lennard-Jones force
+                if (EnableLennardJones && dist < LJ_CutoffRadius)
+                {
+                    float ratio = LJ_Sigma / dist;
+                    float ratio6 = ratio * ratio * ratio * ratio * ratio * ratio;
+                    float ratio12 = ratio6 * ratio6;
+                    float force = 24f * LJ_Epsilon * (2f * ratio12 - ratio6) / dist;
+                    totalForce += dir * force;
+                }
+            }
+
+            return totalForce;
         }
 
         private Vector2 ComputeAnchorForce(Entity entity, GameTime gameTime)
@@ -348,111 +492,6 @@ namespace Engine13.Utilities.Attributes
             Vector2 springForce = -k * posError;
             Vector2 dampingForce = -c * velError;
             return springForce + dampingForce;
-        }
-
-        private Vector2 ComputeInteractionForces(Entity entity)
-        {
-            if (_allEntities == null || _allEntities.Count == 0)
-                return Vector2.Zero;
-
-            Vector2 totalForce = Vector2.Zero;
-
-            if (EnableBonds)
-            {
-                UpdateBonds(entity);
-            }
-
-            for (int i = 0; i < _allEntities.Count; i++)
-            {
-                var other = _allEntities[i];
-                if (other == entity)
-                    continue;
-
-                Vector2 delta = other.Position - entity.Position;
-                float distSq = delta.LengthSquared();
-                if (distSq < 1e-8f)
-                    continue;
-
-                float dist = MathF.Sqrt(distSq);
-                Vector2 direction = delta / dist;
-
-                bool isBonded = EnableBonds && IsBonded(entity, other);
-
-                // 1. Bond forces (strongest, short-range, covalent-like)
-                if (isBonded)
-                {
-                    float displacement = dist - BondEquilibriumLength;
-                    float forceMagnitude = BondSpringConstant * displacement;
-                    totalForce += direction * forceMagnitude;
-                }
-
-                // 2. Coulomb electrostatic forces (long-range, charge-charge)
-                if (EnableCoulomb && dist < CoulombCutoffRadius)
-                {
-                    var otherMD = other.GetComponent<MolecularDynamics>();
-                    if (otherMD != null && (Charge != 0f || otherMD.Charge != 0f))
-                    {
-                        // F = k * q1 * q2 / (ε * r²)
-                        float forceMagnitude =
-                            (CoulombConstant * Charge * otherMD.Charge)
-                            / (DielectricConstant * distSq);
-
-                        // Positive charges repel, opposite charges attract
-                        totalForce += direction * forceMagnitude;
-                    }
-                }
-
-                // 3. Dipole-dipole forces (medium-range, orientation dependent)
-                if (EnableDipole && dist < DipoleCutoffRadius)
-                {
-                    var otherMD = other.GetComponent<MolecularDynamics>();
-                    if (
-                        otherMD != null
-                        && (
-                            DipoleMoment.LengthSquared() > 0f
-                            || otherMD.DipoleMoment.LengthSquared() > 0f
-                        )
-                    )
-                    {
-                        // Simplified dipole-dipole interaction
-                        // Full formula is orientation-dependent, this is a simplified version
-                        float p1 = DipoleMoment.Length();
-                        float p2 = otherMD.DipoleMoment.Length();
-                        if (p1 > 0f && p2 > 0f)
-                        {
-                            // F ∝ -p1*p2/r^4 (attractive for aligned dipoles)
-                            float r3 = dist * distSq;
-                            float r4 = distSq * distSq;
-                            float forceMagnitude = -(p1 * p2) / r4;
-
-                            // Consider dipole orientations
-                            float dot1 = Vector2.Dot(Vector2.Normalize(DipoleMoment), direction);
-                            float dot2 = Vector2.Dot(
-                                Vector2.Normalize(otherMD.DipoleMoment),
-                                direction
-                            );
-                            float orientationFactor = (1f + 3f * dot1 * dot2);
-
-                            totalForce += direction * forceMagnitude * orientationFactor;
-                        }
-                    }
-                }
-
-                // 4. Lennard-Jones (van der Waals - short-range, always present)
-                if (EnableLennardJones && dist < LJ_CutoffRadius && !isBonded)
-                {
-                    // F = 24ε/r * (σ/r)^6 * [1 - 2(σ/r)^6]
-                    float sigmaOverR = LJ_Sigma / dist;
-                    float sr6 = sigmaOverR * sigmaOverR * sigmaOverR;
-                    sr6 *= sr6;
-                    float sr12 = sr6 * sr6;
-
-                    float forceMagnitude = 24f * LJ_Epsilon / dist * (sr6 - 2f * sr12);
-                    totalForce += direction * forceMagnitude;
-                }
-            }
-
-            return totalForce;
         }
 
         private void UpdateBonds(Entity entity)
@@ -506,7 +545,8 @@ namespace Engine13.Utilities.Attributes
             _bondCounts.AddOrUpdate(entity, 1, (key, oldValue) => oldValue + 1);
         }
 
-        private static bool IsBonded(Entity a, Entity b)
+        /// <summary>Check if two entities are bonded together</summary>
+        public static bool IsBonded(Entity a, Entity b)
         {
             var bond = a.GetHashCode() < b.GetHashCode() ? (a, b) : (b, a);
             return _globalBonds.ContainsKey(bond);
@@ -625,7 +665,7 @@ namespace Engine13.Utilities.Attributes
                 Charge = 0f, // Neutral overall
                 DipoleMoment = new Vector2(0f, 0.01f), // Has dipole moment
                 DielectricConstant = 80f, // Water's high permittivity
-                MaxBondsPerEntity = 4, // Can form up to 4 hydrogen bonds
+                MaxBondsPerEntity = 4, 
                 BondSpringConstant = 20f, // Weaker than covalent
                 BondEquilibriumLength = 0.028f,
                 MaxForceMagnitude = 75f,
@@ -654,13 +694,11 @@ namespace Engine13.Utilities.Attributes
             };
         }
 
-        /// <summary>Calculates total energy (kinetic + potential)</summary>
         public static float CalculateTotalEnergy(List<Entity> entities)
         {
             return CalculateKineticEnergy(entities) + CalculatePotentialEnergy(entities);
         }
 
-        /// <summary>Calculates system temperature from kinetic energy</summary>
         public static float CalculateTemperature(List<Entity> entities, float kBoltzmann = 1.0f)
         {
             if (entities.Count == 0)
@@ -671,13 +709,11 @@ namespace Engine13.Utilities.Attributes
             return (2f * ke) / (entities.Count * kBoltzmann * degreesOfFreedom);
         }
 
-        /// <summary>Gets the total number of bonds in the system</summary>
         public static int GetBondCount()
         {
             return _globalBonds.Count;
         }
 
-        /// <summary>Clears all bonds in the system</summary>
         public static void ClearAllBonds()
         {
             _globalBonds.Clear();
@@ -830,8 +866,6 @@ namespace Engine13.Utilities.Attributes
                 var pos = entity.Position;
                 pos += Velocity * gameTime.DeltaTime;
                 entity.Position = pos;
-                // Removed Velocity *= 0.99f - this was destroying bond forces
-                // Damping is now handled by MolecularDynamics.VelocityDamping
             }
         }
     }

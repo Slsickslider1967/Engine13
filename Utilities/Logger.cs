@@ -6,31 +6,27 @@ using System.Text;
 namespace Engine13.Utilities
 {
     /// <summary>
-    /// General-purpose logger with CSV output support for data logging and analysis
+    /// Thread-safe logging utility with console output and CSV file support.
     /// </summary>
     public static class Logger
     {
         private static readonly Dictionary<string, StreamWriter> _csvWriters = new();
         private static readonly Dictionary<string, bool> _headerWritten = new();
-        private static readonly object _lock = new();
+        private static readonly object _syncLock = new();
 
-        /// <summary>
-        /// Log a message to console with timestamp
-        /// </summary>
+        /// <summary>Logs an informational message to console with timestamp.</summary>
         public static void Log(string message)
         {
             Console.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] {message}");
         }
 
-        public static void LogSimKey(string Key)
+        /// <summary>Logs a simulation key identifier.</summary>
+        public static void LogSimKey(string key)
         {
-            Console.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] SIMKEY: {Key}");
+            Console.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] SIMKEY: {key}");
         }
 
-
-        /// <summary>
-        /// Log an error message to console with timestamp
-        /// </summary>
+        /// <summary>Logs an error message to console in red.</summary>
         public static void LogError(string message)
         {
             Console.ForegroundColor = ConsoleColor.Red;
@@ -38,9 +34,7 @@ namespace Engine13.Utilities
             Console.ResetColor();
         }
 
-        /// <summary>
-        /// Log a warning message to console with timestamp
-        /// </summary>
+        /// <summary>Logs a warning message to console in yellow.</summary>
         public static void LogWarning(string message)
         {
             Console.ForegroundColor = ConsoleColor.Yellow;
@@ -48,14 +42,10 @@ namespace Engine13.Utilities
             Console.ResetColor();
         }
 
-        /// <summary>
-        /// Initialize a CSV log file with headers
-        /// </summary>
-        /// <param name="filename">Name of the CSV file (without extension)</param>
-        /// <param name="headers">Column headers for the CSV</param>
+        /// <summary>Initializes a new CSV log file with column headers.</summary>
         public static void InitCSV(string filename, params string[] headers)
         {
-            lock (_lock)
+            lock (_syncLock)
             {
                 if (_csvWriters.ContainsKey(filename))
                 {
@@ -69,7 +59,7 @@ namespace Engine13.Utilities
                     var writer = new StreamWriter(filepath, false, Encoding.UTF8);
                     _csvWriters[filename] = writer;
 
-                    if (headers != null && headers.Length > 0)
+                    if (headers is { Length: > 0 })
                     {
                         writer.WriteLine(string.Join(",", headers));
                         writer.Flush();
@@ -89,14 +79,10 @@ namespace Engine13.Utilities
             }
         }
 
-        /// <summary>
-        /// Log a row of data to a CSV file
-        /// </summary>
-        /// <param name="filename">Name of the CSV file (without extension)</param>
-        /// <param name="values">Values to write as a row</param>
+        /// <summary>Writes a row of data to an initialized CSV file.</summary>
         public static void LogCSV(string filename, params object[] values)
         {
-            lock (_lock)
+            lock (_syncLock)
             {
                 if (!_csvWriters.TryGetValue(filename, out var writer))
                 {
@@ -106,10 +92,7 @@ namespace Engine13.Utilities
 
                 try
                 {
-                    var csvLine = string.Join(
-                        ",",
-                        Array.ConvertAll(values, v => EscapeCSV(v?.ToString() ?? ""))
-                    );
+                    var csvLine = string.Join(",", Array.ConvertAll(values, v => EscapeCSV(v?.ToString() ?? "")));
                     writer.WriteLine(csvLine);
                     writer.Flush();
                 }
@@ -120,6 +103,7 @@ namespace Engine13.Utilities
             }
         }
 
+        /// <summary>Writes a timestamped row of data to an initialized CSV file.</summary>
         public static void LogCSVWithTimestamp(string filename, params object[] values)
         {
             var timestampedValues = new object[values.Length + 1];
@@ -128,9 +112,10 @@ namespace Engine13.Utilities
             LogCSV(filename, timestampedValues);
         }
 
+        /// <summary>Closes a specific CSV file.</summary>
         public static void CloseCSV(string filename)
         {
-            lock (_lock)
+            lock (_syncLock)
             {
                 if (_csvWriters.TryGetValue(filename, out var writer))
                 {
@@ -144,9 +129,10 @@ namespace Engine13.Utilities
             }
         }
 
+        /// <summary>Closes all open CSV files.</summary>
         public static void CloseAllCSV()
         {
-            lock (_lock)
+            lock (_syncLock)
             {
                 foreach (var writer in _csvWriters.Values)
                 {
@@ -160,24 +146,14 @@ namespace Engine13.Utilities
             }
         }
 
-        public static void LogPerformance(
-            string filename,
-            string metricName,
-            double value,
-            string unit = "ms"
-        )
+        /// <summary>Logs a performance metric to a dedicated CSV file.</summary>
+        public static void LogPerformance(string filename, string metricName, double value, string unit = "ms")
         {
             if (!_csvWriters.ContainsKey(filename))
             {
                 InitCSV(filename, "Timestamp", "Metric", "Value", "Unit");
             }
-            LogCSV(
-                filename,
-                DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff"),
-                metricName,
-                value,
-                unit
-            );
+            LogCSV(filename, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff"), metricName, value, unit);
         }
 
         private static string EscapeCSV(string value)
@@ -185,12 +161,7 @@ namespace Engine13.Utilities
             if (string.IsNullOrEmpty(value))
                 return value;
 
-            if (
-                value.Contains(",")
-                || value.Contains("\"")
-                || value.Contains("\n")
-                || value.Contains("\r")
-            )
+            if (value.Contains(',') || value.Contains('"') || value.Contains('\n') || value.Contains('\r'))
             {
                 return $"\"{value.Replace("\"", "\"\"")}\"";
             }

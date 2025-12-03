@@ -95,7 +95,7 @@ namespace Engine13.Core
                 }
 
                 // Process queued update tasks
-                while (_updateTaskQueue.TryDequeue(out UpdateTask task))
+                while (_updateTaskQueue.TryDequeue(out UpdateTask? task))
                 {
                     lock (_stateLock)
                     {
@@ -134,7 +134,7 @@ namespace Engine13.Core
                 }
 
                 // Process queued render tasks
-                while (_renderTaskQueue.TryDequeue(out RenderTask task))
+                while (_renderTaskQueue.TryDequeue(out RenderTask? task))
                 {
                     lock (_stateLock)
                     {

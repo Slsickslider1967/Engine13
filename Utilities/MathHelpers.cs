@@ -672,16 +672,6 @@ namespace Engine13.Utilities
             cells.Clear();
             entityCells.Clear();
         }
-
-        [Obsolete("Use AddEntity instead")]
-        public void AddMesh(Entity entity) => AddEntity(entity);
-
-        [Obsolete("Use UpdateEntityPosition instead")]
-        public void UpdateMeshPosition(Entity entity) => UpdateEntityPosition(entity);
-
-        [Obsolete("Use GetNearbyEntities instead")]
-        public System.Collections.Generic.List<Entity> GetNearbyMeshes(Vector2 position) =>
-            GetNearbyEntities(position);
     }
 
     public sealed class VertexCollisionSolver
@@ -986,12 +976,6 @@ namespace Engine13.Utilities
             }
         }
 
-        [Obsolete("Use ApplyPositionsToEntities instead")]
-        public static void ApplyPositionsToMeshes(
-            System.Collections.Generic.IReadOnlyList<Entity> entities,
-            Vector2[] positions
-        ) => ApplyPositionsToEntities(entities, positions);
-
         public static int WrapIndex(int index, int count)
         {
             if (count <= 0)
@@ -1006,74 +990,6 @@ namespace Engine13.Utilities
             }
 
             return r;
-        }
-    }
-
-    struct Frame
-    {
-        public Vector2[] Positions;
-        public float TimeStamp;
-        public int FrameIndex;
-
-        public Vector2[] Velocities;
-        public float[] Rotations;
-        public bool isValid;
-
-        public Frame(int MeshCount)
-        {
-            Positions = new Vector2[MeshCount];
-            Velocities = new Vector2[MeshCount];
-            Rotations = new float[MeshCount];
-            TimeStamp = 0f;
-            FrameIndex = 0;
-            isValid = false;
-        }
-
-        public void CaptureFrom(List<Entity> entities)
-        {
-            int Count = Math.Min(entities.Count, Positions.Length);
-
-            for (int i = 0; i < Count; i++)
-            {
-                Positions[i] = entities[i].Position;
-                Velocities[i] =
-                    entities[i].GetComponent<ObjectCollision>()?.Velocity ?? Vector2.Zero;
-            }
-
-            isValid = true;
-        }
-
-        public bool ApplyTo(List<Entity> entities)
-        {
-            if (!isValid)
-                return false;
-
-            int Count = Math.Min(entities.Count, Positions.Length);
-
-            for (int i = 0; i < Count; i++)
-            {
-                entities[i].Position = Positions[i];
-                var objCollision = entities[i].GetComponent<ObjectCollision>();
-                if (objCollision != null)
-                {
-                    objCollision.Velocity = Velocities[i];
-                }
-            }
-
-            return true;
-        }
-
-        public void Clear()
-        {
-            for (int i = 0; i < Positions.Length; i++)
-            {
-                Positions[i] = Vector2.Zero;
-                Velocities[i] = Vector2.Zero;
-                Rotations[i] = 0f;
-            }
-            TimeStamp = 0f;
-            FrameIndex = 0;
-            isValid = false;
         }
     }
 }
