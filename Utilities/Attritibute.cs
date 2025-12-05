@@ -14,37 +14,53 @@ namespace Engine13.Utilities.Attributes
 
     public sealed class Gravity : IEntityComponent
     {
-        public float Acceleration { get; set; }
+        public float AccelerationY { get; set; }
+        public float AccelerationX { get; set; }
         public float Mass { get; set; } = 1f;
         public float TerminalVelocityY { get; set; } = float.PositiveInfinity;
+        public float TerminalVelocityX { get; set; } = float.PositiveInfinity;
         public float DragCoefficient { get; set; } = 1f;
         private float _velocityY;
+        private float _velocityX;
 
         public float VelocityY => _velocityY;
+        public float VelocityX => _velocityX;
         public float MomentumY => Mass * _velocityY;
+        public float MomentumX => Mass * _velocityX;
         public float ComputedTerminalVelocityMag
         {
             get
             {
-                return MathHelpers.ComputeTerminalVelocityMag(Mass, Acceleration, DragCoefficient);
+                return MathHelpers.ComputeTerminalVelocityMag(Mass, AccelerationY, DragCoefficient);
             }
         }
 
-        public Gravity(float acceleration, float initialVelocity = 0f, float mass = 1f)
+        public Gravity(
+            float accelerationY,
+            float initialVelocityY = 0f,
+            float mass = 1f,
+            float accelerationX = 0f,
+            float initialVelocityX = 0f
+        )
         {
-            Acceleration = acceleration;
-            _velocityY = initialVelocity;
+            AccelerationY = accelerationY;
+            AccelerationX = accelerationX;
+            _velocityY = initialVelocityY;
+            _velocityX = initialVelocityX;
             Mass = mass;
         }
 
         public void Update(Entity entity, GameTime gameTime)
         {
-            var molecularDynamics = entity.GetComponent<MolecularDynamics>();
-            if (molecularDynamics != null)
+            var particleDynamics = entity.GetComponent<ParticleDynamics>();
+            if (particleDynamics != null)
             {
-                // Simple gravity for MD particles
+                // Apply forces via force accumulator for particles
                 double effectiveMass = (entity.Mass > 0f) ? entity.Mass : 1.0;
-                Forces.AddForce(entity, new Vec2(0.0, effectiveMass * Acceleration));
+                Forces.AddForce(
+                    entity,
+                    new Vec2(effectiveMass * AccelerationX, effectiveMass * AccelerationY)
+                );
                 return;
             }
 
@@ -56,48 +72,64 @@ namespace Engine13.Utilities.Attributes
             if (objectCollision != null && !objectCollision.IsStatic)
             {
                 float velocityY = objectCollision.Velocity.Y;
+                float velocityX = objectCollision.Velocity.X;
+
+                // Apply vertical acceleration
                 if (!(objectCollision.IsGrounded && velocityY >= 0f))
                 {
-                    velocityY += Acceleration * deltaTime;
+                    velocityY += AccelerationY * deltaTime;
                 }
+
+                // Apply horizontal acceleration
+                velocityX += AccelerationX * deltaTime;
+
                 float massForDrag = (objectCollision.Mass > 0f) ? objectCollision.Mass : Mass;
                 float area = MathHelpers.ComputeArea(entity.Size);
                 float effectiveDrag = DragCoefficient * area;
                 float terminalVelocityMagnitude = MathHelpers.ComputeTerminalVelocityMag(
                     massForDrag,
-                    Acceleration,
+                    AccelerationY,
                     effectiveDrag
                 );
                 if (float.IsFinite(terminalVelocityMagnitude))
                 {
-                    if (velocityY > terminalVelocityMagnitude)
-                        velocityY = terminalVelocityMagnitude;
-                    else if (velocityY < -terminalVelocityMagnitude)
-                        velocityY = -terminalVelocityMagnitude;
+                    velocityY = System.Math.Clamp(
+                        velocityY,
+                        -terminalVelocityMagnitude,
+                        terminalVelocityMagnitude
+                    );
                 }
                 if (float.IsFinite(TerminalVelocityY))
                 {
                     velocityY = System.Math.Clamp(velocityY, -TerminalVelocityY, TerminalVelocityY);
                 }
+                if (float.IsFinite(TerminalVelocityX))
+                {
+                    velocityX = System.Math.Clamp(velocityX, -TerminalVelocityX, TerminalVelocityX);
+                }
 
-                objectCollision.Velocity = new Vector2(objectCollision.Velocity.X, velocityY);
+                objectCollision.Velocity = new Vector2(velocityX, velocityY);
             }
             else
             {
-                _velocityY += Acceleration * deltaTime;
+                // Apply accelerations for non-collision entities
+                _velocityY += AccelerationY * deltaTime;
+                _velocityX += AccelerationX * deltaTime;
+
                 float area = MathHelpers.ComputeArea(entity.Size);
                 float effectiveDrag = DragCoefficient * area;
                 float terminalVelocityMagnitude = MathHelpers.ComputeTerminalVelocityMag(
                     Mass,
-                    Acceleration,
+                    AccelerationY,
                     effectiveDrag
                 );
                 if (float.IsFinite(terminalVelocityMagnitude))
                 {
-                    if (_velocityY > terminalVelocityMagnitude)
-                        _velocityY = terminalVelocityMagnitude;
-                    else if (_velocityY < -terminalVelocityMagnitude)
-                        _velocityY = -terminalVelocityMagnitude;
+                    _velocityY = System.Math.Clamp(
+                        _velocityY,
+                        -terminalVelocityMagnitude,
+                        terminalVelocityMagnitude
+                    );
                 }
                 if (float.IsFinite(TerminalVelocityY))
                 {
@@ -107,232 +139,177 @@ namespace Engine13.Utilities.Attributes
                         TerminalVelocityY
                     );
                 }
+                if (float.IsFinite(TerminalVelocityX))
+                {
+                    _velocityX = System.Math.Clamp(
+                        _velocityX,
+                        -TerminalVelocityX,
+                        TerminalVelocityX
+                    );
+                }
+
                 var position = entity.Position;
                 position.Y += _velocityY * deltaTime;
+                position.X += _velocityX * deltaTime;
                 entity.Position = position;
             }
         }
     }
 
-    public sealed class MolecularDynamics : IEntityComponent
+    /// <summary>
+    /// Represents a bond/constraint between two particles.
+    /// Used to maintain structural integrity for solid materials.
+    /// </summary>
+    public struct ParticleBond
     {
-        private static readonly Random _random = new Random();
-        private static readonly System.Collections.Concurrent.ConcurrentDictionary<
-            (Entity, Entity),
-            byte
-        > _globalBonds = new();
-        private static readonly System.Collections.Concurrent.ConcurrentDictionary<
-            Entity,
-            int
-        > _bondCounts = new();
-
-        private static float _simulationTime = 0f;
-        private const float WarmupDuration = 3.0f;
-        private const float FreezeDuration = 0.5f;
-
-        /// <summary>Returns the warmup factor (0 to 1.0) for ramping up forces</summary>
-        public static float GetWarmupFactor()
+        public Entity ParticleA;
+        public Entity ParticleB;
+        public float RestLength;
+        
+        public ParticleBond(Entity a, Entity b)
         {
-            if (_simulationTime < FreezeDuration)
-                return 0f; // Completely frozen
-            float adjustedTime = _simulationTime - FreezeDuration;
-            float adjustedDuration = WarmupDuration - FreezeDuration;
-            // Use quadratic ramp for gentler transition
-            float linearProgress = MathF.Min(adjustedTime / adjustedDuration, 1f);
-            return linearProgress * linearProgress;
+            ParticleA = a;
+            ParticleB = b;
+            RestLength = Vector2.Distance(a.Position, b.Position);
         }
+    }
 
+    /// <summary>
+    /// Particle dynamics component for macro-scale particle simulation.
+    /// Handles particle-level physics without intermolecular/atomic forces.
+    /// </summary>
+    public sealed class ParticleDynamics : IEntityComponent
+    {
         private readonly List<Entity>? _allEntities;
-
-        private Vector2 _restAnchor;
-        private bool _restAnchorInitialized;
-        private float _phaseX;
-        private float _phaseY;
-
-        public bool EnableAnchorOscillation { get; set; } = false;
-        public float SpringConstant { get; set; } = 10f;
-        public float DampingRatio { get; set; } = 1.1f;
-        public float DriveAmplitude { get; set; } = 0.005f;
-        public float DriveFrequency { get; set; } = 4f;
-        public bool EnableDrive { get; set; } = true;
-
-        public bool EnableInteractions { get; set; } = true;
-        public bool EnableBonds { get; set; } = true;
-        public bool EnableLennardJones { get; set; } = true;
-        public bool EnableCoulomb { get; set; } = false; //Electrostatic forces
-        public bool EnableDipole { get; set; } = false; //Dipole-dipole interactions
-
-        public int MaxBondsPerEntity { get; set; } = 6;
-
-        public float BondSpringConstant { get; set; } = 50f;
-        public float BondDampingConstant { get; set; } = 10f; // Damping for bond oscillations
-        public float BondEquilibriumLength { get; set; } = 0.025f;
-        public float BondCutoffDistance { get; set; } = 0.035f;
-
-        public float LJ_Epsilon { get; set; } = 0.005f;
-        public float LJ_Sigma { get; set; } = 0.02f;
-        public float LJ_CutoffRadius { get; set; } = 0.08f;
-
-        public float Charge { get; set; } = 0f; // Electric charge
-        public float CoulombConstant { get; set; } = 8.99f;
-        public float CoulombCutoffRadius { get; set; } = 0.15f;
-        public float DielectricConstant { get; set; } = 1f;
-
-        //Dipole-dipole parameters
-        public Vector2 DipoleMoment { get; set; } = Vector2.Zero;
-        public float DipoleCutoffRadius { get; set; } = 0.1f;
-
         public float MaxForceMagnitude { get; set; } = 25f;
+
         public float VelocityDamping { get; set; } = 0.05f;
 
-        public MolecularDynamics() { }
+        /// <summary>Pressure strength for inter-particle repulsion (works for both fluids and solids)</summary>
+        public float PressureStrength { get; set; } = 2f;
 
-        public MolecularDynamics(List<Entity> allEntities)
+        /// <summary>Radius within which particles repel each other</summary>
+        public float PressureRadius { get; set; } = 0.02f;
+        
+        /// <summary>If true, this particle forms bonds with neighbors to maintain solid structure</summary>
+        public bool IsSolid { get; set; } = false;
+        
+        /// <summary>Stiffness of bonds (higher = more rigid structure)</summary>
+        public float BondStiffness { get; set; } = 50.0f;
+        
+        /// <summary>Damping factor for bond oscillations</summary>
+        public float BondDamping { get; set; } = 5.0f;
+        
+        /// <summary>Bonds connecting this particle to its neighbors</summary>
+        public List<ParticleBond> Bonds { get; } = new List<ParticleBond>();
+
+        public ParticleDynamics() { }
+
+        public ParticleDynamics(List<Entity> allEntities)
         {
             _allEntities = allEntities;
         }
-
-        /// <summary>Creates a simple harmonic oscillator (no interactions)</summary>
-        public static MolecularDynamics CreateSimpleOscillator(
-            float springConstant = 10f,
-            float damping = 1.0f
-        )
+        
+        /// <summary>
+        /// Creates bonds between this particle and nearby neighbors.
+        /// Should be called after all particles are created.
+        /// </summary>
+        public void CreateBondsWithNeighbors(Entity self, List<Entity> allParticles, float bondRadius)
         {
-            return new MolecularDynamics
+            if (!IsSolid) return;
+            
+            Bonds.Clear();
+            
+            foreach (var other in allParticles)
             {
-                EnableAnchorOscillation = true,
-                SpringConstant = springConstant,
-                DampingRatio = damping,
-                EnableDrive = false,
-                EnableInteractions = false,
+                if (other == self) continue;
+                
+                // Check if other particle is also a solid
+                var otherDynamics = other.GetComponent<ParticleDynamics>();
+                if (otherDynamics == null || !otherDynamics.IsSolid) continue;
+                
+                float distance = Vector2.Distance(self.Position, other.Position);
+                if (distance <= bondRadius)
+                {
+                    Bonds.Add(new ParticleBond(self, other));
+                }
+            }
+        }
+
+        /// <summary>Creates a standard particle with default settings</summary>
+        public static ParticleDynamics CreateParticle(List<Entity> allEntities)
+        {
+            return new ParticleDynamics(allEntities)
+            {
+                MaxForceMagnitude = 50f,
+                VelocityDamping = 0.02f,
+                PressureStrength = 2.5f,
+                PressureRadius = 0.02f,
             };
         }
 
-        /// <summary>Creates a driven oscillator with external forcing</summary>
-        public static MolecularDynamics CreateDrivenOscillator(
-            float driveAmplitude = 0.005f,
-            float driveFrequency = 4f
-        )
+        /// <summary>Creates a heavy/dense particle</summary>
+        public static ParticleDynamics CreateHeavyParticle(List<Entity> allEntities)
         {
-            return new MolecularDynamics
+            return new ParticleDynamics(allEntities)
             {
-                EnableAnchorOscillation = true,
-                EnableDrive = true,
-                DriveAmplitude = driveAmplitude,
-                DriveFrequency = driveFrequency,
-                EnableInteractions = false,
+                MaxForceMagnitude = 100f,
+                VelocityDamping = 0.01f,
+                PressureStrength = 4f,
+                PressureRadius = 0.02f,
             };
         }
 
-        /// <summary>Creates a gas-like particle (Lennard-Jones only, no bonds)</summary>
-        public static MolecularDynamics CreateGasParticle(List<Entity> allEntities)
+        /// <summary>Creates a light particle with more damping</summary>
+        public static ParticleDynamics CreateLightParticle(List<Entity> allEntities)
         {
-            return new MolecularDynamics(allEntities)
+            return new ParticleDynamics(allEntities)
             {
-                EnableAnchorOscillation = false,
-                EnableInteractions = true,
-                EnableBonds = false,
-                EnableLennardJones = true,
-                LJ_Epsilon = 0.005f,
-                LJ_Sigma = 0.02f,
+                MaxForceMagnitude = 25f,
+                VelocityDamping = 0.05f,
+                PressureStrength = 2f,
+                PressureRadius = 0.02f,
             };
         }
 
-        /// <summary>Creates a liquid-like particle (LJ + weak bonding)</summary>
-        public static MolecularDynamics CreateLiquidParticle(List<Entity> allEntities)
+        /// <summary>Creates a fluid particle that spreads and flows</summary>
+        public static ParticleDynamics CreateFluidParticle(List<Entity> allEntities)
         {
-            return new MolecularDynamics(allEntities)
+            return new ParticleDynamics(allEntities)
             {
-                EnableAnchorOscillation = false,
-                EnableInteractions = true,
-                EnableBonds = true,
-                EnableLennardJones = true,
-                MaxBondsPerEntity = 4,
-                BondSpringConstant = 30f,
-                BondEquilibriumLength = 0.025f,
+                MaxForceMagnitude = 50f,
+                VelocityDamping = 0.001f,
+                PressureStrength = 5f,
+                PressureRadius = 0.025f,
             };
-        }
-
-        /// <summary>Creates a solid-like particle (strong bonding)</summary>
-        public static MolecularDynamics CreateSolidParticle(List<Entity> allEntities)
-        {
-            return new MolecularDynamics(allEntities)
-            {
-                EnableAnchorOscillation = false,
-                EnableInteractions = true,
-                EnableBonds = true,
-                EnableLennardJones = true,
-                MaxBondsPerEntity = 60,
-                BondSpringConstant = 80f,
-                BondEquilibriumLength = 0.02f,
-                BondCutoffDistance = 0.03f,
-                VelocityDamping = 1.0f,
-            };
-        }
-
-        /// <summary>Creates a full MD simulation particle with all features enabled</summary>
-        public static MolecularDynamics CreateFullMD(List<Entity> allEntities)
-        {
-            return new MolecularDynamics(allEntities)
-            {
-                EnableAnchorOscillation = true,
-                EnableInteractions = true,
-                EnableBonds = true,
-                EnableLennardJones = true,
-                EnableDrive = true,
-            };
-        }
-
-        private void EnsureAnchorInitialized(Entity entity)
-        {
-            if (_restAnchorInitialized)
-                return;
-
-            _restAnchor = entity.Position;
-            _phaseX = (float)(_random.NextDouble() * MathF.PI * 2f);
-            _phaseY = (float)(_random.NextDouble() * MathF.PI * 2f);
-            _restAnchorInitialized = true;
         }
 
         public void Update(Entity entity, GameTime gameTime)
         {
-            _simulationTime += gameTime.DeltaTime;
             Vector2 totalForce = Vector2.Zero;
 
-            if (EnableAnchorOscillation)
+            // Compute bond forces for solid materials (keeps particles together)
+            if (IsSolid && Bonds.Count > 0)
             {
-                totalForce += ComputeAnchorForce(entity, gameTime);
+                totalForce += ComputeBondForces(entity);
+                // For solids, skip inter-particle pressure forces - bonds handle structure
+            }
+            else if (_allEntities != null)
+            {
+                // Compute inter-particle forces (repulsion/pressure) only for non-solids
+                totalForce += ComputeInterParticleForces(entity);
             }
 
-            if (EnableInteractions && _allEntities != null && _allEntities.Count > 0)
-            {
-                if (EnableBonds)
-                {
-                    UpdateBonds(entity);
-
-                    for (int iter = 0; iter < 10; iter++)
-                    {
-                        ApplyPositionConstraints(entity);
-                    }
-                }
-
-                totalForce += ComputeNonBondForces(entity);
-            }
-
-            float warmupFactor = GetWarmupFactor();
-            float effectiveDamping =
-                VelocityDamping * (warmupFactor < 1f ? (1f + 9f * (1f - warmupFactor)) : 1f);
-
-            if (effectiveDamping > 0f)
+            if (VelocityDamping > 0f)
             {
                 float mass = (entity.Mass > 0f) ? entity.Mass : 1f;
-                totalForce -= effectiveDamping * mass * entity.Velocity;
+                totalForce -= VelocityDamping * mass * entity.Velocity;
             }
 
             if (totalForce == Vector2.Zero)
                 return;
 
-            // Clamp force magnitude
+            // Clamp force magnitude for stability
             if (MaxForceMagnitude > 0f)
             {
                 float magnitude = totalForce.Length();
@@ -344,215 +321,132 @@ namespace Engine13.Utilities.Attributes
 
             Forces.AddForce(entity, new Vec2(totalForce.X, totalForce.Y));
         }
-
+        
         /// <summary>
-        /// Position-based constraint solving for bonds.
+        /// Computes bond forces using position-based dynamics.
+        /// Bonds are unbreakable constraints that keep particles together.
         /// </summary>
-        private void ApplyPositionConstraints(Entity entity)
+        private Vector2 ComputeBondForces(Entity entity)
         {
-            if (_allEntities == null || !EnableBonds)
-                return;
-
-            float warmupFactor = GetWarmupFactor();
-            if (warmupFactor < 0.1f)
-                return;
-
-            const float stiffness = 0.3f;
-
-            foreach (var other in _allEntities)
+            if (Bonds.Count == 0) return Vector2.Zero;
+            
+            Vector2 totalBondForce = Vector2.Zero;
+            Vector2 totalPositionCorrection = Vector2.Zero;
+            
+            // First, average velocity with bonded neighbors to keep group moving together
+            Vector2 avgVelocity = entity.Velocity;
+            int velocityCount = 1;
+            
+            foreach (var bond in Bonds)
             {
-                if (other == entity || !IsBonded(entity, other))
-                    continue;
-
-                Vector2 delta = other.Position - entity.Position;
-                float dist = delta.Length();
-                if (dist < 1e-6f)
-                    continue;
-
-                float error = dist - BondEquilibriumLength;
-                if (MathF.Abs(error) < 0.0001f)
-                    continue;
-
-                Vector2 dir = delta / dist;
-
-                // Move position toward equilibrium
-                entity.Position += dir * (error * stiffness * warmupFactor * 0.5f);
-
-                // Dampen velocity along bond
-                float velAlongBond = Vector2.Dot(entity.Velocity - other.Velocity, dir);
-                entity.Velocity -= dir * (velAlongBond * 0.5f * warmupFactor);
+                Entity other = (bond.ParticleA == entity) ? bond.ParticleB : bond.ParticleA;
+                avgVelocity += other.Velocity;
+                velocityCount++;
             }
+            avgVelocity /= velocityCount;
+            
+            // Blend this particle's velocity toward the average
+            var objCollision = entity.GetComponent<ObjectCollision>();
+            if (objCollision != null)
+            {
+                objCollision.Velocity = Vector2.Lerp(objCollision.Velocity, avgVelocity, 0.3f);
+            }
+            
+            foreach (var bond in Bonds)
+            {
+                Entity other = (bond.ParticleA == entity) ? bond.ParticleB : bond.ParticleA;
+                
+                Vector2 delta = other.Position - entity.Position;
+                float currentLength = delta.Length();
+                
+                if (currentLength < 1e-8f) 
+                {
+                    delta = new Vector2(0.001f, 0f);
+                    currentLength = 0.001f;
+                }
+                
+                Vector2 direction = delta / currentLength;
+                
+                // Calculate how far we are from rest length
+                float error = currentLength - bond.RestLength;
+                
+                // Position-based correction - gentler to allow natural physics
+                float correctionStrength = 0.15f; // 15% per frame
+                float posCorrection = error * correctionStrength * 0.5f;
+                totalPositionCorrection += direction * posCorrection;
+            }
+            
+            // Apply position correction
+            if (totalPositionCorrection.LengthSquared() > 1e-12f)
+            {
+                entity.Position += totalPositionCorrection;
+            }
+            
+            return totalBondForce;
         }
 
-        /// <summary>
-        /// Compute non-bond forces (Lennard-Jones, Coulomb, Dipole).
-        /// </summary>
-        private Vector2 ComputeNonBondForces(Entity entity)
+        private Vector2 ComputeInterParticleForces(Entity entity)
         {
             if (_allEntities == null || _allEntities.Count == 0)
                 return Vector2.Zero;
 
+            // Check if this is a fluid particle
+            var objCollision = entity.GetComponent<ObjectCollision>();
+            bool isFluid = objCollision?.IsFluid ?? false;
+
             Vector2 totalForce = Vector2.Zero;
+            float h = PressureRadius;
+            float hSq = h * h;
+            float restDistance = h * 0.5f;
 
             foreach (var other in _allEntities)
             {
                 if (other == entity)
                     continue;
 
-                Vector2 delta = other.Position - entity.Position;
+                Vector2 delta = entity.Position - other.Position;
                 float distSq = delta.LengthSquared();
-                if (distSq < 1e-8f)
-                    continue;
 
-                float dist = MathF.Sqrt(distSq);
-                Vector2 dir = delta / dist;
-
-                // Skip bonded particles
-                if (EnableBonds && IsBonded(entity, other))
-                    continue;
-
-                // Coulomb force
-                if (EnableCoulomb && dist < CoulombCutoffRadius)
+                if (distSq < hSq && distSq > 1e-10f)
                 {
-                    var otherMD = other.GetComponent<MolecularDynamics>();
-                    if (otherMD != null && (Charge != 0f || otherMD.Charge != 0f))
+                    float dist = MathF.Sqrt(distSq);
+                    Vector2 dir = delta / dist;
+
+                    if (dist < restDistance)
                     {
-                        float force =
-                            (CoulombConstant * Charge * otherMD.Charge)
-                            / (DielectricConstant * distSq);
-                        totalForce += dir * force;
-                    }
-                }
+                        float overlap = 1f - (dist / restDistance);
+                        float pressureMag = PressureStrength * overlap * 0.1f;
+                        totalForce += dir * pressureMag;
 
-                // Dipole force
-                if (EnableDipole && dist < DipoleCutoffRadius)
-                {
-                    var otherMD = other.GetComponent<MolecularDynamics>();
-                    if (
-                        otherMD != null
-                        && (
-                            DipoleMoment.LengthSquared() > 0f
-                            || otherMD.DipoleMoment.LengthSquared() > 0f
-                        )
-                    )
+                        float verticalAlignment = MathF.Abs(dir.Y);
+                        if (verticalAlignment > 0.95f)
+                        {
+                            float lateralDir =
+                                (MathF.Abs(dir.X) > 0.001f)
+                                    ? MathF.Sign(dir.X)
+                                    : (
+                                        ((entity.GetHashCode() ^ other.GetHashCode()) & 1) == 0
+                                            ? 1f
+                                            : -1f
+                                    );
+                            float lateralStrength = PressureStrength * overlap * 0.015f;
+                            totalForce += new Vector2(lateralDir * lateralStrength, 0f);
+                        }
+                    }
+
+                    if (isFluid)
                     {
-                        Vector2 mu1 = DipoleMoment,
-                            mu2 = otherMD.DipoleMoment;
-                        float distPow5 = distSq * distSq * dist;
-                        float mu1DotR = Vector2.Dot(mu1, dir);
-                        float mu2DotR = Vector2.Dot(mu2, dir);
-                        float radialTerm = 3f * mu1DotR * mu2DotR - Vector2.Dot(mu1, mu2);
-                        totalForce += dir * (radialTerm / distPow5);
+                        float viscosityStrength = 0.3f;
+                        float w = 1f - (dist / h);
+                        Vector2 velocityDiff = other.Velocity - entity.Velocity;
+                        totalForce += velocityDiff * w * viscosityStrength;
                     }
-                }
-
-                // Lennard-Jones force
-                if (EnableLennardJones && dist < LJ_CutoffRadius)
-                {
-                    float ratio = LJ_Sigma / dist;
-                    float ratio6 = ratio * ratio * ratio * ratio * ratio * ratio;
-                    float ratio12 = ratio6 * ratio6;
-                    float force = 24f * LJ_Epsilon * (2f * ratio12 - ratio6) / dist;
-                    totalForce += dir * force;
                 }
             }
 
             return totalForce;
         }
 
-        private Vector2 ComputeAnchorForce(Entity entity, GameTime gameTime)
-        {
-            EnsureAnchorInitialized(entity);
-
-            float mass = (entity.Mass > 0f) ? entity.Mass : 1f;
-
-            float k = MathF.Max(SpringConstant, 1e-4f);
-            float c = 2f * MathF.Sqrt(k * mass) * MathF.Max(DampingRatio, 0f);
-
-            Vector2 targetPosition = _restAnchor;
-            Vector2 targetVelocity = Vector2.Zero;
-
-            if (EnableDrive && DriveAmplitude > 0f && DriveFrequency > 0f)
-            {
-                float omega = 2f * MathF.PI * DriveFrequency;
-                float t = gameTime.TotalTime;
-
-                float offsetX = DriveAmplitude * MathF.Sin(omega * t + _phaseX);
-                float offsetY = DriveAmplitude * MathF.Sin(omega * t + _phaseY);
-                targetPosition += new Vector2(offsetX, offsetY);
-
-                float velX = DriveAmplitude * omega * MathF.Cos(omega * t + _phaseX);
-                float velY = DriveAmplitude * omega * MathF.Cos(omega * t + _phaseY);
-                targetVelocity = new Vector2(velX, velY);
-            }
-
-            Vector2 posError = entity.Position - targetPosition;
-            Vector2 velError = entity.Velocity - targetVelocity;
-
-            Vector2 springForce = -k * posError;
-            Vector2 dampingForce = -c * velError;
-            return springForce + dampingForce;
-        }
-
-        private void UpdateBonds(Entity entity)
-        {
-            if (_allEntities == null || _allEntities.Count == 0)
-                return;
-
-            int availableSlots = int.MaxValue;
-            if (MaxBondsPerEntity > 0)
-            {
-                int current = GetBondCount(entity);
-                if (current >= MaxBondsPerEntity)
-                    return;
-                availableSlots = MaxBondsPerEntity - current;
-            }
-
-            float bondCutoffSq = BondCutoffDistance * BondCutoffDistance;
-
-            for (int i = 0; i < _allEntities.Count && availableSlots > 0; i++)
-            {
-                var other = _allEntities[i];
-                if (other == entity)
-                    continue;
-
-                if (MaxBondsPerEntity > 0 && GetBondCount(other) >= MaxBondsPerEntity)
-                    continue;
-
-                float distSq = (other.Position - entity.Position).LengthSquared();
-                if (distSq >= bondCutoffSq)
-                    continue;
-
-                bool aFirst = entity.GetHashCode() < other.GetHashCode();
-                var bond = aFirst ? (entity, other) : (other, entity);
-
-                if (_globalBonds.TryAdd(bond, 0))
-                {
-                    IncrementBondCount(entity);
-                    IncrementBondCount(other);
-                    availableSlots--;
-                }
-            }
-        }
-
-        private static int GetBondCount(Entity entity)
-        {
-            return _bondCounts.TryGetValue(entity, out var count) ? count : 0;
-        }
-
-        private static void IncrementBondCount(Entity entity)
-        {
-            _bondCounts.AddOrUpdate(entity, 1, (key, oldValue) => oldValue + 1);
-        }
-
-        /// <summary>Check if two entities are bonded together</summary>
-        public static bool IsBonded(Entity a, Entity b)
-        {
-            var bond = a.GetHashCode() < b.GetHashCode() ? (a, b) : (b, a);
-            return _globalBonds.ContainsKey(bond);
-        }
-
-        /// <summary>Calculates total kinetic energy</summary>
         public static float CalculateKineticEnergy(List<Entity> entities)
         {
             float totalKE = 0f;
@@ -560,138 +454,34 @@ namespace Engine13.Utilities.Attributes
             {
                 var entity = entities[i];
                 float mass = entity.Mass > 0f ? entity.Mass : 1f;
-                float velSq = entity.Velocity.LengthSquared();
+
+                var objCollision = entity.GetComponent<ObjectCollision>();
+                float velSq =
+                    objCollision != null
+                        ? objCollision.Velocity.LengthSquared()
+                        : entity.Velocity.LengthSquared();
+
                 totalKE += 0.5f * mass * velSq;
             }
             return totalKE;
         }
 
-        /// <summary>Calculates total potential energy from bonds and LJ interactions</summary>
         public static float CalculatePotentialEnergy(List<Entity> entities)
         {
             float totalPE = 0f;
-            var processedPairs = new HashSet<(Entity, Entity)>();
+            var bounds = WindowBounds.GetNormalizedBounds();
+            float groundLevel = bounds.bottom;
 
             for (int i = 0; i < entities.Count; i++)
             {
                 var entity = entities[i];
-                var comp = entity.GetComponent<MolecularDynamics>();
-                if (comp == null)
-                    continue;
-
-                for (int j = i + 1; j < entities.Count; j++)
-                {
-                    var other = entities[j];
-                    if (!processedPairs.Add((entity, other)))
-                        continue;
-
-                    Vector2 delta = other.Position - entity.Position;
-                    float dist = delta.Length();
-                    if (dist < 1e-8f)
-                        continue;
-
-                    bool bonded = comp.EnableBonds && IsBonded(entity, other);
-
-                    if (bonded && comp.EnableBonds)
-                    {
-                        float displacement = dist - comp.BondEquilibriumLength;
-                        totalPE += 0.5f * comp.BondSpringConstant * displacement * displacement;
-                    }
-                    else if (comp.EnableLennardJones && dist < comp.LJ_CutoffRadius)
-                    {
-                        float sigmaOverR = comp.LJ_Sigma / dist;
-                        float sr6 = sigmaOverR * sigmaOverR * sigmaOverR;
-                        sr6 *= sr6;
-                        float sr12 = sr6 * sr6;
-                        totalPE += 4f * comp.LJ_Epsilon * (sr12 - sr6);
-                    }
-                }
+                float mass = entity.Mass > 0f ? entity.Mass : 1f;
+                var gravity = entity.GetComponent<Gravity>();
+                float g = gravity?.AccelerationY ?? 0f;
+                float height = groundLevel - entity.Position.Y;
+                totalPE += mass * MathF.Abs(g) * height;
             }
-
             return totalPE;
-        }
-
-        /// <summary>Creates a charged particle (ionic)</summary>
-        public static MolecularDynamics CreateIon(List<Entity> allEntities, float charge)
-        {
-            return new MolecularDynamics(allEntities)
-            {
-                EnableAnchorOscillation = false,
-                EnableInteractions = true,
-                EnableBonds = false,
-                EnableLennardJones = true,
-                EnableCoulomb = true,
-                Charge = charge,
-                CoulombConstant = 8.99f,
-                DielectricConstant = 1f,
-                LJ_Epsilon = 0.005f,
-                LJ_Sigma = 0.02f,
-                MaxForceMagnitude = 100f,
-            };
-        }
-
-        /// <summary>Creates a polar molecule (has dipole moment)</summary>
-        public static MolecularDynamics CreatePolarMolecule(
-            List<Entity> allEntities,
-            Vector2 dipoleMoment
-        )
-        {
-            return new MolecularDynamics(allEntities)
-            {
-                EnableAnchorOscillation = false,
-                EnableInteractions = true,
-                EnableBonds = true,
-                EnableLennardJones = true,
-                EnableCoulomb = false,
-                EnableDipole = true,
-                DipoleMoment = dipoleMoment,
-                MaxBondsPerEntity = 4,
-                BondSpringConstant = 30f,
-                MaxForceMagnitude = 50f,
-            };
-        }
-
-        /// <summary>Creates a water-like molecule (polar + hydrogen bonding)</summary>
-        public static MolecularDynamics CreateWaterMolecule(List<Entity> allEntities)
-        {
-            return new MolecularDynamics(allEntities)
-            {
-                EnableAnchorOscillation = false,
-                EnableInteractions = true,
-                EnableBonds = true,
-                EnableLennardJones = true,
-                EnableCoulomb = true,
-                EnableDipole = true,
-                Charge = 0f, // Neutral overall
-                DipoleMoment = new Vector2(0f, 0.01f), // Has dipole moment
-                DielectricConstant = 80f, // Water's high permittivity
-                MaxBondsPerEntity = 4, 
-                BondSpringConstant = 20f, // Weaker than covalent
-                BondEquilibriumLength = 0.028f,
-                MaxForceMagnitude = 75f,
-            };
-        }
-
-        /// <summary>Creates a salt crystal particle (strong ionic bonds)</summary>
-        public static MolecularDynamics CreateSaltCrystal(List<Entity> allEntities, float charge)
-        {
-            return new MolecularDynamics(allEntities)
-            {
-                EnableAnchorOscillation = false,
-                EnableInteractions = true,
-                EnableBonds = true,
-                EnableLennardJones = true,
-                EnableCoulomb = true,
-                Charge = charge, // +1 or -1 typically
-                CoulombConstant = 15.0f, // Stronger for ionic
-                DielectricConstant = 1f,
-                MaxBondsPerEntity = 6,
-                BondSpringConstant = 150f, // Strong ionic bonds
-                BondEquilibriumLength = 0.02f,
-                BondCutoffDistance = 0.025f,
-                MaxForceMagnitude = 500f,
-                VelocityDamping = 2.0f,
-            };
         }
 
         public static float CalculateTotalEnergy(List<Entity> entities)
@@ -699,25 +489,72 @@ namespace Engine13.Utilities.Attributes
             return CalculateKineticEnergy(entities) + CalculatePotentialEnergy(entities);
         }
 
-        public static float CalculateTemperature(List<Entity> entities, float kBoltzmann = 1.0f)
+        public static (float avgSpeed, float maxSpeed, float minSpeed) GetVelocityStats(
+            List<Entity> entities
+        )
         {
             if (entities.Count == 0)
-                return 0f;
+                return (0f, 0f, 0f);
 
-            float ke = CalculateKineticEnergy(entities);
-            int degreesOfFreedom = 2;
-            return (2f * ke) / (entities.Count * kBoltzmann * degreesOfFreedom);
+            float totalSpeed = 0f;
+            float maxSpeed = float.MinValue;
+            float minSpeed = float.MaxValue;
+
+            for (int i = 0; i < entities.Count; i++)
+            {
+                var entity = entities[i];
+                var objCollision = entity.GetComponent<ObjectCollision>();
+                float speed =
+                    objCollision != null
+                        ? objCollision.Velocity.Length()
+                        : entity.Velocity.Length();
+
+                totalSpeed += speed;
+                if (speed > maxSpeed)
+                    maxSpeed = speed;
+                if (speed < minSpeed)
+                    minSpeed = speed;
+            }
+
+            return (totalSpeed / entities.Count, maxSpeed, minSpeed);
         }
 
-        public static int GetBondCount()
+        /// <summary>Gets statistics about particle positions</summary>
+        public static (Vector2 avgPos, float minY, float maxY) GetPositionStats(
+            List<Entity> entities
+        )
         {
-            return _globalBonds.Count;
+            if (entities.Count == 0)
+                return (Vector2.Zero, 0f, 0f);
+
+            Vector2 totalPos = Vector2.Zero;
+            float minY = float.MaxValue;
+            float maxY = float.MinValue;
+
+            for (int i = 0; i < entities.Count; i++)
+            {
+                var pos = entities[i].Position;
+                totalPos += pos;
+                if (pos.Y < minY)
+                    minY = pos.Y;
+                if (pos.Y > maxY)
+                    maxY = pos.Y;
+            }
+
+            return (totalPos / entities.Count, minY, maxY);
         }
 
-        public static void ClearAllBonds()
+        /// <summary>Gets count of grounded particles</summary>
+        public static int GetGroundedCount(List<Entity> entities)
         {
-            _globalBonds.Clear();
-            _bondCounts.Clear();
+            int count = 0;
+            for (int i = 0; i < entities.Count; i++)
+            {
+                var objCollision = entities[i].GetComponent<ObjectCollision>();
+                if (objCollision != null && objCollision.IsGrounded)
+                    count++;
+            }
+            return count;
         }
     }
 
@@ -738,11 +575,20 @@ namespace Engine13.Utilities.Attributes
         private void HandleWallCollision(
             ObjectCollision objectCollision,
             bool isXAxis,
-            float sleepVelocity
+            float sleepVelocity,
+            Entity? entity = null
         )
         {
             if (objectCollision == null)
                 return;
+
+            // Check if this is a solid particle with bonds
+            ParticleDynamics? dynamics = null;
+            if (entity != null)
+            {
+                dynamics = entity.GetComponent<ParticleDynamics>();
+            }
+            bool isSolid = dynamics?.IsSolid ?? false;
 
             if (isXAxis)
             {
@@ -756,6 +602,12 @@ namespace Engine13.Utilities.Attributes
                     velocityX = -velocityX * objectCollision.Restitution;
                 }
                 objectCollision.Velocity = new Vector2(velocityX, objectCollision.Velocity.Y);
+                
+                // For solid particles, propagate velocity change to bonded neighbors
+                if (isSolid && dynamics != null)
+                {
+                    PropagateVelocityToBonds(dynamics, objectCollision.Velocity);
+                }
             }
             else
             {
@@ -769,6 +621,30 @@ namespace Engine13.Utilities.Attributes
                     velocityY = -velocityY * objectCollision.Restitution;
                 }
                 objectCollision.Velocity = new Vector2(objectCollision.Velocity.X, velocityY);
+                
+                // For solid particles, propagate velocity change to bonded neighbors
+                if (isSolid && dynamics != null)
+                {
+                    PropagateVelocityToBonds(dynamics, objectCollision.Velocity);
+                }
+            }
+        }
+        
+        /// <summary>
+        /// When a solid particle hits a wall, share the velocity with bonded neighbors
+        /// so they all bounce together as a unit.
+        /// </summary>
+        private void PropagateVelocityToBonds(ParticleDynamics dynamics, Vector2 newVelocity)
+        {
+            foreach (var bond in dynamics.Bonds)
+            {
+                var other = bond.ParticleB; // Assume ParticleA is the one that hit
+                var otherCollision = other.GetComponent<ObjectCollision>();
+                if (otherCollision != null)
+                {
+                    // Blend toward the collision velocity (don't override completely)
+                    otherCollision.Velocity = Vector2.Lerp(otherCollision.Velocity, newVelocity, 0.5f);
+                }
             }
         }
 
@@ -816,13 +692,13 @@ namespace Engine13.Utilities.Attributes
                 {
                     position.X = left + halfWidth + recovery;
                     if (objectCollision != null)
-                        HandleWallCollision(objectCollision, true, sleepVelocity);
+                        HandleWallCollision(objectCollision, true, sleepVelocity, entity);
                 }
                 else if (position.X > right - halfWidth)
                 {
                     position.X = right - halfWidth - recovery;
                     if (objectCollision != null)
-                        HandleWallCollision(objectCollision, true, sleepVelocity);
+                        HandleWallCollision(objectCollision, true, sleepVelocity, entity);
                 }
 
                 if (position.Y < top + halfHeight)
@@ -830,7 +706,7 @@ namespace Engine13.Utilities.Attributes
                     position.Y = top + halfHeight + recovery;
                     if (objectCollision != null)
                     {
-                        HandleWallCollision(objectCollision, false, sleepVelocity);
+                        HandleWallCollision(objectCollision, false, sleepVelocity, entity);
                         objectCollision.IsGrounded = false;
                     }
                 }
@@ -839,7 +715,7 @@ namespace Engine13.Utilities.Attributes
                     position.Y = bottom - halfHeight - recovery;
                     if (objectCollision != null)
                     {
-                        HandleWallCollision(objectCollision, false, sleepVelocity);
+                        HandleWallCollision(objectCollision, false, sleepVelocity, entity);
                         objectCollision.IsGrounded =
                             MathF.Abs(objectCollision.Velocity.Y) < sleepVelocity;
                     }
@@ -858,6 +734,12 @@ namespace Engine13.Utilities.Attributes
         public Vector2 Velocity { get; set; } = Vector2.Zero;
         public bool IsStatic { get; set; } = false;
         public bool IsGrounded { get; set; } = false;
+
+        /// <summary>
+        /// If true, this entity uses soft inter-particle forces instead of hard collision.
+        /// Fluid particles should set this to true.
+        /// </summary>
+        public bool IsFluid { get; set; } = false;
 
         public void Update(Entity entity, GameTime gameTime)
         {

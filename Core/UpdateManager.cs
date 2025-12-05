@@ -71,7 +71,7 @@ namespace Engine13.Core
 
             if (useParallel)
             {
-                var mdEntities = new List<(Entity entity, MolecularDynamics md)>();
+                var pdEntities = new List<(Entity entity, ParticleDynamics pd)>();
                 var gravityEntities = new List<(Entity entity, Gravity gravity)>();
 
                 // First pass: categorize components
@@ -85,8 +85,8 @@ namespace Engine13.Core
                         var component = components[j];
                         switch (component)
                         {
-                            case MolecularDynamics md:
-                                mdEntities.Add((entity, md));
+                            case ParticleDynamics pd:
+                                pdEntities.Add((entity, pd));
                                 break;
                             case Gravity gravity:
                                 gravityEntities.Add((entity, gravity));
@@ -104,13 +104,13 @@ namespace Engine13.Core
                     }
                 }
 
-                // Parallel force calculation for MolecularDynamics
+                // Parallel force calculation for ParticleDynamics
                 _timer.Restart();
                 Parallel.ForEach(
-                    mdEntities,
+                    pdEntities,
                     pair =>
                     {
-                        pair.md.Update(pair.entity, gameTime);
+                        pair.pd.Update(pair.entity, gameTime);
                     }
                 );
                 _timer.Stop();

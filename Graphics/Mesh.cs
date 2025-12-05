@@ -114,6 +114,15 @@ namespace Engine13.Graphics
                 return _cachedAABB.Value;
             }
 
+            if (CollisionShape == CollisionShapeType.Circle && CollisionRadius > 0f)
+            {
+                Vector2 radiusVec = new Vector2(CollisionRadius, CollisionRadius);
+                var circleAabb = new AABB(Position - radiusVec, Position + radiusVec);
+                _cachedAABB = circleAabb;
+                _cachedAABBPosition = Position;
+                return circleAabb;
+            }
+
             var vertices = RenderMesh.Vertices;
             if (vertices == null || vertices.Length == 0)
             {

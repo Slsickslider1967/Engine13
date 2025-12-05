@@ -14,17 +14,19 @@ namespace Engine13.Core
     public class Game : EngineBase
     {
         private readonly List<Entity> _entities = new();
+        private readonly List<ParticleSystem> _particleSystems = new();
         private readonly UpdateManager _updateManager = new();
         private readonly SpatialGrid _grid = new SpatialGrid(0.005f);
         private readonly List<Vector2[]> _tickPositions = new();
         private int _tickIndex;
         private int _bufferStart;
         private const int BufferedFrames = 250;
-        private const int StepsPerFrame = 8;
+        private const int StepsPerFrame = 1;
         private int _tickCounter = 0;
-        private readonly System.Diagnostics.Stopwatch _tickTimer = new System.Diagnostics.Stopwatch();
+        private readonly System.Diagnostics.Stopwatch _tickTimer =
+            new System.Diagnostics.Stopwatch();
         private double _lastTickTime = 0;
-        public const int ParticleCount = 500;
+        public const int ParticleCount = 1000;
 
         public Game(Sdl2Window window, GraphicsDevice graphicsDevice)
             : base(window, graphicsDevice)
@@ -35,32 +37,31 @@ namespace Engine13.Core
 
         protected override void Initialize()
         {
-            CreateObjects();
+            CreateObjects("Sand", ParticleCount, 0f, 0f, 0f, 0f);
+            CreateObjects("Steel", ParticleCount, 0.5f, -0.1f, 0.2f, 0.1f);
         }
 
         protected override void Update(GameTime gameTime)
         {
-            const float targetFps = 120f; // Higher FPS = smaller time steps
+            const float targetFps = 120f;
             float stepDelta = MathHelpers.ComputeStepDelta(targetFps);
 
             if (_tickPositions.Count == _bufferStart)
             {
-                // Initialize CSV logs
+                // Initialize CSV logs with more useful headers
                 Logger.InitCSV(
                     "Ticks",
                     "TickCount",
                     "TickTime(ms)",
-                    "Average KineticEnergy",
-                    "Average PotentialEnergy",
-                    "Average TotalEnergy",
-                    "TotalEnergy"
+                    "AvgSpeed",
+                    "MaxSpeed",
+                    "AvgPosY",
+                    "MinPosY",
+                    "MaxPosY",
+                    "GroundedCount",
+                    "TotalKE",
+                    "TotalPE"
                 );
-
-                var detailTimer = new System.Diagnostics.Stopwatch();
-                double updateTime = 0,
-                    gridTime = 0,
-                    collisionTime = 0,
-                    energyTime = 0;
 
                 for (int step = _tickPositions.Count; step < BufferedFrames; step++)
                 {
@@ -72,55 +73,41 @@ namespace Engine13.Core
                     for (int i = 0; i < StepsPerFrame; i++)
                     {
                         GameTime.OverrideDeltaTime(stepDelta);
-
-                        detailTimer.Restart();
                         _updateManager.Update(GameTime);
-                        detailTimer.Stop();
-                        updateTime += detailTimer.Elapsed.TotalMilliseconds;
-
-                        detailTimer.Restart();
                         _grid.UpdateAllAabb(_entities);
-                        detailTimer.Stop();
-                        gridTime += detailTimer.Elapsed.TotalMilliseconds;
-
-                        detailTimer.Restart();
                         RunCollisionDetection(stepDelta);
-                        detailTimer.Stop();
-                        collisionTime += detailTimer.Elapsed.TotalMilliseconds;
-
-                        var snapshot = MathHelpers.CapturePositions(_entities);
-                        _tickPositions.Add(snapshot);
+                        _tickPositions.Add(MathHelpers.CapturePositions(_entities));
                     }
-                    // Calculate energies
-                    detailTimer.Restart();
-                    float kineticEnergy = MolecularDynamics.CalculateKineticEnergy(_entities);
-                    float potentialEnergy = MolecularDynamics.CalculatePotentialEnergy(_entities);
-                    detailTimer.Stop();
-                    energyTime += detailTimer.Elapsed.TotalMilliseconds;
 
-                    float totalEnergy = kineticEnergy + potentialEnergy;
-                    // Log tick data to CSV
+                    // Calculate useful statistics
+                    var (avgSpeed, maxSpeed, minSpeed) = ParticleDynamics.GetVelocityStats(_entities);
+                    var (avgPos, minY, maxY) = ParticleDynamics.GetPositionStats(_entities);
+                    int groundedCount = ParticleDynamics.GetGroundedCount(_entities);
+                    float kineticEnergy = ParticleDynamics.CalculateKineticEnergy(_entities);
+                    float potentialEnergy = ParticleDynamics.CalculatePotentialEnergy(_entities);
+
                     Logger.LogCSV(
                         "Ticks",
                         _tickCounter,
                         timeBetweenTicks,
-                        kineticEnergy / ParticleCount,
-                        potentialEnergy / ParticleCount,
-                        totalEnergy / ParticleCount,
-                        totalEnergy
+                        avgSpeed,
+                        maxSpeed,
+                        avgPos.Y,
+                        minY,
+                        maxY,
+                        groundedCount,
+                        kineticEnergy,
+                        potentialEnergy
                     );
                     Logger.Log(
-                        $"Tick: {_tickCounter} | Time: {timeBetweenTicks:F2}ms | AVG KE: {kineticEnergy / ParticleCount:F2} | AVG PE: {potentialEnergy / ParticleCount:F2} | AVG Total: {totalEnergy / ParticleCount:F2} | Total: {totalEnergy:F2}"
+                        $"Tick: {_tickCounter} | Time: {timeBetweenTicks:F2}ms | AvgSpd: {avgSpeed:F4} | MaxSpd: {maxSpeed:F4} | AvgY: {avgPos.Y:F3} | Grounded: {groundedCount}/{_entities.Count}"
                     );
                 }
 
                 Logger.CloseAllCSV();
 
                 if (_tickPositions.Count > 0)
-                {
-                    var initialPositions = _tickPositions[0];
-                    MathHelpers.ApplyPositionsToEntities(_entities, initialPositions);
-                }
+                    MathHelpers.ApplyPositionsToEntities(_entities, _tickPositions[0]);
 
                 _bufferStart = _tickPositions.Count - BufferedFrames;
             }
@@ -131,7 +118,6 @@ namespace Engine13.Core
         protected override void Draw()
         {
             int tickCount = _tickPositions.Count;
-            //bool Run = false;
             if (tickCount == 0)
             {
                 Renderer.BeginFrame(new RgbaFloat(0.1f, 0.1f, 0.1f, 1f));
@@ -140,17 +126,8 @@ namespace Engine13.Core
             }
 
             _tickIndex = MathHelpers.WrapIndex(_tickIndex, tickCount);
-
             Renderer.BeginFrame(new RgbaFloat(0.1f, 0.1f, 0.1f, 1f));
 
-            // while (!Run)
-            // {
-            //     _Input.Update();
-            //     if (_Input.KeysDown(Key.Space))
-            //     {
-            //         Run = true;
-            //     }
-            // }
             var tickPositions = _tickPositions[_tickIndex];
             int count = Math.Min(_entities.Count, tickPositions.Length);
             for (int i = 0; i < count; i++)
@@ -169,32 +146,29 @@ namespace Engine13.Core
             {
                 var collision = entity.GetComponent<ObjectCollision>();
                 if (collision != null)
-                {
                     collision.IsGrounded = false;
-                }
             }
 
-            const int iterations = 4; // Reduced from 20 - most collisions resolve in 2-3 iterations
+            const int iterations = 4;
             for (int iter = 0; iter < iterations; iter++)
             {
                 var collisionPairs = _grid.GetCollisionPairs();
                 if (collisionPairs.Count == 0)
-                {
                     break;
-                }
 
                 bool anyContacts = false;
                 foreach (var pair in collisionPairs)
                 {
-                    // Skip collision for bonded particles - bonds handle their separation
-                    if (MolecularDynamics.IsBonded(pair.EntityA, pair.EntityB))
+                    var objA = pair.EntityA.GetComponent<ObjectCollision>();
+                    var objB = pair.EntityB.GetComponent<ObjectCollision>();
+                    if (objA != null && objB != null && objA.IsFluid && objB.IsFluid)
                         continue;
 
                     if (
                         CollisionInfo.AreColliding(
                             pair.EntityA,
                             pair.EntityB,
-                            out CollisionInfo collisionInfo
+                            out var collisionInfo
                         )
                     )
                     {
@@ -204,225 +178,57 @@ namespace Engine13.Core
                 }
 
                 if (!anyContacts)
-                {
                     break;
-                }
 
-                // Only update grid every other iteration to reduce overhead
                 if (iter < iterations - 1 && iter % 2 == 1)
-                {
                     _grid.UpdateAllAabb(_entities);
-                }
             }
         }
 
-        private void CreateObjects()
+        private void CreateObjects(string MaterialName = "Sand", int ParticleCount = 1000, float TopLeftX = -0.3f, float TopLeftY = -0.4f, float BottomRightX = 0.3f, float BottomRightY = 0.4f)
         {
-            const int columns = 25;
-            var origin = new Vector2(-0.3f, -0.4f);
+            Vector2 TopLeftPos = new Vector2(TopLeftX, TopLeftY);
+            Vector2 BottomRightPos = new Vector2(BottomRightX, BottomRightY);
+            Vector2 AreaSize = BottomRightPos - TopLeftPos;
 
             _entities.EnsureCapacity(_entities.Count + ParticleCount + 1);
-
-            var preset = MDPresetReader.Load("Wood");
-
-            // Log preset configuration
-            Logger.Log($"Loaded MD Preset: {preset.Name}");
-            Logger.Log(
-                $"  Bonds: k={preset.BondSpringConstant:F0}, eq={preset.BondEquilibriumLength:F4}, cutoff={preset.BondCutoffDistance:F4}"
-            );
-            Logger.Log(
-                $"  Forces: maxForce={preset.MaxForceMagnitude:F0}, restitution={preset.Restitution:F2}"
+            var particleSystem = ParticleSystemFactory.Create(
+                $"{MaterialName}Object",
+                MaterialName
             );
 
-            float particleRadius = preset.ParticleRadius;
-
-            float diameter = particleRadius * 2f;
-            float horizontalSpacing = diameter * 1.15f;
-            float verticalSpacing = diameter * 1.15f;
-
-            // Log particle info
-            Logger.Log(
-                $"Creating {ParticleCount} {preset.Name} particles (radius={particleRadius:F4}, mass={preset.Mass:F3})"
+            // Create all particles for this system
+            particleSystem.CreateParticles(
+                GraphicsDevice,
+                ParticleCount,
+                TopLeftPos,
+                25,
+                _entities,
+                _updateManager,
+                _grid
             );
 
-            if (preset.Composition != null && preset.Composition.Count > 0)
-            {
-                int totalRatio = preset.Composition.Sum(c => Math.Max(1, c.Ratio));
-                var compCounts = new List<int>(preset.Composition.Count);
-                int remaining = ParticleCount;
-
-                // Compute per-composition counts (last gets remainder to ensure sum==particleCount)
-                for (int ci = 0; ci < preset.Composition.Count; ci++)
-                {
-                    var c = preset.Composition[ci];
-                    int count =
-                        (ci == preset.Composition.Count - 1)
-                            ? remaining
-                            : (int)Math.Round((double)ParticleCount * c.Ratio / totalRatio);
-                    compCounts.Add(Math.Max(0, count));
-                    remaining -= count;
-                }
-
-                int index = 0;
-                for (int ci = 0; ci < preset.Composition.Count; ci++)
-                {
-                    var comp = preset.Composition[ci];
-                    int compCount = compCounts[ci];
-
-                    for (int k = 0; k < compCount; k++, index++)
-                    {
-                        int i = index;
-                        var particle = CircleFactory.CreateCircle(
-                            GraphicsDevice,
-                            particleRadius,
-                            8,
-                            8
-                        );
-                        int column = i % columns;
-                        int row = i / columns;
-                        particle.Position = new Vector2(
-                            origin.X + column * horizontalSpacing,
-                            origin.Y + row * verticalSpacing
-                        );
-
-                        // Use actual particle radius for collision (not inflated)
-                        particle.CollisionRadius = particleRadius;
-                        particle.Mass = preset.Mass;
-
-                        particle.AddComponent(
-                            new Gravity(preset.GravityStrength, 0f, particle.Mass)
-                        );
-                        particle.AddComponent(
-                            new ObjectCollision
-                            {
-                                Mass = particle.Mass,
-                                Restitution = preset.Restitution,
-                                Friction = preset.Friction,
-                            }
-                        );
-
-                        particle.AddComponent(
-                            preset.EnableEdgeCollision
-                                ? new EdgeCollision(false)
-                                : new EdgeCollision(true)
-                        );
-
-                        MolecularDynamics molecularDynamics;
-                        string mdType = comp.MDType?.ToLowerInvariant() ?? "solid";
-                        switch (mdType)
-                        {
-                            case "ion":
-                                float charge = comp.Charge.HasValue
-                                    ? comp.Charge.Value
-                                    : (preset.Charge ?? 0f);
-                                molecularDynamics = MolecularDynamics.CreateIon(_entities, charge);
-                                break;
-                            case "water":
-                                molecularDynamics = MolecularDynamics.CreateWaterMolecule(
-                                    _entities
-                                );
-                                break;
-                            case "gas":
-                                molecularDynamics = MolecularDynamics.CreateGasParticle(_entities);
-                                break;
-                            case "liquid":
-                                molecularDynamics = MolecularDynamics.CreateLiquidParticle(
-                                    _entities
-                                );
-                                break;
-                            case "solid":
-                            default:
-                                molecularDynamics = MolecularDynamics.CreateSolidParticle(
-                                    _entities
-                                );
-                                break;
-                        }
-
-                        preset.ApplyTo(molecularDynamics);
-                        if (comp.Charge.HasValue)
-                            molecularDynamics.Charge = comp.Charge.Value;
-
-                        // Log first particle MD values for verification
-                        if (i == 0)
-                        {
-                            Logger.Log(
-                                $"  MD Applied: bonds={molecularDynamics.EnableBonds}, LJ={molecularDynamics.EnableLennardJones}, damping={molecularDynamics.VelocityDamping:F2}"
-                            );
-                        }
-
-                        particle.AddComponent(molecularDynamics);
-
-                        _updateManager.Register(particle);
-                        _entities.Add(particle);
-                        _grid.AddEntity(particle);
-                    }
-                }
-            }
-            else
-            {
-                for (int i = 0; i < ParticleCount; i++)
-                {
-                    var particle = CircleFactory.CreateCircle(GraphicsDevice, particleRadius, 8, 8);
-                    int column = i % columns;
-                    int row = i / columns;
-                    particle.Position = new Vector2(
-                        origin.X + column * horizontalSpacing,
-                        origin.Y + row * verticalSpacing
-                    );
-
-                    // Use actual particle radius for collision (not inflated)
-                    particle.CollisionRadius = particleRadius;
-                    particle.Mass = preset.Mass;
-
-                    particle.AddComponent(new Gravity(preset.GravityStrength, 0f, particle.Mass));
-                    particle.AddComponent(
-                        new ObjectCollision
-                        {
-                            Mass = particle.Mass,
-                            Restitution = preset.Restitution,
-                            Friction = 0.1f,
-                        }
-                    );
-
-                    particle.AddComponent(
-                        preset.EnableEdgeCollision
-                            ? new EdgeCollision(false)
-                            : new EdgeCollision(true)
-                    );
-
-                    var molecularDynamics = MolecularDynamics.CreateSolidParticle(_entities);
-                    preset.ApplyTo(molecularDynamics);
-
-                    // Log first particle MD values for verification
-                    if (i == 0)
-                    {
-                        Logger.Log(
-                            $"  MD Applied: bonds={molecularDynamics.EnableBonds}, LJ={molecularDynamics.EnableLennardJones}, damping={molecularDynamics.VelocityDamping:F2}"
-                        );
-                    }
-
-                    particle.AddComponent(molecularDynamics);
-
-                    _updateManager.Register(particle);
-                    _entities.Add(particle);
-                    _grid.AddEntity(particle);
-                }
-            }
+            _particleSystems.Add(particleSystem);
         }
 
+        /// <summary>
+        /// Generates a short hash key for cache identification.
+        /// </summary>
         public static string GenKey(
-            MDPresetReader Preset,
-            int ParticleCount,
+            ParticlePresetReader preset,
+            int particleCount,
             int frameCount,
-            float tickstep
+            float tickStep
         )
         {
-            string fullHash = GenerateHash(Preset, ParticleCount, frameCount, tickstep);
-            return fullHash.Substring(0, 16);
+            return GenerateHash(preset, particleCount, frameCount, tickStep)[..16];
         }
 
+        /// <summary>
+        /// Generates a full MD5 hash based on simulation parameters.
+        /// </summary>
         public static string GenerateHash(
-            MDPresetReader preset,
+            ParticlePresetReader preset,
             int particleCount,
             int frameCount,
             float tickStep
@@ -430,34 +236,24 @@ namespace Engine13.Core
         {
             var sb = new StringBuilder();
 
-            // Add preset identifier
             sb.Append($"preset:{preset.Name ?? "unknown"}_");
             sb.Append($"mass:{preset.Mass:F6}_");
             sb.Append($"radius:{preset.ParticleRadius:F6}_");
             sb.Append($"restitution:{preset.Restitution:F6}_");
             sb.Append($"gravity:{preset.GravityStrength:F6}_");
 
-            // Add composition if available
-            if (preset.Composition != null && preset.Composition.Count > 0)
+            if (preset.Composition is { Count: > 0 })
             {
                 sb.Append("comp:");
                 foreach (var comp in preset.Composition)
-                {
-                    sb.Append($"{comp.MDType ?? "solid"}x{comp.Ratio}_");
-                }
+                    sb.Append($"{comp.ParticleType ?? "standard"}x{comp.Ratio}_");
             }
 
-            // Add simulation parameters
-            sb.Append($"particles:{particleCount}_");
-            sb.Append($"frames:{frameCount}_");
-            sb.Append($"tickstep:{tickStep:F6}");
+            sb.Append($"particles:{particleCount}_frames:{frameCount}_tickstep:{tickStep:F6}");
 
-            // Generate MD5 hash
-            using (var md5 = MD5.Create())
-            {
-                byte[] hashBytes = md5.ComputeHash(Encoding.UTF8.GetBytes(sb.ToString()));
-                return Convert.ToHexString(hashBytes).ToLower();
-            }
+            using var md5 = MD5.Create();
+            byte[] hashBytes = md5.ComputeHash(Encoding.UTF8.GetBytes(sb.ToString()));
+            return Convert.ToHexString(hashBytes).ToLower();
         }
     }
 }

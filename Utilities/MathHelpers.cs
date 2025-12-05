@@ -279,16 +279,16 @@ namespace Engine13.Utilities
 
     public static class PhysicsSolver
     {
-        private const float PenetrationSlop = 0.0015f;
-        private const float PositionalCorrectionPercent = 0.2f;
-        private const float MaxPenetrationCorrection = 0.05f;
-        private const float BaumgarteScalar = 0.25f;
-        private const float RestitutionVelocityThreshold = 0.15f;
-        private const float StaticToDynamicFrictionRatio = 0.8f;
+        private const float PenetrationSlop = 0.0005f;
+        private const float PositionalCorrectionPercent = 0.8f;
+        private const float MaxPenetrationCorrection = 0.1f;
+        private const float BaumgarteScalar = 0.3f;
+        private const float RestitutionVelocityThreshold = 0.1f;
+        private const float StaticToDynamicFrictionRatio = 0.6f;
         private const float GroundNormalThreshold = 0.6f;
-        private const float RestingRelativeVelocityThreshold = 0.4f;
+        private const float RestingRelativeVelocityThreshold = 0.3f;
         private const float MassIgnoreRatio = 1000f;
-        private const float MaxLinearVelocity = 10f;
+        private const float MaxLinearVelocity = 15f;
 
         public static void ResolveCollision(CollisionInfo collision, float deltaTime)
         {

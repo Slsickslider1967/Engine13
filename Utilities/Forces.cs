@@ -40,10 +40,10 @@ namespace Engine13.Utilities
         private static readonly ConcurrentDictionary<Entity, Vec2> _accumulator = new();
 
         /// <summary>Maximum velocity magnitude to prevent simulation instability.</summary>
-        public static float MaxVelocity { get; set; } = 1.5f;
+        public static float MaxVelocity { get; set; } = 2.0f;
 
-        /// <summary>Per-frame velocity damping factor (0.0-1.0).</summary>
-        public static float VelocityDamping { get; set; } = 0.95f;
+        /// <summary>Per-frame velocity damping factor (0.0-1.0). 1.0 = no damping.</summary>
+        public static float VelocityDamping { get; set; } = 0.96f;
 
         /// <summary>Clears all accumulated forces. Call at the start of each physics step.</summary>
         public static void Reset() => _accumulator.Clear();
