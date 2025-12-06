@@ -1,11 +1,9 @@
+using System.Diagnostics;
 using System.Numerics;
-using System.Security.Cryptography;
-using System.Text;
 using Engine13.Graphics;
 using Engine13.Primitives;
 using Engine13.Utilities;
 using Engine13.Utilities.Attributes;
-using Engine13.Utilities.JsonReader;
 using Veldrid;
 using Veldrid.Sdl2;
 
@@ -13,32 +11,30 @@ namespace Engine13.Core
 {
     public class Game : EngineBase
     {
+        private const int Frames = 250;
+        private const int StepsPerFrame = 1;
+
         private readonly List<Entity> _entities = new();
         private readonly List<ParticleSystem> _particleSystems = new();
         private readonly UpdateManager _updateManager = new();
-        private readonly SpatialGrid _grid = new SpatialGrid(0.005f);
+        private readonly SpatialGrid _grid = new(0.05f);
         private readonly List<Vector2[]> _tickPositions = new();
+        private readonly Stopwatch _tickTimer = Stopwatch.StartNew();
+
         private int _tickIndex;
         private int _bufferStart;
-        private const int BufferedFrames = 250;
-        private const int StepsPerFrame = 1;
-        private int _tickCounter = 0;
-        private readonly System.Diagnostics.Stopwatch _tickTimer =
-            new System.Diagnostics.Stopwatch();
-        private double _lastTickTime = 0;
-        public const int ParticleCount = 1000;
+        private int _tickCounter;
+        private double _lastTickTime;
 
         public Game(Sdl2Window window, GraphicsDevice graphicsDevice)
             : base(window, graphicsDevice)
         {
-            _tickTimer.Start();
             WindowBounds.SetWindow(window);
         }
 
         protected override void Initialize()
         {
-            CreateObjects("Sand", ParticleCount, 0f, 0f, 0f, 0f);
-            CreateObjects("Steel", ParticleCount, 0.5f, -0.1f, 0.2f, 0.1f);
+            CreateObjects("Water", 2000, -0.5f, -0.5f);
         }
 
         protected override void Update(GameTime gameTime)
@@ -63,7 +59,7 @@ namespace Engine13.Core
                     "TotalPE"
                 );
 
-                for (int step = _tickPositions.Count; step < BufferedFrames; step++)
+                for (int step = _tickPositions.Count; step < Frames; step++)
                 {
                     double currentTime = _tickTimer.Elapsed.TotalMilliseconds;
                     double timeBetweenTicks = currentTime - _lastTickTime;
@@ -74,6 +70,10 @@ namespace Engine13.Core
                     {
                         GameTime.OverrideDeltaTime(stepDelta);
                         _updateManager.Update(GameTime);
+                        
+                        foreach (var ps in _particleSystems)
+                            ps.StepFluid(stepDelta, _grid);
+                        
                         _grid.UpdateAllAabb(_entities);
                         RunCollisionDetection(stepDelta);
                         _tickPositions.Add(MathHelpers.CapturePositions(_entities));
@@ -109,7 +109,7 @@ namespace Engine13.Core
                 if (_tickPositions.Count > 0)
                     MathHelpers.ApplyPositionsToEntities(_entities, _tickPositions[0]);
 
-                _bufferStart = _tickPositions.Count - BufferedFrames;
+                _bufferStart = _tickPositions.Count - Frames;
             }
 
             GameTime.OverrideDeltaTime(gameTime.DeltaTime);
@@ -185,75 +185,44 @@ namespace Engine13.Core
             }
         }
 
-        private void CreateObjects(string MaterialName = "Sand", int ParticleCount = 1000, float TopLeftX = -0.3f, float TopLeftY = -0.4f, float BottomRightX = 0.3f, float BottomRightY = 0.4f)
+        private void CreateObjects(
+            string materialName = "Sand",
+            int particleCount = 1000,
+            float topLeftX = -0.3f,
+            float topLeftY = -0.4f,
+            float bottomRightX = 0.3f,
+            float bottomRightY = 0.4f)
         {
-            Vector2 TopLeftPos = new Vector2(TopLeftX, TopLeftY);
-            Vector2 BottomRightPos = new Vector2(BottomRightX, BottomRightY);
-            Vector2 AreaSize = BottomRightPos - TopLeftPos;
+            var topLeftPos = new Vector2(topLeftX, topLeftY);
 
-            _entities.EnsureCapacity(_entities.Count + ParticleCount + 1);
             var particleSystem = ParticleSystemFactory.Create(
-                $"{MaterialName}Object",
-                MaterialName
+                $"{materialName}Object",
+                materialName
             );
 
-            // Create all particles for this system
+            float areaSize = (bottomRightX - topLeftX) * (bottomRightY - topLeftY);
+            float radius = particleSystem.Material.ParticleRadius;
+            int totalParticlesPerArea = (int)(areaSize / (MathF.PI * radius * radius));
+
+            _entities.EnsureCapacity(_entities.Count + particleCount + 1);
+
             particleSystem.CreateParticles(
                 GraphicsDevice,
-                ParticleCount,
-                TopLeftPos,
+                particleCount,
+                topLeftPos,
                 25,
                 _entities,
                 _updateManager,
                 _grid
             );
 
-            _particleSystems.Add(particleSystem);
-        }
-
-        /// <summary>
-        /// Generates a short hash key for cache identification.
-        /// </summary>
-        public static string GenKey(
-            ParticlePresetReader preset,
-            int particleCount,
-            int frameCount,
-            float tickStep
-        )
-        {
-            return GenerateHash(preset, particleCount, frameCount, tickStep)[..16];
-        }
-
-        /// <summary>
-        /// Generates a full MD5 hash based on simulation parameters.
-        /// </summary>
-        public static string GenerateHash(
-            ParticlePresetReader preset,
-            int particleCount,
-            int frameCount,
-            float tickStep
-        )
-        {
-            var sb = new StringBuilder();
-
-            sb.Append($"preset:{preset.Name ?? "unknown"}_");
-            sb.Append($"mass:{preset.Mass:F6}_");
-            sb.Append($"radius:{preset.ParticleRadius:F6}_");
-            sb.Append($"restitution:{preset.Restitution:F6}_");
-            sb.Append($"gravity:{preset.GravityStrength:F6}_");
-
-            if (preset.Composition is { Count: > 0 })
+            if (particleSystem.Material.IsFluid)
             {
-                sb.Append("comp:");
-                foreach (var comp in preset.Composition)
-                    sb.Append($"{comp.ParticleType ?? "standard"}x{comp.Ratio}_");
+                particleSystem.InitializeFluid();
+                Logger.Log($"[Fluid] Initialized {particleSystem.Particles.Count} particles");
             }
 
-            sb.Append($"particles:{particleCount}_frames:{frameCount}_tickstep:{tickStep:F6}");
-
-            using var md5 = MD5.Create();
-            byte[] hashBytes = md5.ComputeHash(Encoding.UTF8.GetBytes(sb.ToString()));
-            return Convert.ToHexString(hashBytes).ToLower();
+            _particleSystems.Add(particleSystem);
         }
     }
 }

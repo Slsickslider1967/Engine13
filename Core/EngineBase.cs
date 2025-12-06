@@ -18,6 +18,9 @@ namespace Engine13.Core
         private System.Diagnostics.Stopwatch _frameTimer;
         private ThreadManager _threadManager;
         private bool _disposed;
+        private volatile bool _resizePending;
+        private uint _pendingWidth;
+        private uint _pendingHeight;
 
         protected EngineBase(Sdl2Window window, GraphicsDevice graphicsDevice)
         {
@@ -39,8 +42,27 @@ namespace Engine13.Core
                     GameTime.Update();
                     Update(GameTime);
                 },
-                () => Draw()
+                () => DrawWithResize()
             );
+        }
+
+        private void DrawWithResize()
+        {
+            // Handle resize on the render thread to avoid race conditions
+            if (_resizePending)
+            {
+                _resizePending = false;
+                try
+                {
+                    GraphicsDevice.WaitForIdle();
+                    GraphicsDevice.ResizeMainWindow(_pendingWidth, _pendingHeight);
+                }
+                catch (Exception)
+                {
+                    // Swallow resize errors during transition
+                }
+            }
+            Draw();
         }
 
         public void Run()
@@ -60,12 +82,16 @@ namespace Engine13.Core
                     break;
                 }
 
+                // Queue resize for render thread instead of doing it here
                 if (
-                    Window.Width != GraphicsDevice.MainSwapchain.Framebuffer.Width
-                    || Window.Height != GraphicsDevice.MainSwapchain.Framebuffer.Height
+                    Window.Width > 0 && Window.Height > 0 &&
+                    (Window.Width != GraphicsDevice.MainSwapchain.Framebuffer.Width
+                    || Window.Height != GraphicsDevice.MainSwapchain.Framebuffer.Height)
                 )
                 {
-                    GraphicsDevice.ResizeMainWindow((uint)Window.Width, (uint)Window.Height);
+                    _pendingWidth = (uint)Window.Width;
+                    _pendingHeight = (uint)Window.Height;
+                    _resizePending = true;
                 }
 
                 Thread.Sleep(1);

@@ -39,6 +39,12 @@ namespace Engine13.Utilities.JsonReader
         public float BondStiffness { get; set; } = 50.0f;
         public float BondDamping { get; set; } = 5.0f;
         
+        // SPH-specific parameters for scientific fluid simulation
+        public float SPHRestDensity { get; set; } = 1000f;       // kg/m³ (water = 1000)
+        public float SPHGasConstant { get; set; } = 2000f;       // Pressure stiffness
+        public float SPHViscosity { get; set; } = 0.1f;          // Dynamic viscosity
+        public float SPHSurfaceTension { get; set; } = 0.0728f;  // Surface tension coefficient
+        
         public List<CompositionItem>? Composition { get; set; }
 
         private static Dictionary<string, ParticlePresetReader>? _Presets;

@@ -3,7 +3,7 @@
     "Default": {
       "Name": "Default",
       "Description": "Standard balanced particle for testing",
-      "Mass": 0.005,
+      "Mass": 0.0042,
       "ParticleRadius": 0.01,
       "GravityStrength": 9.81,
       "Restitution": 0.3,
@@ -17,7 +17,7 @@
     "Sand": {
       "Name": "Sand",
       "Description": "Dry sand grains - granular, forms piles, slight spreading",
-      "Mass": 0.0026,
+      "Mass": 0.00084,
       "ParticleRadius": 0.005,
       "GravityStrength": 9.81,
       "Restitution": 0.0,
@@ -31,7 +31,7 @@
     "WetSand": {
       "Name": "WetSand",
       "Description": "Wet sand - heavier, stickier, almost no bounce",
-      "Mass": 0.004,
+      "Mass": 0.00099,
       "ParticleRadius": 0.005,
       "GravityStrength": 9.81,
       "Restitution": 0.02,
@@ -45,7 +45,7 @@
     "Gravel": {
       "Name": "Gravel",
       "Description": "Small stones - heavier than sand, moderate bounce",
-      "Mass": 0.012,
+      "Mass": 0.0188,
       "ParticleRadius": 0.012,
       "GravityStrength": 9.81,
       "Restitution": 0.2,
@@ -59,24 +59,24 @@
     "Steel": {
       "Name": "Steel",
       "Description": "Steel ball bearings - dense, bouncy, low friction",
-      "Mass": 0.032,
+      "Mass": 0.0168,
       "ParticleRadius": 0.008,
       "GravityStrength": 9.81,
       "Restitution": 0.85,
       "Friction": 0.9,
       "EnableEdgeCollision": true,
-      "MaxForceMagnitude": 50.0,
+      "MaxForceMagnitude": 1500.0,
       "VelocityDamping": 0.02,
       "PressureStrength": 5.0,
       "PressureRadius": 0.02,
       "IsSolid": true,
-      "BondStiffness": 50.0,
-      "BondDamping": 8.0
+      "BondStiffness": 500.0,
+      "BondDamping": 15.0
     },
     "Rubber": {
       "Name": "Rubber",
       "Description": "Rubber balls - light, very bouncy, high friction",
-      "Mass": 0.004,
+      "Mass": 0.0046,
       "ParticleRadius": 0.01,
       "GravityStrength": 9.81,
       "Restitution": 0.92,
@@ -88,12 +88,12 @@
       "PressureRadius": 0.025,
       "IsSolid": true,
       "BondStiffness": 20.0,
-      "BondDamping": 5.0
+      "BondDamping": 8.0
     },
     "Wood": {
       "Name": "Wood",
       "Description": "Wooden beads - light, moderate bounce, moderate friction",
-      "Mass": 0.003,
+      "Mass": 0.0025,
       "ParticleRadius": 0.01,
       "GravityStrength": 9.81,
       "Restitution": 0.4,
@@ -104,13 +104,13 @@
       "PressureStrength": 2.5,
       "PressureRadius": 0.025,
       "IsSolid": true,
-      "BondStiffness": 30.0,
-      "BondDamping": 6.0
+      "BondStiffness": 150.0,
+      "BondDamping": 10.0
     },
     "Glass": {
       "Name": "Glass",
       "Description": "Glass marbles - moderately dense, bouncy, very smooth",
-      "Mass": 0.010,
+      "Mass": 0.0054,
       "ParticleRadius": 0.008,
       "GravityStrength": 9.81,
       "Restitution": 0.75,
@@ -121,13 +121,13 @@
       "PressureStrength": 4.0,
       "PressureRadius": 0.02,
       "IsSolid": true,
-      "BondStiffness": 45.0,
-      "BondDamping": 7.0
+      "BondStiffness": 400.0,
+      "BondDamping": 12.0
     },
     "Ice": {
       "Name": "Ice",
       "Description": "Ice cubes - slippery, moderate bounce",
-      "Mass": 0.0037,
+      "Mass": 0.0038,
       "ParticleRadius": 0.01,
       "GravityStrength": 9.81,
       "Restitution": 0.3,
@@ -138,13 +138,13 @@
       "PressureStrength": 3.0,
       "PressureRadius": 0.025,
       "IsSolid": true,
-      "BondStiffness": 35.0,
-      "BondDamping": 6.0
+      "BondStiffness": 300.0,
+      "BondDamping": 8.0
     },
     "Clay": {
       "Name": "Clay",
       "Description": "Wet clay - heavy, no bounce, very sticky",
-      "Mass": 0.008,
+      "Mass": 0.0075,
       "ParticleRadius": 0.01,
       "GravityStrength": 9.81,
       "Restitution": 0.01,
@@ -158,7 +158,7 @@
     "Lead": {
       "Name": "Lead",
       "Description": "Lead pellets - very dense, almost no bounce, soft",
-      "Mass": 0.045,
+      "Mass": 0.0102,
       "ParticleRadius": 0.006,
       "GravityStrength": 9.81,
       "Restitution": 0.05,
@@ -172,7 +172,7 @@
     "Cork": {
       "Name": "Cork",
       "Description": "Cork particles - very light, low bounce, high friction",
-      "Mass": 0.001,
+      "Mass": 0.00087,
       "ParticleRadius": 0.012,
       "GravityStrength": 9.81,
       "Restitution": 0.25,
@@ -186,7 +186,7 @@
     "Plastic": {
       "Name": "Plastic",
       "Description": "Plastic beads - lightweight, moderately bouncy",
-      "Mass": 0.0035,
+      "Mass": 0.0029,
       "ParticleRadius": 0.009,
       "GravityStrength": 9.81,
       "Restitution": 0.55,
@@ -197,13 +197,13 @@
       "PressureStrength": 2.5,
       "PressureRadius": 0.022,
       "IsSolid": true,
-      "BondStiffness": 25.0,
-      "BondDamping": 5.0
+      "BondStiffness": 80.0,
+      "BondDamping": 6.0
     },
     "Snow": {
       "Name": "Snow",
       "Description": "Powder snow - very light, no bounce, compressible",
-      "Mass": 0.0005,
+      "Mass": 0.00009,
       "ParticleRadius": 0.006,
       "GravityStrength": 9.81,
       "Restitution": 0.0,
@@ -217,7 +217,7 @@
     "Mud": {
       "Name": "Mud",
       "Description": "Thick mud - heavy, no bounce, extremely sticky",
-      "Mass": 0.007,
+      "Mass": 0.0036,
       "ParticleRadius": 0.008,
       "GravityStrength": 9.81,
       "Restitution": 0.0,
@@ -230,18 +230,79 @@
     },
     "Water": {
       "Name": "Water",
-      "Description": "Water with inter-particle repulsion and viscosity",
-      "Mass": 0.001,
+      "Description": "Water with SPH-based scientific fluid dynamics",
+      "Mass": 0.01,
       "ParticleRadius": 0.006,
       "GravityStrength": 9.81,
       "Restitution": 0.0,
       "Friction": 0.0,
       "EnableEdgeCollision": true,
       "MaxForceMagnitude": 50.0,
-      "VelocityDamping": 0.02,
-      "PressureStrength": 5.0,
+      "VelocityDamping": 0.05,
+      "PressureStrength": 2.0,
       "PressureRadius": 0.025,
-      "IsFluid": true
+      "IsFluid": true,
+      "SPHRestDensity": 1.0,
+      "SPHGasConstant": 0.5,
+      "SPHViscosity": 0.3,
+      "SPHSurfaceTension": 0.0
+    },
+    "Oil": {
+      "Name": "Oil",
+      "Description": "Viscous oil - higher viscosity than water, lower surface tension",
+      "Mass": 0.0009,
+      "ParticleRadius": 0.006,
+      "GravityStrength": 9.81,
+      "Restitution": 0.0,
+      "Friction": 0.1,
+      "EnableEdgeCollision": true,
+      "MaxForceMagnitude": 40.0,
+      "VelocityDamping": 0.02,
+      "PressureStrength": 0.4,
+      "PressureRadius": 0.015,
+      "IsFluid": true,
+      "SPHRestDensity": 900.0,
+      "SPHGasConstant": 1500.0,
+      "SPHViscosity": 0.8,
+      "SPHSurfaceTension": 0.032
+    },
+    "Honey": {
+      "Name": "Honey",
+      "Description": "Highly viscous honey - very slow flowing",
+      "Mass": 0.0014,
+      "ParticleRadius": 0.007,
+      "GravityStrength": 9.81,
+      "Restitution": 0.0,
+      "Friction": 0.3,
+      "EnableEdgeCollision": true,
+      "MaxForceMagnitude": 30.0,
+      "VelocityDamping": 0.05,
+      "PressureStrength": 0.3,
+      "PressureRadius": 0.018,
+      "IsFluid": true,
+      "SPHRestDensity": 1400.0,
+      "SPHGasConstant": 1000.0,
+      "SPHViscosity": 5.0,
+      "SPHSurfaceTension": 0.05
+    },
+    "Mercury": {
+      "Name": "Mercury",
+      "Description": "Liquid mercury - very dense, high surface tension, low viscosity",
+      "Mass": 0.0135,
+      "ParticleRadius": 0.005,
+      "GravityStrength": 9.81,
+      "Restitution": 0.0,
+      "Friction": 0.0,
+      "EnableEdgeCollision": true,
+      "MaxForceMagnitude": 100.0,
+      "VelocityDamping": 0.01,
+      "PressureStrength": 1.0,
+      "PressureRadius": 0.012,
+      "IsFluid": true,
+      "SPHRestDensity": 13500.0,
+      "SPHGasConstant": 5000.0,
+      "SPHViscosity": 0.0015,
+      "SPHSurfaceTension": 0.485
     }
   }
 }
