@@ -30,6 +30,7 @@ namespace Engine13.Core
             PipeLineManager = new PipeLineManager(GraphicsDevice);
             PipeLineManager.LoadDefaultShaders();
             PipeLineManager.CreatePipeline();
+            PipeLineManager.CreateInstancedPipeline();
             var commandList = GraphicsDevice.ResourceFactory.CreateCommandList();
             Renderer = new Renderer(GraphicsDevice, commandList, PipeLineManager);
             InputManager = new Input.InputManager();

@@ -11,16 +11,18 @@ namespace Engine13.Core
 {
     public class Game : EngineBase
     {
-        private const int Frames = 250;
+        private const int Frames = 2000;
         private const int StepsPerFrame = 1;
-
+        private const float SimulationFps = 60f;
         private readonly List<Entity> _entities = new();
         private readonly List<ParticleSystem> _particleSystems = new();
         private readonly UpdateManager _updateManager = new();
-        private readonly SpatialGrid _grid = new(0.05f);
+        private readonly SpatialGrid _grid = new(0.005f);
         private readonly List<Vector2[]> _tickPositions = new();
         private readonly Stopwatch _tickTimer = Stopwatch.StartNew();
+        private readonly Stopwatch _playbackTimer = new();
 
+        private float _playbackTime;
         private int _tickIndex;
         private int _bufferStart;
         private int _tickCounter;
@@ -35,6 +37,12 @@ namespace Engine13.Core
         protected override void Initialize()
         {
             CreateObjects("Water", 2000, -0.5f, -0.5f);
+            
+            if (_particleSystems.Count > 0)
+            {
+                float radius = _particleSystems[0].Material.ParticleRadius;
+                Renderer.InitializeInstancedRendering(radius, 8);
+            }
         }
 
         protected override void Update(GameTime gameTime)
@@ -125,19 +133,21 @@ namespace Engine13.Core
                 return;
             }
 
-            _tickIndex = MathHelpers.WrapIndex(_tickIndex, tickCount);
-            Renderer.BeginFrame(new RgbaFloat(0.1f, 0.1f, 0.1f, 1f));
+            if (!_playbackTimer.IsRunning)
+                _playbackTimer.Start();
 
+            float elapsedSeconds = (float)_playbackTimer.Elapsed.TotalSeconds;
+            float frameTime = 1f / SimulationFps;
+            float totalSimTime = tickCount * frameTime;
+            
+            _playbackTime = elapsedSeconds % totalSimTime;
+            _tickIndex = (int)(_playbackTime / frameTime);
+            _tickIndex = Math.Clamp(_tickIndex, 0, tickCount - 1);
+
+            Renderer.BeginFrame(new RgbaFloat(0.1f, 0.1f, 0.1f, 1f));
             var tickPositions = _tickPositions[_tickIndex];
-            int count = Math.Min(_entities.Count, tickPositions.Length);
-            for (int i = 0; i < count; i++)
-            {
-                _entities[i].Position = tickPositions[i];
-                Renderer.DrawMesh(_entities[i]);
-            }
+            Renderer.DrawInstanced(_entities, tickPositions);
             Renderer.EndFrame();
-            _tickIndex += 1;
-            _tickIndex = MathHelpers.WrapIndex(_tickIndex, tickCount);
         }
 
         private void RunCollisionDetection(float stepDelta)

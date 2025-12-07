@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Numerics;
 using Engine13.Graphics;
 using Veldrid;
@@ -196,6 +197,88 @@ namespace Engine13.Graphics
                 CL.SetGraphicsResourceSet(2, _DebugColorSet);
 
             CL.DrawIndexed(6, 1, 0, 0, 0);
+        }
+
+        private DeviceBuffer? _InstanceBuffer;
+        private int _InstanceBufferCapacity;
+        private DeviceBuffer? _SharedCircleVertexBuffer;
+        private DeviceBuffer? _SharedCircleIndexBuffer;
+        private int _SharedCircleIndexCount;
+
+        public void InitializeInstancedRendering(float circleRadius, int segments)
+        {
+            var vertices = new VertexPosition[segments + 1];
+            vertices[0] = new VertexPosition(0, 0);
+            for (int i = 0; i < segments; i++)
+            {
+                float angle = 2f * MathF.PI * i / segments;
+                vertices[i + 1] = new VertexPosition(
+                    MathF.Cos(angle) * circleRadius,
+                    MathF.Sin(angle) * circleRadius
+                );
+            }
+
+            var indices = new ushort[segments * 3];
+            for (int i = 0; i < segments; i++)
+            {
+                indices[i * 3] = 0;
+                indices[i * 3 + 1] = (ushort)(i + 1);
+                indices[i * 3 + 2] = (ushort)((i + 1) % segments + 1);
+            }
+
+            _SharedCircleVertexBuffer = GD.ResourceFactory.CreateBuffer(
+                new BufferDescription((uint)(vertices.Length * VertexPosition.SizeInBytes), BufferUsage.VertexBuffer)
+            );
+            GD.UpdateBuffer(_SharedCircleVertexBuffer, 0, vertices);
+
+            _SharedCircleIndexBuffer = GD.ResourceFactory.CreateBuffer(
+                new BufferDescription((uint)(indices.Length * sizeof(ushort)), BufferUsage.IndexBuffer)
+            );
+            GD.UpdateBuffer(_SharedCircleIndexBuffer, 0, indices);
+
+            _SharedCircleIndexCount = indices.Length;
+        }
+
+        public void DrawInstanced(List<Entity> entities, Vector2[] positions)
+        {
+            var instancedPipeline = _Pipeline.GetInstancedPipeline();
+            if (instancedPipeline == null || _SharedCircleVertexBuffer == null) return;
+            if (entities.Count == 0 || positions.Length == 0) return;
+
+            int count = Math.Min(entities.Count, positions.Length);
+            int requiredSize = count * 24;
+
+            if (_InstanceBuffer == null || _InstanceBufferCapacity < count)
+            {
+                _InstanceBuffer?.Dispose();
+                _InstanceBuffer = GD.ResourceFactory.CreateBuffer(
+                    new BufferDescription((uint)requiredSize, BufferUsage.VertexBuffer)
+                );
+                _InstanceBufferCapacity = count;
+            }
+
+            var instanceData = new float[count * 6];
+            for (int i = 0; i < count; i++)
+            {
+                int offset = i * 6;
+                instanceData[offset] = positions[i].X;
+                instanceData[offset + 1] = positions[i].Y;
+                instanceData[offset + 2] = entities[i].Color.X;
+                instanceData[offset + 3] = entities[i].Color.Y;
+                instanceData[offset + 4] = entities[i].Color.Z;
+                instanceData[offset + 5] = entities[i].Color.W;
+            }
+            GD.UpdateBuffer(_InstanceBuffer, 0, instanceData);
+
+            CL.SetPipeline(instancedPipeline);
+            CL.SetVertexBuffer(0, _SharedCircleVertexBuffer);
+            CL.SetVertexBuffer(1, _InstanceBuffer);
+            CL.SetIndexBuffer(_SharedCircleIndexBuffer!, IndexFormat.UInt16);
+
+            if (_ProjectionSet != null)
+                CL.SetGraphicsResourceSet(0, _ProjectionSet);
+
+            CL.DrawIndexed((uint)_SharedCircleIndexCount, (uint)count, 0, 0, 0);
         }
     }
 }

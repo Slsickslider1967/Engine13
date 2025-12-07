@@ -9,6 +9,7 @@ namespace Engine13.Graphics
         private GraphicsPipelineDescription PipelineDescription = new GraphicsPipelineDescription();
         private Shader[] _Shaders = Array.Empty<Shader>();
         private Pipeline _Pipeline = null!;
+        private Pipeline? _InstancedPipeline;
         private CommandList CL = null!;
         private ResourceFactory factory;
         public ResourceLayout? PositionLayout { get; private set; }
@@ -129,6 +130,52 @@ namespace Engine13.Graphics
         public Pipeline GetPipeline()
         {
             return _Pipeline;
+        }
+
+        public Pipeline? GetInstancedPipeline()
+        {
+            return _InstancedPipeline;
+        }
+
+        public void CreateInstancedPipeline()
+        {
+            string shaderDir = System.IO.Path.Combine(AppContext.BaseDirectory, "Shaders");
+            string vertPath = System.IO.Path.Combine(shaderDir, "instanced.vert");
+            string fragPath = System.IO.Path.Combine(shaderDir, "instanced.frag");
+
+            if (!System.IO.File.Exists(vertPath) || !System.IO.File.Exists(fragPath))
+                return;
+
+            string vertexCode = System.IO.File.ReadAllText(vertPath);
+            string fragmentCode = System.IO.File.ReadAllText(fragPath);
+
+            var instancedShaders = factory.CreateFromSpirv(
+                new ShaderDescription(ShaderStages.Vertex, System.Text.Encoding.UTF8.GetBytes(vertexCode), "main"),
+                new ShaderDescription(ShaderStages.Fragment, System.Text.Encoding.UTF8.GetBytes(fragmentCode), "main")
+            );
+
+            var vertexLayout = new VertexLayoutDescription(
+                new VertexElementDescription("Position", VertexElementSemantic.Position, VertexElementFormat.Float2)
+            );
+
+            var instanceLayout = new VertexLayoutDescription(
+                new VertexElementDescription("InstancePos", VertexElementSemantic.TextureCoordinate, VertexElementFormat.Float2),
+                new VertexElementDescription("InstanceColor", VertexElementSemantic.Color, VertexElementFormat.Float4)
+            );
+            instanceLayout.InstanceStepRate = 1;
+
+            var instancedPipelineDesc = new GraphicsPipelineDescription
+            {
+                BlendState = BlendStateDescription.SingleAlphaBlend,
+                DepthStencilState = new DepthStencilStateDescription(false, false, ComparisonKind.Always),
+                RasterizerState = new RasterizerStateDescription(FaceCullMode.Back, PolygonFillMode.Solid, FrontFace.Clockwise, true, false),
+                PrimitiveTopology = PrimitiveTopology.TriangleList,
+                ShaderSet = new ShaderSetDescription(new[] { vertexLayout, instanceLayout }, instancedShaders),
+                ResourceLayouts = new[] { ProjectionLayout! },
+                Outputs = GD.SwapchainFramebuffer.OutputDescription
+            };
+
+            _InstancedPipeline = factory.CreateGraphicsPipeline(instancedPipelineDesc);
         }
 
         public void AddShader(Shader shader)

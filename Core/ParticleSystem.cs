@@ -28,7 +28,8 @@ namespace Engine13.Core
         float _stiffness;
         float _viscosity;
         float _particleRadius;
-        float _maxVelocity = 5f;
+        float _maxVelocity = 2f;
+        float _damping = 0.95f;
         Vector2 _gravity;
         public Vector2 CenterOfMass
         {
@@ -382,6 +383,7 @@ namespace Engine13.Core
             _viscosity = Material.SPHViscosity;
             _particleRadius = Material.ParticleRadius;
             _gravity = new Vector2(0f, Material.GravityStrength);
+            _damping = 1f - Material.VelocityDamping;  // Convert 0.1 damping to 0.9 multiplier
             
             _fluidParticles.Clear();
             _fluidMap.Clear();
@@ -471,6 +473,7 @@ namespace Engine13.Core
                 }
 
                 c.Velocity += separation;
+                c.Velocity *= _damping;
 
                 float speed = c.Velocity.Length();
                 if (speed > _maxVelocity)
