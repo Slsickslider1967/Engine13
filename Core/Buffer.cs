@@ -1,4 +1,1 @@
-namespace Engine13.Core
-{
-    public class Buffer { }
-}
+// This file is no longer needed - empty class removed

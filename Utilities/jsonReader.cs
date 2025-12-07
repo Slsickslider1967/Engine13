@@ -32,7 +32,7 @@ namespace Engine13.Utilities.JsonReader
         public float MaxForceMagnitude { get; set; } = 50f;
         public float VelocityDamping { get; set; } = 0.03f;
         public float PressureStrength { get; set; } = 2.5f;
-        public float PressureRadius { get; set; } = 0.02f;
+        public float PressureRadius { get; set; } = ParticleDynamics.DefaultPressureRadius;
         
         public bool IsFluid { get; set; } = false;
         public bool IsSolid { get; set; } = false;

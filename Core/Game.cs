@@ -11,9 +11,9 @@ namespace Engine13.Core
 {
     public class Game : EngineBase
     {
-        private const int Frames = 2000;
-        private const int StepsPerFrame = 1;
-        private const float SimulationFps = 60f;
+        private const int MaxFrames = 500;
+        private const float SimulationDeltaTime = 1f / 60f;  // Physics step size (fixed for stability)
+        private const float PlaybackFps = 30f;               // Playback speed (independent of simulation)
         private readonly List<Entity> _entities = new();
         private readonly List<ParticleSystem> _particleSystems = new();
         private readonly UpdateManager _updateManager = new();
@@ -22,10 +22,9 @@ namespace Engine13.Core
         private readonly Stopwatch _tickTimer = Stopwatch.StartNew();
         private readonly Stopwatch _playbackTimer = new();
 
-        private float _playbackTime;
         private int _tickIndex;
-        private int _bufferStart;
         private int _tickCounter;
+        private bool _simulationComplete;
         private double _lastTickTime;
 
         public Game(Sdl2Window window, GraphicsDevice graphicsDevice)
@@ -36,7 +35,7 @@ namespace Engine13.Core
 
         protected override void Initialize()
         {
-            CreateObjects("Water", 2000, -0.5f, -0.5f);
+            CreateObjects("Water", 1000, 0f, -1f);
             
             if (_particleSystems.Count > 0)
             {
@@ -47,12 +46,8 @@ namespace Engine13.Core
 
         protected override void Update(GameTime gameTime)
         {
-            const float targetFps = 120f;
-            float stepDelta = MathHelpers.ComputeStepDelta(targetFps);
-
-            if (_tickPositions.Count == _bufferStart)
+            if (!_simulationComplete && _tickPositions.Count == 0)
             {
-                // Initialize CSV logs with more useful headers
                 Logger.InitCSV(
                     "Ticks",
                     "TickCount",
@@ -67,28 +62,28 @@ namespace Engine13.Core
                     "TotalPE"
                 );
 
-                for (int step = _tickPositions.Count; step < Frames; step++)
+                // Pre-compute all frames using fixed timestep (not tied to framerate)
+                for (int frame = 0; frame < MaxFrames; frame++)
                 {
-                    double currentTime = _tickTimer.Elapsed.TotalMilliseconds;
-                    double timeBetweenTicks = currentTime - _lastTickTime;
-                    _lastTickTime = currentTime;
+                    double tickStart = _tickTimer.Elapsed.TotalMilliseconds;
                     _tickCounter++;
 
-                    for (int i = 0; i < StepsPerFrame; i++)
-                    {
-                        GameTime.OverrideDeltaTime(stepDelta);
-                        _updateManager.Update(GameTime);
-                        
-                        foreach (var ps in _particleSystems)
-                            ps.StepFluid(stepDelta, _grid);
-                        
-                        _grid.UpdateAllAabb(_entities);
-                        RunCollisionDetection(stepDelta);
-                        _tickPositions.Add(MathHelpers.CapturePositions(_entities));
-                    }
+                    // Always use fixed delta time for physics stability
+                    GameTime.OverrideDeltaTime(SimulationDeltaTime);
+                    _updateManager.Update(GameTime);
 
-                    // Calculate useful statistics
-                    var (avgSpeed, maxSpeed, minSpeed) = ParticleDynamics.GetVelocityStats(_entities);
+                    foreach (var ps in _particleSystems)
+                        ps.StepFluid(SimulationDeltaTime, _grid);
+
+                    _grid.UpdateAllAabb(_entities);
+                    RunCollisionDetection(SimulationDeltaTime);
+                    _tickPositions.Add(MathHelpers.CapturePositions(_entities));
+
+                    double tickTime = _tickTimer.Elapsed.TotalMilliseconds - tickStart;
+                    _lastTickTime = tickTime;
+
+                    // Log statistics
+                    var (avgSpeed, maxSpeed, _) = ParticleDynamics.GetVelocityStats(_entities);
                     var (avgPos, minY, maxY) = ParticleDynamics.GetPositionStats(_entities);
                     int groundedCount = ParticleDynamics.GetGroundedCount(_entities);
                     float kineticEnergy = ParticleDynamics.CalculateKineticEnergy(_entities);
@@ -97,7 +92,7 @@ namespace Engine13.Core
                     Logger.LogCSV(
                         "Ticks",
                         _tickCounter,
-                        timeBetweenTicks,
+                        tickTime,
                         avgSpeed,
                         maxSpeed,
                         avgPos.Y,
@@ -107,17 +102,16 @@ namespace Engine13.Core
                         kineticEnergy,
                         potentialEnergy
                     );
+
                     Logger.Log(
-                        $"Tick: {_tickCounter} | Time: {timeBetweenTicks:F2}ms | AvgSpd: {avgSpeed:F4} | MaxSpd: {maxSpeed:F4} | AvgY: {avgPos.Y:F3} | Grounded: {groundedCount}/{_entities.Count}"
+                        $"Tick: {_tickCounter} | Time: {tickTime:F2}ms | AvgSpd: {avgSpeed:F4} | MaxSpd: {maxSpeed:F4} | AvgY: {avgPos.Y:F3}"
                     );
                 }
 
                 Logger.CloseAllCSV();
-
-                if (_tickPositions.Count > 0)
-                    MathHelpers.ApplyPositionsToEntities(_entities, _tickPositions[0]);
-
-                _bufferStart = _tickPositions.Count - Frames;
+                Logger.Log($"Simulation complete: {_tickPositions.Count} frames recorded");
+                _simulationComplete = true;
+                _playbackTimer.Start();
             }
 
             GameTime.OverrideDeltaTime(gameTime.DeltaTime);
@@ -125,26 +119,23 @@ namespace Engine13.Core
 
         protected override void Draw()
         {
+            Renderer.BeginFrame(new RgbaFloat(0.1f, 0.1f, 0.1f, 1f));
+
             int tickCount = _tickPositions.Count;
             if (tickCount == 0)
             {
-                Renderer.BeginFrame(new RgbaFloat(0.1f, 0.1f, 0.1f, 1f));
                 Renderer.EndFrame();
                 return;
             }
 
-            if (!_playbackTimer.IsRunning)
-                _playbackTimer.Start();
-
+            // Playback loop - uses PlaybackFps (independent of simulation step size)
             float elapsedSeconds = (float)_playbackTimer.Elapsed.TotalSeconds;
-            float frameTime = 1f / SimulationFps;
+            float frameTime = 1f / PlaybackFps;
             float totalSimTime = tickCount * frameTime;
-            
-            _playbackTime = elapsedSeconds % totalSimTime;
-            _tickIndex = (int)(_playbackTime / frameTime);
+            float playbackTime = elapsedSeconds % totalSimTime;
+            _tickIndex = (int)(playbackTime / frameTime);
             _tickIndex = Math.Clamp(_tickIndex, 0, tickCount - 1);
 
-            Renderer.BeginFrame(new RgbaFloat(0.1f, 0.1f, 0.1f, 1f));
             var tickPositions = _tickPositions[_tickIndex];
             Renderer.DrawInstanced(_entities, tickPositions);
             Renderer.EndFrame();

@@ -238,13 +238,13 @@
       "Friction": 0.0,
       "EnableEdgeCollision": true,
       "MaxForceMagnitude": 50.0,
-      "VelocityDamping": 0.02,
+      "VelocityDamping": 0.08,
       "PressureStrength": 2.0,
       "PressureRadius": 0.025,
       "IsFluid": true,
       "SPHRestDensity": 1.0,
-      "SPHGasConstant": 0.3,
-      "SPHViscosity": 0.1,
+      "SPHGasConstant": 0.2,
+      "SPHViscosity": 0.3,
       "SPHSurfaceTension": 0.0
     },
     "Oil": {

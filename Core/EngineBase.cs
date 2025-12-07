@@ -75,7 +75,6 @@ namespace Engine13.Core
 
             while (Window.Exists && _threadManager.IsRunning)
             {
-                InputManager.Update(Window);
                 Window.PumpEvents();
 
                 if (!Window.Exists)

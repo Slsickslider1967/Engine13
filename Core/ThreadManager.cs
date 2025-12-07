@@ -13,7 +13,6 @@ namespace Engine13.Core
         private const double TargetFrameTime = 1.0 / TargetFps;
 
         private Thread _updateThread;
-        private Thread _bufferThread;
         private Thread _renderThread;
         private volatile bool _isRunning;
         private readonly object _stateLock = new object();
@@ -39,7 +38,6 @@ namespace Engine13.Core
 
             _updateThread = new Thread(UpdateLoop) { Name = "Update Thread", IsBackground = true };
             _renderThread = new Thread(RenderLoop) { Name = "Render Thread", IsBackground = true };
-            _bufferThread = new Thread(BufferLoop) { Name = "Buffer Thread", IsBackground = true };
         }
 
         public void Start()
@@ -144,14 +142,6 @@ namespace Engine13.Core
 
                 Thread.Sleep(1); // Small yield to prevent busy waiting
             }
-        }
-
-        private void BufferLoop() { }
-
-        ///Using a seperate thread to log to console as it has a massive over head.
-        private void LoggerLoop()
-        {
-            while (_isRunning) { }
         }
 
         protected virtual void Dispose(bool disposing)

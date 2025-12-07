@@ -156,20 +156,12 @@ namespace Engine13.Utilities
             float radiusB =
                 b.CollisionRadius > 0f ? b.CollisionRadius : MathF.Max(b.Size.X, b.Size.Y) * 0.5f;
 
-            if (radiusA <= 0f || radiusB <= 0f)
-                return false;
-
-            Vector2 delta = b.Position - a.Position;
-            float distanceSq = delta.LengthSquared();
-            float radiusSum = radiusA + radiusB;
-            float radiusSumSq = radiusSum * radiusSum;
-
-            return distanceSq < radiusSumSq;
+            return AreCirclesOverlapping(a.Position, radiusA, b.Position, radiusB);
         }
 
         /// <summary>
-        /// Even more basic circle overlap - just takes positions and radii directly
-        /// Fastest possible circle collision check
+        /// Basic circle overlap check using positions and radii directly.
+        /// Fastest possible circle collision check.
         /// </summary>
         public static bool AreCirclesOverlapping(
             Vector2 posA,

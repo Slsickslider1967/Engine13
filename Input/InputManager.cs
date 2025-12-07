@@ -57,7 +57,5 @@ namespace Engine13.Input
                 _window.WindowState = WindowState.BorderlessFullScreen;
             }
         }
-
-        public void Update(Sdl2Window window) { }
     }
 }

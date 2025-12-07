@@ -107,8 +107,8 @@ namespace Engine13.Graphics
         public void LoadDefaultShaders()
         {
             string shaderDir = System.IO.Path.Combine(AppContext.BaseDirectory, "Shaders");
-            string vertPath = System.IO.Path.Combine(shaderDir, "basic.vert");
-            string fragPath = System.IO.Path.Combine(shaderDir, "basic.frag");
+            string vertPath = System.IO.Path.Combine(shaderDir, "mesh.vert");
+            string fragPath = System.IO.Path.Combine(shaderDir, "mesh.frag");
 
             string vertexCode = System.IO.File.ReadAllText(vertPath);
             string fragmentCode = System.IO.File.ReadAllText(fragPath);
@@ -140,8 +140,8 @@ namespace Engine13.Graphics
         public void CreateInstancedPipeline()
         {
             string shaderDir = System.IO.Path.Combine(AppContext.BaseDirectory, "Shaders");
-            string vertPath = System.IO.Path.Combine(shaderDir, "instanced.vert");
-            string fragPath = System.IO.Path.Combine(shaderDir, "instanced.frag");
+            string vertPath = System.IO.Path.Combine(shaderDir, "particle.vert");
+            string fragPath = System.IO.Path.Combine(shaderDir, "particle.frag");
 
             if (!System.IO.File.Exists(vertPath) || !System.IO.File.Exists(fragPath))
                 return;

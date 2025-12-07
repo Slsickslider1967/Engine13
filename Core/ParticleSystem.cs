@@ -31,56 +31,6 @@ namespace Engine13.Core
         float _maxVelocity = 2f;
         float _damping = 0.95f;
         Vector2 _gravity;
-        public Vector2 CenterOfMass
-        {
-            get
-            {
-                if (Particles.Count == 0)
-                    return Vector2.Zero;
-
-                float totalMass = 0f;
-                Vector2 weightedSum = Vector2.Zero;
-
-                foreach (var particle in Particles)
-                {
-                    weightedSum += particle.Position * particle.Mass;
-                    totalMass += particle.Mass;
-                }
-
-                return totalMass > 0 ? weightedSum / totalMass : Vector2.Zero;
-            }
-        }
-
-        /// <summary>Total mass of all particles in this system</summary>
-        public float TotalMass
-        {
-            get
-            {
-                float total = 0f;
-                foreach (var particle in Particles)
-                {
-                    total += particle.Mass;
-                }
-                return total;
-            }
-        }
-
-        /// <summary>Average velocity of all particles</summary>
-        public Vector2 AverageVelocity
-        {
-            get
-            {
-                if (Particles.Count == 0)
-                    return Vector2.Zero;
-
-                Vector2 sum = Vector2.Zero;
-                foreach (var particle in Particles)
-                {
-                    sum += particle.Velocity;
-                }
-                return sum / Particles.Count;
-            }
-        }
 
         public ParticleSystem(string name, ParticlePresetReader material)
         {
@@ -320,13 +270,34 @@ namespace Engine13.Core
             );
 
             // Create particle dynamics based on type
-            ParticleDynamics particleDynamics = particleType switch
+            var particleDynamics = new ParticleDynamics(allEntities);
+            switch (particleType)
             {
-                "heavy" => ParticleDynamics.CreateHeavyParticle(allEntities),
-                "light" => ParticleDynamics.CreateLightParticle(allEntities),
-                "fluid" => ParticleDynamics.CreateFluidParticle(allEntities),
-                _ => ParticleDynamics.CreateParticle(allEntities),
-            };
+                case "heavy":
+                    particleDynamics.MaxForceMagnitude = 100f;
+                    particleDynamics.VelocityDamping = 0.01f;
+                    particleDynamics.PressureStrength = 4f;
+                    particleDynamics.PressureRadius = ParticleDynamics.DefaultPressureRadius;
+                    break;
+                case "light":
+                    particleDynamics.MaxForceMagnitude = 25f;
+                    particleDynamics.VelocityDamping = 0.05f;
+                    particleDynamics.PressureStrength = 2f;
+                    particleDynamics.PressureRadius = ParticleDynamics.DefaultPressureRadius;
+                    break;
+                case "fluid":
+                    particleDynamics.MaxForceMagnitude = 15f;
+                    particleDynamics.VelocityDamping = 0.08f;
+                    particleDynamics.PressureStrength = 1.5f;
+                    particleDynamics.PressureRadius = ParticleDynamics.DefaultPressureRadius;
+                    break;
+                default:
+                    particleDynamics.MaxForceMagnitude = 50f;
+                    particleDynamics.VelocityDamping = 0.02f;
+                    particleDynamics.PressureStrength = 2.5f;
+                    particleDynamics.PressureRadius = ParticleDynamics.DefaultPressureRadius;
+                    break;
+            }
 
             Material.ApplyTo(particleDynamics);
             particle.AddComponent(particleDynamics);
@@ -345,33 +316,6 @@ namespace Engine13.Core
             allEntities.Add(particle);
             updateManager.Register(particle);
             grid.AddEntity(particle);
-        }
-
-        /// <summary>
-        /// Get kinetic energy of this particle system
-        /// </summary>
-        public float GetKineticEnergy()
-        {
-            float energy = 0f;
-            foreach (var particle in Particles)
-            {
-                float speed = particle.Velocity.Length();
-                energy += 0.5f * particle.Mass * speed * speed;
-            }
-            return energy;
-        }
-
-        /// <summary>
-        /// Get potential energy of this particle system (gravitational)
-        /// </summary>
-        public float GetPotentialEnergy()
-        {
-            float energy = 0f;
-            foreach (var particle in Particles)
-            {
-                energy += particle.Mass * Material.GravityStrength * (particle.Position.Y + 1f);
-            }
-            return energy;
         }
 
         public void InitializeFluid()
