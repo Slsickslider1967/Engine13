@@ -99,10 +99,7 @@ namespace Engine13.Core
                 );
             }
 
-            if (Material.IsSolid)
-            {
-                CreateParticleBonds(horizontalSpacing, verticalSpacing);
-            }
+            // TODO: Implement solid dynamics system
 
             Logger.Log(
                 $"[{Name}] Created {Particles.Count} particles with material '{Material.Name}'"
@@ -110,30 +107,9 @@ namespace Engine13.Core
             Logger.Log(
                 $"  Material: restitution={Material.Restitution:F2}, friction={Material.Friction:F2}, mass={Material.Mass:F4}"
             );
-            if (Material.IsSolid)
-            {
-                int totalBonds =
-                    Particles.Sum(p => p.GetComponent<ParticleDynamics>()?.Bonds.Count ?? 0) / 2;
-                Logger.Log($"  Solid bonds created: {totalBonds}");
-            }
         }
 
-        private void CreateParticleBonds(float horizontalSpacing, float verticalSpacing)
-        {
-            float bondRadius =
-                MathF.Sqrt(
-                    horizontalSpacing * horizontalSpacing + verticalSpacing * verticalSpacing
-                ) * 1.1f;
 
-            foreach (var particle in Particles)
-            {
-                var dynamics = particle.GetComponent<ParticleDynamics>();
-                if (dynamics != null && dynamics.IsSolid)
-                {
-                    dynamics.CreateBondsWithNeighbors(particle, Particles, bondRadius);
-                }
-            }
-        }
 
         private void CreateUniformParticles(
             GraphicsDevice graphicsDevice,
@@ -327,7 +303,7 @@ namespace Engine13.Core
             _viscosity = Material.SPHViscosity;
             _particleRadius = Material.ParticleRadius;
             _gravity = new Vector2(0f, Material.GravityStrength);
-            _damping = 1f - Material.VelocityDamping;  // Convert 0.1 damping to 0.9 multiplier
+            _damping = 1f - (Material.VelocityDamping * 0.25f);  // Reduce damping effect (0.08 -> 0.02 -> 0.98 multiplier)
             
             _fluidParticles.Clear();
             _fluidMap.Clear();
@@ -370,10 +346,12 @@ namespace Engine13.Core
                 var c = p.Entity.GetComponent<ObjectCollision>();
                 if (c == null || c.IsStatic) continue;
 
+                // Apply gravity as acceleration
                 c.Velocity += _gravity * dt;
 
-                Vector2 separation = Vector2.Zero;
-                Vector2 alignment = Vector2.Zero;
+                // Compute pressure/separation forces
+                Vector2 pressureForce = Vector2.Zero;
+                Vector2 viscosityForce = Vector2.Zero;
                 int count = 0;
 
                 foreach (var n in p.Neighbors)
@@ -394,35 +372,45 @@ namespace Engine13.Core
                     if (dist < minDist)
                     {
                         float t = 1f - (dist / minDist);
-                        separation += dir * t * _stiffness * 0.1f;
+                        pressureForce += dir * t * _stiffness * 0.1f;
                     }
                     else if (dist < h)
                     {
                         float t = 1f - ((dist - minDist) / (h - minDist));
-                        separation += dir * t * t * _stiffness * 0.01f;
+                        pressureForce += dir * t * t * _stiffness * 0.01f;
                     }
 
+                    // Viscosity: average weighted by kernel
                     var nc = n.Entity.GetComponent<ObjectCollision>();
                     if (nc != null)
                     {
-                        alignment += nc.Velocity;
+                        float kernel = 1f - (dist / h);
+                        viscosityForce += (nc.Velocity - c.Velocity) * kernel;
                         count++;
                     }
                 }
 
+                // Apply pressure forces as acceleration (F = ma, so a = F/m)
+                float mass = p.Entity.Mass > 0f ? p.Entity.Mass : 1f;
+                c.Velocity += (pressureForce / mass) * dt;
+
+                // Apply viscosity (weighted average with current velocity)
                 if (count > 0)
                 {
-                    alignment /= count;
-                    c.Velocity += (alignment - c.Velocity) * _viscosity;
+                    viscosityForce /= count;
+                    // Reduce viscosity scaling for more responsive movement
+                    c.Velocity += viscosityForce * _viscosity * 0.05f * dt;
                 }
 
-                c.Velocity += separation;
+                // Apply damping
                 c.Velocity *= _damping;
 
+                // Clamp to max velocity
                 float speed = c.Velocity.Length();
                 if (speed > _maxVelocity)
                     c.Velocity *= _maxVelocity / speed;
 
+                // Integrate position (since UseSPHIntegration=true skips ObjectCollision.Update)
                 p.Entity.Position += c.Velocity * dt;
             }
         }

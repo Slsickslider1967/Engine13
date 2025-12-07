@@ -35,9 +35,6 @@ namespace Engine13.Utilities.JsonReader
         public float PressureRadius { get; set; } = ParticleDynamics.DefaultPressureRadius;
         
         public bool IsFluid { get; set; } = false;
-        public bool IsSolid { get; set; } = false;
-        public float BondStiffness { get; set; } = 50.0f;
-        public float BondDamping { get; set; } = 5.0f;
         
         // SPH-specific parameters for scientific fluid simulation
         public float SPHRestDensity { get; set; } = 1000f;       // kg/m³ (water = 1000)
@@ -55,12 +52,16 @@ namespace Engine13.Utilities.JsonReader
             {
                 string baseDir = AppDomain.CurrentDomain.BaseDirectory;
                 string projectRoot = Path.GetFullPath(
-                    Path.Combine(baseDir, "..", "..", "..", "..", "..")
+                    Path.Combine(baseDir, "..", "..", "..", "..")
                 );
                 string jsonPath = Path.Combine(projectRoot, "Utilities", "ParticlePresets.json");
 
+                Console.WriteLine($"[jsonReader] Looking for JSON at: {jsonPath}");
+                Console.WriteLine($"[jsonReader] File.Exists = {File.Exists(jsonPath)}");
+
                 if (!File.Exists(jsonPath))
                 {
+                    Console.WriteLine($"[jsonReader] File not found! Returning default preset.");
                     // Return default preset if file doesn't exist
                     return new ParticlePresetReader { Name = presetName };
                 }
@@ -68,10 +69,16 @@ namespace Engine13.Utilities.JsonReader
                 string json = File.ReadAllText(jsonPath);
                 var root = JsonSerializer.Deserialize<PresetCollection>(json);
                 _Presets = root?.Presets ?? new Dictionary<string, ParticlePresetReader>();
+                Console.WriteLine($"[jsonReader] Loaded {_Presets.Count} presets from JSON");
             }
 
             if (_Presets.TryGetValue(presetName, out var preset))
             {
+                // Debug output
+                if (preset != null)
+                {
+                    Console.WriteLine($"[jsonReader] Loaded '{presetName}': IsFluid={preset.IsFluid}");
+                }
                 return preset;
             }
 
@@ -85,9 +92,6 @@ namespace Engine13.Utilities.JsonReader
             pd.VelocityDamping = VelocityDamping;
             pd.PressureStrength = PressureStrength;
             pd.PressureRadius = PressureRadius;
-            pd.IsSolid = IsSolid;
-            pd.BondStiffness = BondStiffness;
-            pd.BondDamping = BondDamping;
         }
 
         private class PresetCollection

@@ -59,19 +59,16 @@
     "Steel": {
       "Name": "Steel",
       "Description": "Steel ball bearings - dense, bouncy, low friction",
-      "Mass": 0.0168,
+      "Mass": 0.01,
       "ParticleRadius": 0.008,
       "GravityStrength": 9.81,
-      "Restitution": 0.85,
-      "Friction": 0.9,
+      "Restitution": 0.3,
+      "Friction": 0.4,
       "EnableEdgeCollision": true,
-      "MaxForceMagnitude": 1500.0,
+      "MaxForceMagnitude": 50.0,
       "VelocityDamping": 0.02,
-      "PressureStrength": 5.0,
-      "PressureRadius": 0.02,
-      "IsSolid": true,
-      "BondStiffness": 500.0,
-      "BondDamping": 15.0
+      "PressureStrength": 3.0,
+      "PressureRadius": 0.02
     },
     "Rubber": {
       "Name": "Rubber",
@@ -244,7 +241,7 @@
       "IsFluid": true,
       "SPHRestDensity": 1.0,
       "SPHGasConstant": 0.2,
-      "SPHViscosity": 0.3,
+      "SPHViscosity": 0.05,
       "SPHSurfaceTension": 0.0
     },
     "Oil": {

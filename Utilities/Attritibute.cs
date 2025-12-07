@@ -47,8 +47,13 @@ public sealed class Gravity : IEntityComponent
 
     public void Update(Entity entity, GameTime gameTime)
     {
-        if (entity.GetComponent<ParticleDynamics>() != null)
+        var particleDynamics = entity.GetComponent<ParticleDynamics>();
+        if (particleDynamics != null)
         {
+            // If using SPH solver, skip - gravity handled in StepFluid()
+            if (particleDynamics.UseSPHSolver)
+                return;
+                
             double effectiveMass = entity.Mass > 0f ? entity.Mass : 1.0;
             Forces.AddForce(
                 entity,
@@ -117,16 +122,9 @@ public sealed class Gravity : IEntityComponent
     }
 }
 
-public struct ParticleBond(Entity a, Entity b)
-{
-    public Entity ParticleA = a;
-    public Entity ParticleB = b;
-    public float RestLength = Vector2.Distance(a.Position, b.Position);
-}
-
 public sealed class ParticleDynamics : IEntityComponent
 {
-    public const float DefaultPressureRadius = 0.5f;
+    public const float DefaultPressureRadius = 0.025f;
     
     readonly List<Entity>? _allEntities;
 
@@ -134,34 +132,11 @@ public sealed class ParticleDynamics : IEntityComponent
     public float VelocityDamping { get; set; } = 0.05f;
     public float PressureStrength { get; set; } = 2f;
     public float PressureRadius { get; set; } = DefaultPressureRadius;
-    public bool IsSolid { get; set; }
-    public float BondStiffness { get; set; } = 50f;
-    public float BondDamping { get; set; } = 5f;
     public bool UseSPHSolver { get; set; }
-    public List<ParticleBond> Bonds { get; } = [];
 
     public ParticleDynamics() { }
 
     public ParticleDynamics(List<Entity> allEntities) => _allEntities = allEntities;
-
-    public void CreateBondsWithNeighbors(Entity self, List<Entity> allParticles, float bondRadius)
-    {
-        if (!IsSolid)
-            return;
-        Bonds.Clear();
-
-        foreach (var other in allParticles)
-        {
-            if (other == self)
-                continue;
-            var otherDynamics = other.GetComponent<ParticleDynamics>();
-            if (otherDynamics is not { IsSolid: true })
-                continue;
-
-            if (Vector2.Distance(self.Position, other.Position) <= bondRadius)
-                Bonds.Add(new ParticleBond(self, other));
-        }
-    }
 
     public void Update(Entity entity, GameTime gameTime)
     {
@@ -170,10 +145,11 @@ public sealed class ParticleDynamics : IEntityComponent
 
         Vector2 totalForce = Vector2.Zero;
 
-        if (IsSolid && Bonds.Count > 0)
-            totalForce += ComputeBondForces(entity);
-        else if (_allEntities != null)
+        // Granular materials: use inter-particle pressure
+        if (_allEntities != null)
+        {
             totalForce += ComputeInterParticleForces(entity);
+        }
 
         if (VelocityDamping > 0f)
         {
@@ -194,60 +170,7 @@ public sealed class ParticleDynamics : IEntityComponent
         Forces.AddForce(entity, new Vec2(totalForce.X, totalForce.Y));
     }
 
-    Vector2 ComputeBondForces(Entity entity)
-    {
-        if (Bonds.Count == 0)
-            return Vector2.Zero;
 
-        Vector2 totalBondForce = Vector2.Zero;
-        Vector2 totalPosCorrection = Vector2.Zero;
-        Vector2 avgVelocity = entity.Velocity;
-        int velocityCount = 1;
-
-        foreach (var bond in Bonds)
-        {
-            Entity other = bond.ParticleA == entity ? bond.ParticleB : bond.ParticleA;
-            avgVelocity += other.Velocity;
-            velocityCount++;
-        }
-        avgVelocity /= velocityCount;
-
-        var oc = entity.GetComponent<ObjectCollision>();
-        if (oc != null)
-            oc.Velocity = Vector2.Lerp(oc.Velocity, avgVelocity, 0.3f);
-
-        foreach (var bond in Bonds)
-        {
-            Entity other = bond.ParticleA == entity ? bond.ParticleB : bond.ParticleA;
-            Vector2 delta = other.Position - entity.Position;
-            float currentLength = delta.Length();
-
-            if (currentLength < 1e-8f)
-            {
-                delta = new Vector2(0.001f, 0f);
-                currentLength = 0.001f;
-            }
-
-            Vector2 direction = delta / currentLength;
-            float error = currentLength - bond.RestLength;
-
-            float springForce = BondStiffness * error;
-            totalBondForce += direction * springForce;
-
-            Vector2 relVel = other.Velocity - entity.Velocity;
-            float dampingForce = BondDamping * Vector2.Dot(relVel, direction);
-            totalBondForce += direction * dampingForce;
-
-            float correctionStrength = MathF.Min(BondStiffness / 200f, 0.8f);
-            float posCorrection = error * correctionStrength * 0.5f;
-            totalPosCorrection += direction * posCorrection;
-        }
-
-        if (totalPosCorrection.LengthSquared() > 1e-12f)
-            entity.Position += totalPosCorrection;
-
-        return totalBondForce;
-    }
 
     Vector2 ComputeInterParticleForces(Entity entity)
     {
@@ -296,10 +219,14 @@ public sealed class ParticleDynamics : IEntityComponent
 
             if (isFluid)
             {
-                float viscosityStrength = 0.15f;
-                float w = 1f - dist / h;
-                Vector2 velocityDiff = other.Velocity - entity.Velocity;
-                totalForce += velocityDiff * w * viscosityStrength;
+                var otherOc = other.GetComponent<ObjectCollision>();
+                if (otherOc != null && oc != null)
+                {
+                    float viscosityStrength = 0.15f;
+                    float w = 1f - dist / h;
+                    Vector2 velocityDiff = otherOc.Velocity - oc.Velocity;
+                    totalForce += velocityDiff * w * viscosityStrength;
+                }
             }
         }
 
@@ -419,36 +346,17 @@ public sealed class EdgeCollision : IEntityComponent
         if (oc == null)
             return;
 
-        var dynamics = entity?.GetComponent<ParticleDynamics>();
-        bool isSolid = dynamics?.IsSolid ?? false;
-
         if (isXAxis)
         {
             float vX = oc.Velocity.X;
             vX = MathF.Abs(vX) < sleepVelocity ? 0f : -vX * oc.Restitution;
             oc.Velocity = new Vector2(vX, oc.Velocity.Y);
-
-            if (isSolid && dynamics != null)
-                PropagateVelocityToBonds(dynamics, oc.Velocity);
         }
         else
         {
             float vY = oc.Velocity.Y;
             vY = MathF.Abs(vY) < sleepVelocity ? 0f : -vY * oc.Restitution;
             oc.Velocity = new Vector2(oc.Velocity.X, vY);
-
-            if (isSolid && dynamics != null)
-                PropagateVelocityToBonds(dynamics, oc.Velocity);
-        }
-    }
-
-    static void PropagateVelocityToBonds(ParticleDynamics dynamics, Vector2 newVelocity)
-    {
-        foreach (var bond in dynamics.Bonds)
-        {
-            var otherCollision = bond.ParticleB.GetComponent<ObjectCollision>();
-            if (otherCollision != null)
-                otherCollision.Velocity = Vector2.Lerp(otherCollision.Velocity, newVelocity, 0.5f);
         }
     }
 

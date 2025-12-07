@@ -13,7 +13,7 @@ namespace Engine13.Core
     {
         private const int MaxFrames = 500;
         private const float SimulationDeltaTime = 1f / 60f;  // Physics step size (fixed for stability)
-        private const float PlaybackFps = 30f;               // Playback speed (independent of simulation)
+        private const float PlaybackFps = 60f;               // Playback speed (independent of simulation)
         private readonly List<Entity> _entities = new();
         private readonly List<ParticleSystem> _particleSystems = new();
         private readonly UpdateManager _updateManager = new();
@@ -35,7 +35,7 @@ namespace Engine13.Core
 
         protected override void Initialize()
         {
-            CreateObjects("Water", 1000, 0f, -1f);
+            CreateObjects("Steel", 1000, 0f, -1f);
             
             if (_particleSystems.Count > 0)
             {
