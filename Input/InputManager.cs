@@ -65,13 +65,13 @@ namespace Engine13.Input
             _window = null;
         }
 
-        public void Update()
-        {
-            _keysPressedThisFrame.Clear();
+        public void Update()        {
+             _keysPressedThisFrame.Clear();
             _keysReleasedThisFrame.Clear();
             _mouseButtonsPressedThisFrame.Clear();
-            _mouseButtonsReleasedThisFrame.Clear();
-        }
+            _mouseButtonsReleasedThisFrame.Clear();       }
+
+
 
         private void OnKeyDown(KeyEvent Event)
         {
@@ -103,9 +103,7 @@ namespace Engine13.Input
         {
             if (_mouseButtonsDown.Remove(e.MouseButton))
                 _mouseButtonsReleasedThisFrame.Add(e.MouseButton);
-        }
-
-        public void ToggleFullscreen()
+        }        public void ToggleFullscreen()
         {
             if (_window == null)
                 return;
@@ -119,5 +117,6 @@ namespace Engine13.Input
                 _window.WindowState = WindowState.BorderlessFullScreen;
             }
         }
-    }
+
+       }
 }
