@@ -19,19 +19,19 @@ namespace Engine13.UI
             Size = size;
         }
 
-        public virtual void Update(InputManager input)
-        {
-            
-        }
-
-        public abstract PFN_vkVoidFunction Draw(Renderer renderer);
+        public virtual void Update(InputManager input) { }
+        public abstract void Draw(Renderer renderer);
 
         public bool HitTest(Vector2 windowMousePosition)
         {
-            if (!Visible) return false;
+            if (!Visible)
+                return false;
             float x = windowMousePosition.X;
             float y = windowMousePosition.Y;
-            return x >= Position.X && x <= Position.X + Size.X && y >= Position.Y && y <= Position.Y + Size.Y;
+            return x >= Position.X
+                && x <= Position.X + Size.X
+                && y >= Position.Y
+                && y <= Position.Y + Size.Y;
         }
 
         protected void DrawRectOutline(Renderer renderer, Vector4 color, float thickness = 2f)
@@ -50,7 +50,7 @@ namespace Engine13.UI
             renderer.DrawVelocityVector(bl, tl - bl, 1f, color, thickness * 0.0005f);
         }
 
-                protected Vector2 ScreenToWorld(Vector2 screen)
+        protected Vector2 ScreenToWorld(Vector2 screen)
         {
             // Convert from 0..width and 0..height to -1..1-ish world coords
             // Read framebuffer size from Renderer/GD would be better; for now assume 800x600 fallback.

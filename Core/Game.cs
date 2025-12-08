@@ -1,21 +1,21 @@
 using System.Diagnostics;
 using System.Numerics;
 using Engine13.Graphics;
+using Engine13.Input;
 using Engine13.Primitives;
+using Engine13.UI;
 using Engine13.Utilities;
 using Engine13.Utilities.Attributes;
-using Engine13.UI;
 using Veldrid;
 using Veldrid.Sdl2;
-using Engine13.Input;
 
 namespace Engine13.Core
 {
     public class Game : EngineBase
     {
         private const int MaxFrames = 500;
-        private const float SimulationDeltaTime = 1f / 60f;  // Physics step size (fixed for stability)
-        private const float PlaybackFps = 60f;               // Playback speed (independent of simulation)
+        private const float SimulationDeltaTime = 1f / 60f; // Physics step size (fixed for stability)
+        private const float PlaybackFps = 60f; // Playback speed (independent of simulation)
         private readonly List<Entity> _entities = new();
         private readonly List<ParticleSystem> _particleSystems = new();
         private readonly UpdateManager _updateManager = new();
@@ -47,7 +47,7 @@ namespace Engine13.Core
         protected override void Initialize()
         {
             CreateObjects("Water", 1000, 0f, -1f);
-            
+
             if (_particleSystems.Count > 0)
             {
                 float radius = _particleSystems[0].Material.ParticleRadius;
@@ -64,11 +64,11 @@ namespace Engine13.Core
 
             if (_uiManager.ShouldReset)
             {
-                ResetSimulation();
+                //ResetSimulation();
                 return;
             }
 
-            if (!_simulationComplete && _tickPositions.Count == 0)
+            if (!_simulationComplete && _tickPositions.Count == 0 && _uiManager.HasStarted)
             {
                 Logger.InitCSV(
                     "Ticks",
@@ -161,6 +161,7 @@ namespace Engine13.Core
 
             var tickPositions = _tickPositions[_tickIndex];
             Renderer.DrawInstanced(_entities, tickPositions);
+            _uiManager.Draw(Renderer);
             Renderer.EndFrame();
         }
 
@@ -215,7 +216,8 @@ namespace Engine13.Core
             float topLeftX = -0.3f,
             float topLeftY = -0.4f,
             float bottomRightX = 0.3f,
-            float bottomRightY = 0.4f)
+            float bottomRightY = 0.4f
+        )
         {
             var topLeftPos = new Vector2(topLeftX, topLeftY);
 
