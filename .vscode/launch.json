@@ -6,7 +6,7 @@
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "dotnet: build",
-            "program": "${workspaceFolder}/Engine-13/bin/Debug/net9.0/Engine-13.dll",
+            "program": "${workspaceFolder}/Engine-13/bin/Debug/net10.0/Engine-13.dll",
             "args": [],
             "cwd": "${workspaceFolder}/Engine-13",
             "console": "integratedTerminal",

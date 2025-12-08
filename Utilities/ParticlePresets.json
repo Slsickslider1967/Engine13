@@ -67,7 +67,7 @@
       "EnableEdgeCollision": true,
       "MaxForceMagnitude": 50.0,
       "VelocityDamping": 0.02,
-      "PressureStrength": 3.0,
+      "PressureStrength": 0.0,
       "PressureRadius": 0.02
     },
     "Rubber": {
@@ -234,15 +234,15 @@
       "Restitution": 0.0,
       "Friction": 0.0,
       "EnableEdgeCollision": true,
-      "MaxForceMagnitude": 50.0,
-      "VelocityDamping": 0.08,
-      "PressureStrength": 2.0,
+      "MaxForceMagnitude": 100.0,
+      "VelocityDamping": 0.05,
+      "PressureStrength": 0.0,
       "PressureRadius": 0.025,
       "IsFluid": true,
-      "SPHRestDensity": 1.0,
-      "SPHGasConstant": 0.2,
-      "SPHViscosity": 0.05,
-      "SPHSurfaceTension": 0.0
+      "SPHRestDensity": 1000.0,
+      "SPHGasConstant": 2000.0,
+      "SPHViscosity": 0.5,
+      "SPHSurfaceTension": 0.0728
     },
     "Oil": {
       "Name": "Oil",

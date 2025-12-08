@@ -4,8 +4,10 @@ using Engine13.Graphics;
 using Engine13.Primitives;
 using Engine13.Utilities;
 using Engine13.Utilities.Attributes;
+using Engine13.UI;
 using Veldrid;
 using Veldrid.Sdl2;
+using Engine13.Input;
 
 namespace Engine13.Core
 {
@@ -27,25 +29,45 @@ namespace Engine13.Core
         private bool _simulationComplete;
         private double _lastTickTime;
 
+        private float _lastAvgSpeed;
+        private float _lastMaxSpeed;
+        private Vector2 _lastAvgPos;
+        private int _lastGroundedCount;
+
+        private readonly UIManager _uiManager = new();
+        private InputManager _inputManager;
+
         public Game(Sdl2Window window, GraphicsDevice graphicsDevice)
             : base(window, graphicsDevice)
         {
             WindowBounds.SetWindow(window);
+            _inputManager = new InputManager(window);
         }
 
         protected override void Initialize()
         {
-            CreateObjects("Steel", 1000, 0f, -1f);
+            CreateObjects("Water", 1000, 0f, -1f);
             
             if (_particleSystems.Count > 0)
             {
                 float radius = _particleSystems[0].Material.ParticleRadius;
                 Renderer.InitializeInstancedRendering(radius, 8);
             }
+
+            _uiManager.Initialize(GraphicsDevice);
         }
 
         protected override void Update(GameTime gameTime)
         {
+            _inputManager.Update();
+            _uiManager.Update(_inputManager);
+
+            if (_uiManager.ShouldReset)
+            {
+                ResetSimulation();
+                return;
+            }
+
             if (!_simulationComplete && _tickPositions.Count == 0)
             {
                 Logger.InitCSV(
@@ -82,12 +104,15 @@ namespace Engine13.Core
                     double tickTime = _tickTimer.Elapsed.TotalMilliseconds - tickStart;
                     _lastTickTime = tickTime;
 
-                    // Log statistics
                     var (avgSpeed, maxSpeed, _) = ParticleDynamics.GetVelocityStats(_entities);
                     var (avgPos, minY, maxY) = ParticleDynamics.GetPositionStats(_entities);
                     int groundedCount = ParticleDynamics.GetGroundedCount(_entities);
-                    float kineticEnergy = ParticleDynamics.CalculateKineticEnergy(_entities);
-                    float potentialEnergy = ParticleDynamics.CalculatePotentialEnergy(_entities);
+
+                    // Log statistics
+                    _lastAvgSpeed = avgSpeed;
+                    _lastMaxSpeed = maxSpeed;
+                    _lastAvgPos = avgPos;
+                    _lastGroundedCount = groundedCount;
 
                     Logger.LogCSV(
                         "Ticks",
@@ -98,9 +123,7 @@ namespace Engine13.Core
                         avgPos.Y,
                         minY,
                         maxY,
-                        groundedCount,
-                        kineticEnergy,
-                        potentialEnergy
+                        groundedCount
                     );
 
                     Logger.Log(
