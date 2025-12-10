@@ -14,6 +14,8 @@ namespace Engine13.Core
         protected GameTime GameTime { get; }
         protected PipeLineManager PipeLineManager { get; }
         protected Renderer Renderer { get; }
+    // Shared CommandList used by Renderer and subsystems (ImGui)
+    protected CommandList CommandList { get; private set; }
         protected Input.InputManager InputManager { get; }
         private System.Diagnostics.Stopwatch _frameTimer;
         private ThreadManager _threadManager;
@@ -31,8 +33,9 @@ namespace Engine13.Core
             PipeLineManager.LoadDefaultShaders();
             PipeLineManager.CreatePipeline();
             PipeLineManager.CreateInstancedPipeline();
-            var commandList = GraphicsDevice.ResourceFactory.CreateCommandList();
-            Renderer = new Renderer(GraphicsDevice, commandList, PipeLineManager);
+            // Create a single shared CommandList for the renderer and other systems (ImGui)
+            CommandList = GraphicsDevice.ResourceFactory.CreateCommandList();
+            Renderer = new Renderer(GraphicsDevice, CommandList, PipeLineManager);
             InputManager = new Input.InputManager();
             InputManager.Attach(Window);
             _frameTimer = new System.Diagnostics.Stopwatch();

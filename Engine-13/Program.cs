@@ -18,6 +18,7 @@ class Program
         };
 
         Sdl2Window window = VeldridStartup.CreateWindow(windowCreateInfo);
+    Console.WriteLine($"[Startup] Created window: Title='{window.Title}', Size={window.Width}x{window.Height}, IsVisible={window.Exists}");
         GraphicsBackend backend = GraphicsBackend.Vulkan;
         GraphicsDeviceOptions gdOptions = new GraphicsDeviceOptions
         {
@@ -27,6 +28,8 @@ class Program
         };
 
         GraphicsDevice gd = VeldridStartup.CreateGraphicsDevice(window, gdOptions, backend);
+    var fb = gd.MainSwapchain.Framebuffer;
+    Console.WriteLine($"[Startup] GraphicsDevice created. Backend={gd.BackendType}, Framebuffer={fb.Width}x{fb.Height}");
         Game game = new Game(window, gd);
         game.Run();
     }

@@ -199,6 +199,7 @@ namespace Engine13.UI
             };
 
             _pipeline = _factory.CreateGraphicsPipeline(pd);
+            Console.WriteLine("[ImGui] CreateDeviceResources: Graphics pipeline created");
 
             // font
             var io = ImGui.GetIO();
@@ -236,6 +237,7 @@ namespace Engine13.UI
             var fontTexId = (IntPtr)_fontTextureView.GetHashCode();
             io.Fonts.SetTexID(fontTexId);
             io.Fonts.ClearTexData();
+            Console.WriteLine($"[ImGui] CreateDeviceResources: Font texture uploaded (width={width} height={height}) TexId={fontTexId}");
 
             _fontSampler = _factory.CreateSampler(
                 new SamplerDescription(
@@ -255,6 +257,7 @@ namespace Engine13.UI
             _fontSet = _factory.CreateResourceSet(
                 new ResourceSetDescription(_layout, _projBuffer, _fontTextureView, _fontSampler)
             );
+            Console.WriteLine("[ImGui] CreateDeviceResources: Font resource set created");
         }
 
         public void LoadDefaultShaders()
@@ -278,6 +281,7 @@ namespace Engine13.UI
                     "main"
                 )
             );
+            Console.WriteLine($"[ImGui] LoadDefaultShaders: Loaded shaders from '{vertPath}' and '{fragPath}' ({_shaders?.Length ?? 0} modules)");
         }
 
         private void RenderDrawData(ImDrawDataPtr drawData)
@@ -338,11 +342,16 @@ namespace Engine13.UI
             // Update projection matrix
             var width = Math.Max(1, _gd.MainSwapchain.Framebuffer.Width);
             var height = Math.Max(1, _gd.MainSwapchain.Framebuffer.Height);
-            var proj = Matrix4x4.CreateOrthographicOffCenter(0, width, height, 0, -1f, 1f);
+            // Use a top-down projection (bottom=0, top=height) so ImGui's Y-down coords map correctly
+            var proj = Matrix4x4.CreateOrthographicOffCenter(0, width, 0, height, -1f, 1f);
             _gd.UpdateBuffer(_projBuffer, 0, ref proj);
 
-            _cl.Begin();
-            _cl.SetFramebuffer(_gd.SwapchainFramebuffer);
+            // Record draw commands into the shared command list provided by the engine's renderer.
+            // The renderer is responsible for Begin/SetFramebuffer/Clear and Submit.
+            if (_printDrawData)
+            {
+                Console.WriteLine("[ImGui] Recording draw commands into shared CommandList");
+            }
             _cl.SetPipeline(_pipeline);
             _cl.SetVertexBuffer(0, _vertexBuffer);
             _cl.SetIndexBuffer(_indexBuffer, IndexFormat.UInt16);
@@ -366,6 +375,13 @@ namespace Engine13.UI
                     uint h = (uint)Math.Max((int)Math.Ceiling(clip.W - clip.Y), 0);
                     _cl.SetScissorRect(0, x, y, w, h);
 
+                    if (_printDrawData)
+                    {
+                        // pcmd.TextureId is an IntPtr; lib maps it to our texture view hash earlier
+                        var texId = pcmd.TextureId;
+                        Console.WriteLine($"[ImGui] DrawCmd: CmdList={n} CmdIdx={cmdi} TexId={texId} ElemCount={pcmd.ElemCount} IdxOffset={pcmd.IdxOffset + idxBase} VtxOffset={pcmd.VtxOffset + vtxBase} Scissor=({x},{y},{w},{h})");
+                    }
+
                     _cl.DrawIndexed(
                         (uint)pcmd.ElemCount,
                         1,
@@ -378,8 +394,10 @@ namespace Engine13.UI
                 idxBase += (uint)cmdList.IdxBuffer.Size;
             }
 
-            _cl.End();
-            _gd.SubmitCommands(_cl);
+            if (_printDrawData)
+            {
+                Console.WriteLine("[ImGui] Finished recording draw commands into shared CommandList");
+            }
         }
 
         private void SetKeyMappings(ImGuiIOPtr io)
