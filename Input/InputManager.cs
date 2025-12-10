@@ -7,6 +7,9 @@ namespace Engine13.Input
 {
     public class InputManager
     {
+    // Exposed for UI integration
+    public float MouseWheelDelta { get; private set; }
+
         public HashSet<Key> KeysDown { get; } = new HashSet<Key>();
         public Vector2 MousePosition { get; private set; } = Vector2.Zero;
 
@@ -50,6 +53,7 @@ namespace Engine13.Input
             window.MouseMove += OnMouseMove;
             window.MouseDown += OnMouseDown;
             window.MouseUp += OnMouseUp;
+            window.MouseWheel += OnMouseWheel;
         }
 
         private void Detach()
@@ -61,15 +65,21 @@ namespace Engine13.Input
             _window.MouseMove -= OnMouseMove;
             _window.MouseDown -= OnMouseDown;
             _window.MouseUp -= OnMouseUp;
+            _window.MouseWheel -= OnMouseWheel;
             _attached = false;
             _window = null;
         }
 
-        public void Update()        {
-             _keysPressedThisFrame.Clear();
+        public void Update()
+        {
+            _keysPressedThisFrame.Clear();
             _keysReleasedThisFrame.Clear();
             _mouseButtonsPressedThisFrame.Clear();
-            _mouseButtonsReleasedThisFrame.Clear();       }
+            _mouseButtonsReleasedThisFrame.Clear();
+
+            // Reset per-frame UI inputs
+            MouseWheelDelta = 0f;
+        }
 
 
 
@@ -91,6 +101,12 @@ namespace Engine13.Input
         private void OnMouseMove(MouseMoveEventArgs e)
         {
             MousePosition = new Vector2(e.MousePosition.X, e.MousePosition.Y);
+        }
+
+        private void OnMouseWheel(MouseWheelEventArgs e)
+        {
+            // SDL2 wheel typically uses e.WheelDelta or vertical Y; adapt if your wrapper differs
+            MouseWheelDelta += e.WheelDelta;
         }
 
         private void OnMouseDown(MouseEvent e)

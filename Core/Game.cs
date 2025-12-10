@@ -3,11 +3,12 @@ using System.Numerics;
 using Engine13.Graphics;
 using Engine13.Input;
 using Engine13.Primitives;
-using Engine13.UI;
 using Engine13.Utilities;
 using Engine13.Utilities.Attributes;
 using Veldrid;
 using Veldrid.Sdl2;
+using ImGuiNET;
+using Engine13.UI;
 
 namespace Engine13.Core
 {
@@ -33,9 +34,13 @@ namespace Engine13.Core
         private float _lastMaxSpeed;
         private Vector2 _lastAvgPos;
         private int _lastGroundedCount;
+        private bool _showStartWindow = true;
+        private bool _startRequested = false;
+        private bool _showGuiDebug = true;
+    private bool _forceShowDemo = true;
 
-        private readonly UIManager _uiManager = new();
-        private InputManager _inputManager;
+    private InputManager _inputManager;
+    private ImGuiController? _imgui;
 
         public Game(Sdl2Window window, GraphicsDevice graphicsDevice)
             : base(window, graphicsDevice)
@@ -54,22 +59,60 @@ namespace Engine13.Core
                 Renderer.InitializeInstancedRendering(radius, 8);
             }
 
-            _uiManager.Initialize(GraphicsDevice);
+            var cl = GraphicsDevice.ResourceFactory.CreateCommandList();
+            _imgui = new ImGuiController(Window, GraphicsDevice, cl, _inputManager);
+            // Enable diagnostic console printing so we can see draw-data even if UI isn't visible
+            _imgui.PrintDrawData = true;
+
         }
 
         protected override void Update(GameTime gameTime)
         {
             _inputManager.Update();
-            _uiManager.Update(_inputManager);
 
-            if (_uiManager.ShouldReset)
-            {
-                //ResetSimulation();
-                return;
-            }
+            _imgui.NewFrame(gameTime.DeltaTime);
 
-            if (!_simulationComplete && _tickPositions.Count == 0 && _uiManager.HasStarted)
+            _imgui?.BuildDiagnosticsUI();
+                // Optionally force the ImGui demo window for debugging
+                if (_forceShowDemo && _imgui != null)
+                {
+                    ImGui.ShowDemoWindow();
+                }
+                if (_showGuiDebug)
+                {
+                    Console.WriteLine("[Game] Calling BuildDiagnosticsUI");
+                    _imgui?.BuildDiagnosticsUI();
+                }
+
+                if (!_simulationComplete && _tickPositions.Count == 0)
             {
+                    if (_imgui != null)
+                    {
+                        ImGui.Begin("Simulation Setup", ref _showStartWindow, ImGuiWindowFlags.AlwaysAutoResize);
+                        ImGui.Text("Precompute simulation frames before playback.");
+                        ImGui.Text($"Particle systems: {_particleSystems.Count}");
+                        ImGui.Text($"Entities: {_entities.Count}");
+                        if (ImGui.Button("Start Precompute"))
+                        {
+                            _startRequested = true;
+                            _showStartWindow = false;
+                        }
+                        ImGui.SameLine();
+                        if (ImGui.Button("Start (no precompute)"))
+                        {
+                            _simulationComplete = true;
+                            _playbackTimer.Start();
+                            _showStartWindow = false;
+                        }
+                        ImGui.End();
+                        }
+
+                        if (!_startRequested && !_simulationComplete)
+                        {
+                            GameTime.OverrideDeltaTime(gameTime.DeltaTime);
+                            return;
+                        }
+
                 Logger.InitCSV(
                     "Ticks",
                     "TickCount",
@@ -84,13 +127,11 @@ namespace Engine13.Core
                     "TotalPE"
                 );
 
-                // Pre-compute all frames using fixed timestep (not tied to framerate)
                 for (int frame = 0; frame < MaxFrames; frame++)
                 {
                     double tickStart = _tickTimer.Elapsed.TotalMilliseconds;
                     _tickCounter++;
 
-                    // Always use fixed delta time for physics stability
                     GameTime.OverrideDeltaTime(SimulationDeltaTime);
                     _updateManager.Update(GameTime);
 
@@ -145,11 +186,13 @@ namespace Engine13.Core
             Renderer.BeginFrame(new RgbaFloat(0.1f, 0.1f, 0.1f, 1f));
 
             int tickCount = _tickPositions.Count;
-            if (tickCount == 0)
-            {
-                Renderer.EndFrame();
-                return;
-            }
+                if (tickCount == 0)
+                {
+                    // Still render ImGui (start UI / diagnostics) even when there are no precomputed frames.
+                    _imgui?.Render();
+                    Renderer.EndFrame();
+                    return;
+                }
 
             // Playback loop - uses PlaybackFps (independent of simulation step size)
             float elapsedSeconds = (float)_playbackTimer.Elapsed.TotalSeconds;
@@ -161,7 +204,10 @@ namespace Engine13.Core
 
             var tickPositions = _tickPositions[_tickIndex];
             Renderer.DrawInstanced(_entities, tickPositions);
-            _uiManager.Draw(Renderer);
+
+            // Render ImGui on top
+            _imgui?.Render();
+
             Renderer.EndFrame();
         }
 

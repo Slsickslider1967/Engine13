@@ -2,6 +2,41 @@
   "version": 3,
   "targets": {
     "net10.0": {
+      "ImGui.NET/1.89.6": {
+        "type": "package",
+        "compile": {
+          "lib/net6.0/ImGui.NET.dll": {
+            "related": ".xml"
+          }
+        },
+        "runtime": {
+          "lib/net6.0/ImGui.NET.dll": {
+            "related": ".xml"
+          }
+        },
+        "runtimeTargets": {
+          "runtimes/linux-x64/native/libcimgui.so": {
+            "assetType": "native",
+            "rid": "linux-x64"
+          },
+          "runtimes/osx/native/libcimgui.dylib": {
+            "assetType": "native",
+            "rid": "osx"
+          },
+          "runtimes/win-arm64/native/cimgui.dll": {
+            "assetType": "native",
+            "rid": "win-arm64"
+          },
+          "runtimes/win-x64/native/cimgui.dll": {
+            "assetType": "native",
+            "rid": "win-x64"
+          },
+          "runtimes/win-x86/native/cimgui.dll": {
+            "assetType": "native",
+            "rid": "win-x86"
+          }
+        }
+      },
       "Microsoft.DotNet.PlatformAbstractions/2.0.3": {
         "type": "package",
         "compile": {
@@ -348,6 +383,27 @@
     }
   },
   "libraries": {
+    "ImGui.NET/1.89.6": {
+      "sha512": "UDL+hqs86gmv2Xu6bQMaekAnt/kxer140OGJYgy9IgXWMzRr4Rn/Fnr2BjOp2RS+5dJF47EYZteQ/TnGHI57tA==",
+      "type": "package",
+      "path": "imgui.net/1.89.6",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "build/net40/ImGui.NET.targets",
+        "imgui.net.1.89.6.nupkg.sha512",
+        "imgui.net.nuspec",
+        "lib/net6.0/ImGui.NET.dll",
+        "lib/net6.0/ImGui.NET.xml",
+        "lib/netstandard2.0/ImGui.NET.dll",
+        "lib/netstandard2.0/ImGui.NET.xml",
+        "runtimes/linux-x64/native/libcimgui.so",
+        "runtimes/osx/native/libcimgui.dylib",
+        "runtimes/win-arm64/native/cimgui.dll",
+        "runtimes/win-x64/native/cimgui.dll",
+        "runtimes/win-x86/native/cimgui.dll"
+      ]
+    },
     "Microsoft.DotNet.PlatformAbstractions/2.0.3": {
       "sha512": "cXgVdJmW3fLwmSxsv0RlTe4BIKs6slVXV5xRvsO4CV4aUeY67GelaujxY/lP5yVlaMjMM22pXKbKtUY9x050Mw==",
       "type": "package",
@@ -700,6 +756,7 @@
   },
   "projectFileDependencyGroups": {
     "net10.0": [
+      "ImGui.NET >= 1.89.6",
       "Veldrid >= 4.9.0",
       "Veldrid.SDL2 >= 4.9.0",
       "Veldrid.SPIRV >= 1.0.15",
@@ -749,6 +806,10 @@
       "net10.0": {
         "targetAlias": "net10.0",
         "dependencies": {
+          "ImGui.NET": {
+            "target": "Package",
+            "version": "[1.89.6, )"
+          },
           "Veldrid": {
             "target": "Package",
             "version": "[4.9.0, )"

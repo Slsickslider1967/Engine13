@@ -5,12 +5,14 @@
     <RootNamespace>Engine13</RootNamespace>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Veldrid" Version="4.9.0" />
     <PackageReference Include="Veldrid.SDL2" Version="4.9.0" />
     <PackageReference Include="Veldrid.SPIRV" Version="1.0.15" />
     <PackageReference Include="Veldrid.StartupUtilities" Version="4.9.0" />
+    <PackageReference Include="ImGui.NET" Version="1.89.6" />
     <Compile Include="..\Core\**\*.cs" />
     <Compile Include="..\Graphics\**\*.cs" />
     <Compile Include="..\Input\**\*.cs" />

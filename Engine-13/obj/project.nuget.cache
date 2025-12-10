@@ -1,9 +1,10 @@
 {
   "version": 2,
-  "dgSpecHash": "vlQUHarc7+Y=",
+  "dgSpecHash": "KYhB9peOcFM=",
   "success": true,
   "projectFilePath": "/home/slickslider/Documents/Engine-13/Engine13/Engine-13/Engine-13.csproj",
   "expectedPackageFiles": [
+    "/home/slickslider/.nuget/packages/imgui.net/1.89.6/imgui.net.1.89.6.nupkg.sha512",
     "/home/slickslider/.nuget/packages/microsoft.dotnet.platformabstractions/2.0.3/microsoft.dotnet.platformabstractions.2.0.3.nupkg.sha512",
     "/home/slickslider/.nuget/packages/microsoft.extensions.dependencymodel/2.0.3/microsoft.extensions.dependencymodel.2.0.3.nupkg.sha512",
     "/home/slickslider/.nuget/packages/nativelibraryloader/1.0.13/nativelibraryloader.1.0.13.nupkg.sha512",
