@@ -17,24 +17,29 @@ namespace Engine13.UI
         private readonly InputManager _input;
         private CommandList _cl;
 
-        private DeviceBuffer _vertexBuffer;
-        private DeviceBuffer _indexBuffer;
-        private DeviceBuffer _projBuffer;
+        private DeviceBuffer? _vertexBuffer;
+        private DeviceBuffer? _indexBuffer;
+        private DeviceBuffer? _projBuffer;
         private uint _vertexBufferSize = 65536;
         private uint _indexBufferSize = 65536;
         private readonly uint _vertexStructSize = (uint)
             System.Runtime.InteropServices.Marshal.SizeOf(typeof(ImDrawVert));
 
-        private Shader[] _shaders;
-        private Pipeline _pipeline;
-        private ResourceLayout _layout;
-        private ResourceSet _fontSet;
-        private Texture _fontTexture;
-        private TextureView _fontTextureView;
-        private Sampler _fontSampler;
-    // Diagnostics
-    private bool _printDrawData = true; // enabled during debug by default
-        public bool PrintDrawData { get => _printDrawData; set => _printDrawData = value; }
+        private Shader[]? _shaders;
+        private Pipeline? _pipeline;
+        private ResourceLayout? _layout;
+        private ResourceSet? _fontSet;
+        private Texture? _fontTexture;
+        private TextureView? _fontTextureView;
+        private Sampler? _fontSampler;
+
+        // Diagnostics
+        private bool _printDrawData = true; // enabled during debug by default
+        public bool PrintDrawData
+        {
+            get => _printDrawData;
+            set => _printDrawData = value;
+        }
 
         public ImGuiController(
             Sdl2Window window,
@@ -76,21 +81,23 @@ namespace Engine13.UI
             ImGui.NewFrame();
         }
 
-        public void Render()
+        // Render into the provided CommandList. If cl is null, fall back to the controller's stored command list.
+        public void Render(CommandList? cl = null)
         {
             ImGui.Render();
             var drawData = ImGui.GetDrawData();
-            if (_printDrawData)
+            var target = cl ?? _cl;
+            if (target == null)
             {
-                Console.WriteLine($"[ImGui] CmdLists={drawData.CmdListsCount}, TotalVtx={drawData.TotalVtxCount}, TotalIdx={drawData.TotalIdxCount}");
+                // Nothing to record into
+                return;
             }
-            RenderDrawData(drawData);
+            RenderDrawData(drawData, target);
         }
 
         // Builds an on-frame diagnostics UI showing the checklist and allows toggles
         public void BuildDiagnosticsUI()
         {
-            Console.WriteLine("[ImGui] BuildDiagnosticsUI invoked");
             var io = ImGui.GetIO();
             ImGui.Begin("ImGui Debug", ImGuiWindowFlags.AlwaysAutoResize);
             ImGui.Text("Runtime checklist:");
@@ -104,7 +111,9 @@ namespace Engine13.UI
             var dd = ImGui.GetDrawData();
             try
             {
-                ImGui.Text($"Draw lists: {dd.CmdListsCount}, Vtx: {dd.TotalVtxCount}, Idx: {dd.TotalIdxCount}");
+                ImGui.Text(
+                    $"Draw lists: {dd.CmdListsCount}, Vtx: {dd.TotalVtxCount}, Idx: {dd.TotalIdxCount}"
+                );
             }
             catch
             {
@@ -199,7 +208,7 @@ namespace Engine13.UI
             };
 
             _pipeline = _factory.CreateGraphicsPipeline(pd);
-            Console.WriteLine("[ImGui] CreateDeviceResources: Graphics pipeline created");
+
 
             // font
             var io = ImGui.GetIO();
@@ -237,7 +246,6 @@ namespace Engine13.UI
             var fontTexId = (IntPtr)_fontTextureView.GetHashCode();
             io.Fonts.SetTexID(fontTexId);
             io.Fonts.ClearTexData();
-            Console.WriteLine($"[ImGui] CreateDeviceResources: Font texture uploaded (width={width} height={height}) TexId={fontTexId}");
 
             _fontSampler = _factory.CreateSampler(
                 new SamplerDescription(
@@ -257,7 +265,6 @@ namespace Engine13.UI
             _fontSet = _factory.CreateResourceSet(
                 new ResourceSetDescription(_layout, _projBuffer, _fontTextureView, _fontSampler)
             );
-            Console.WriteLine("[ImGui] CreateDeviceResources: Font resource set created");
         }
 
         public void LoadDefaultShaders()
@@ -281,10 +288,9 @@ namespace Engine13.UI
                     "main"
                 )
             );
-            Console.WriteLine($"[ImGui] LoadDefaultShaders: Loaded shaders from '{vertPath}' and '{fragPath}' ({_shaders?.Length ?? 0} modules)");
         }
 
-        private void RenderDrawData(ImDrawDataPtr drawData)
+        private void RenderDrawData(ImDrawDataPtr drawData, CommandList cl)
         {
             if (drawData.CmdListsCount == 0)
                 return;
@@ -339,23 +345,15 @@ namespace Engine13.UI
                 }
             }
 
-            // Update projection matrix
             var width = Math.Max(1, _gd.MainSwapchain.Framebuffer.Width);
             var height = Math.Max(1, _gd.MainSwapchain.Framebuffer.Height);
-            // Use a top-down projection (bottom=0, top=height) so ImGui's Y-down coords map correctly
             var proj = Matrix4x4.CreateOrthographicOffCenter(0, width, 0, height, -1f, 1f);
-            _gd.UpdateBuffer(_projBuffer, 0, ref proj);
+            _gd.UpdateBuffer(_projBuffer!, 0, ref proj);
 
-            // Record draw commands into the shared command list provided by the engine's renderer.
-            // The renderer is responsible for Begin/SetFramebuffer/Clear and Submit.
-            if (_printDrawData)
-            {
-                Console.WriteLine("[ImGui] Recording draw commands into shared CommandList");
-            }
-            _cl.SetPipeline(_pipeline);
-            _cl.SetVertexBuffer(0, _vertexBuffer);
-            _cl.SetIndexBuffer(_indexBuffer, IndexFormat.UInt16);
-            _cl.SetGraphicsResourceSet(0, _fontSet);
+            cl.SetPipeline(_pipeline!);
+            cl.SetVertexBuffer(0, _vertexBuffer!);
+            cl.SetIndexBuffer(_indexBuffer!, IndexFormat.UInt16);
+            cl.SetGraphicsResourceSet(0, _fontSet!);
 
             uint vtxBase = 0;
             uint idxBase = 0;
@@ -373,16 +371,15 @@ namespace Engine13.UI
                     uint y = (uint)Math.Max((int)Math.Floor(clip.Y), 0);
                     uint w = (uint)Math.Max((int)Math.Ceiling(clip.Z - clip.X), 0);
                     uint h = (uint)Math.Max((int)Math.Ceiling(clip.W - clip.Y), 0);
-                    _cl.SetScissorRect(0, x, y, w, h);
+                    cl.SetScissorRect(0, x, y, w, h);
 
                     if (_printDrawData)
                     {
                         // pcmd.TextureId is an IntPtr; lib maps it to our texture view hash earlier
                         var texId = pcmd.TextureId;
-                        Console.WriteLine($"[ImGui] DrawCmd: CmdList={n} CmdIdx={cmdi} TexId={texId} ElemCount={pcmd.ElemCount} IdxOffset={pcmd.IdxOffset + idxBase} VtxOffset={pcmd.VtxOffset + vtxBase} Scissor=({x},{y},{w},{h})");
                     }
 
-                    _cl.DrawIndexed(
+                    cl.DrawIndexed(
                         (uint)pcmd.ElemCount,
                         1,
                         (uint)(pcmd.IdxOffset + idxBase),
@@ -392,11 +389,6 @@ namespace Engine13.UI
                 }
                 vtxBase += (uint)cmdList.VtxBuffer.Size;
                 idxBase += (uint)cmdList.IdxBuffer.Size;
-            }
-
-            if (_printDrawData)
-            {
-                Console.WriteLine("[ImGui] Finished recording draw commands into shared CommandList");
             }
         }
 
