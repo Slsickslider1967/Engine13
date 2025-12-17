@@ -20,10 +20,10 @@ namespace Engine13.Core
         public string Name { get; }
         public ParticlePresetReader Material { get; }
         public List<Entity> Particles { get; } = new();
-        
+
         readonly List<FluidParticle> _fluidParticles = new();
         readonly Dictionary<Entity, FluidParticle> _fluidMap = new();
-        
+
         float _smoothingRadius;
         float _stiffness;
         float _viscosity;
@@ -38,17 +38,9 @@ namespace Engine13.Core
             Material = material;
         }
 
-        /// <summary>Create a new particle system by loading a preset by name</summary>
         public ParticleSystem(string name, string presetName)
             : this(name, ParticlePresetReader.Load(presetName)) { }
 
-        /// <param name="graphicsDevice">Graphics device for rendering</param>
-        /// <param name="particleCount">Number of particles to create</param>
-        /// <param name="origin">Starting position for the grid</param>
-        /// <param name="columns">Number of columns in the grid layout</param>
-        /// <param name="allEntities">Global entity list to add particles to</param>
-        /// <param name="updateManager">Update manager to register particles with</param>
-        /// <param name="grid">Spatial grid for collision detection</param>
         public void CreateParticles(
             GraphicsDevice graphicsDevice,
             int particleCount,
@@ -67,7 +59,6 @@ namespace Engine13.Core
             Particles.Clear();
             Particles.Capacity = particleCount;
 
-            // Check if we have composition (mixed particle types within the material)
             if (Material.Composition != null && Material.Composition.Count > 0)
             {
                 CreateCompositionParticles(
@@ -99,8 +90,6 @@ namespace Engine13.Core
                 );
             }
 
-            // TODO: Implement solid dynamics system
-
             Logger.Log(
                 $"[{Name}] Created {Particles.Count} particles with material '{Material.Name}'"
             );
@@ -108,8 +97,6 @@ namespace Engine13.Core
                 $"  Material: restitution={Material.Restitution:F2}, friction={Material.Friction:F2}, mass={Material.Mass:F4}"
             );
         }
-
-
 
         private void CreateUniformParticles(
             GraphicsDevice graphicsDevice,
@@ -160,7 +147,6 @@ namespace Engine13.Core
             var compCounts = new List<int>(composition.Count);
             int remaining = particleCount;
 
-            // Compute per-composition counts
             for (int ci = 0; ci < composition.Count; ci++)
             {
                 var c = composition[ci];
@@ -240,12 +226,10 @@ namespace Engine13.Core
                     IsFluid = Material.IsFluid,
                 }
             );
-
             particle.AddComponent(
                 Material.EnableEdgeCollision ? new EdgeCollision(false) : new EdgeCollision(true)
             );
 
-            // Create particle dynamics based on type
             var particleDynamics = new ParticleDynamics(allEntities);
             switch (particleType)
             {
@@ -296,35 +280,39 @@ namespace Engine13.Core
 
         public void InitializeFluid()
         {
-            if (!Material.IsFluid) return;
-            
+            if (!Material.IsFluid)
+                return;
+
             _smoothingRadius = Material.PressureRadius * 2f;
             _stiffness = Material.SPHGasConstant;
             _viscosity = Material.SPHViscosity;
             _particleRadius = Material.ParticleRadius;
             _gravity = new Vector2(0f, Material.GravityStrength);
-            _damping = 1f - (Material.VelocityDamping * 0.25f);  // Reduce damping effect (0.08 -> 0.02 -> 0.98 multiplier)
-            
+            _damping = 1f - (Material.VelocityDamping * 0.25f);
+
             _fluidParticles.Clear();
             _fluidMap.Clear();
-            
+
             foreach (var particle in Particles)
             {
                 var fp = new FluidParticle { Entity = particle };
                 _fluidParticles.Add(fp);
                 _fluidMap[particle] = fp;
-                
+
                 var pd = particle.GetComponent<ParticleDynamics>();
-                if (pd != null) pd.UseSPHSolver = true;
-                
+                if (pd != null)
+                    pd.UseSPHSolver = true;
+
                 var oc = particle.GetComponent<ObjectCollision>();
-                if (oc != null) oc.UseSPHIntegration = true;
+                if (oc != null)
+                    oc.UseSPHIntegration = true;
             }
         }
 
         public void StepFluid(float dt, SpatialGrid grid)
         {
-            if (!Material.IsFluid || _fluidParticles.Count == 0) return;
+            if (!Material.IsFluid || _fluidParticles.Count == 0)
+                return;
 
             float h = _smoothingRadius;
             float h2 = h * h;
@@ -334,8 +322,10 @@ namespace Engine13.Core
                 p.Neighbors.Clear();
                 foreach (var other in grid.GetNearbyEntities(p.Entity.Position))
                 {
-                    if (other == p.Entity) continue;
-                    if (!_fluidMap.TryGetValue(other, out var n)) continue;
+                    if (other == p.Entity)
+                        continue;
+                    if (!_fluidMap.TryGetValue(other, out var n))
+                        continue;
                     if (Vector2.DistanceSquared(p.Entity.Position, n.Entity.Position) < h2)
                         p.Neighbors.Add(n);
                 }
@@ -344,12 +334,11 @@ namespace Engine13.Core
             foreach (var p in _fluidParticles)
             {
                 var c = p.Entity.GetComponent<ObjectCollision>();
-                if (c == null || c.IsStatic) continue;
+                if (c == null || c.IsStatic)
+                    continue;
 
-                // Apply gravity as acceleration
                 c.Velocity += _gravity * dt;
 
-                // Compute pressure/separation forces
                 Vector2 pressureForce = Vector2.Zero;
                 Vector2 viscosityForce = Vector2.Zero;
                 int count = 0;
@@ -358,16 +347,18 @@ namespace Engine13.Core
                 {
                     Vector2 diff = p.Entity.Position - n.Entity.Position;
                     float dist = diff.Length();
-                    
+
                     if (dist < 0.0001f)
                     {
-                        diff = new Vector2((float)(Random.Shared.NextDouble() - 0.5) * 0.0001f,
-                                           (float)(Random.Shared.NextDouble() - 0.5) * 0.0001f);
+                        diff = new Vector2(
+                            (float)(Random.Shared.NextDouble() - 0.5) * 0.0001f,
+                            (float)(Random.Shared.NextDouble() - 0.5) * 0.0001f
+                        );
                         dist = 0.0001f;
                     }
-                    
+
                     Vector2 dir = diff / dist;
-                    
+
                     float minDist = _particleRadius * 2f;
                     if (dist < minDist)
                     {
@@ -380,7 +371,6 @@ namespace Engine13.Core
                         pressureForce += dir * t * t * _stiffness * 0.01f;
                     }
 
-                    // Viscosity: average weighted by kernel
                     var nc = n.Entity.GetComponent<ObjectCollision>();
                     if (nc != null)
                     {
@@ -390,48 +380,33 @@ namespace Engine13.Core
                     }
                 }
 
-                // Apply pressure forces as acceleration (F = ma, so a = F/m)
                 float mass = p.Entity.Mass > 0f ? p.Entity.Mass : 1f;
                 c.Velocity += (pressureForce / mass) * dt;
 
-                // Apply viscosity (weighted average with current velocity)
                 if (count > 0)
                 {
                     viscosityForce /= count;
-                    // Reduce viscosity scaling for more responsive movement
                     c.Velocity += viscosityForce * _viscosity * 0.05f * dt;
                 }
 
-                // Apply damping
                 c.Velocity *= _damping;
 
-                // Clamp to max velocity
                 float speed = c.Velocity.Length();
                 if (speed > _maxVelocity)
                     c.Velocity *= _maxVelocity / speed;
 
-                // Integrate position (since UseSPHIntegration=true skips ObjectCollision.Update)
                 p.Entity.Position += c.Velocity * dt;
             }
         }
     }
 
-    /// <summary>
-    /// Factory for creating particle systems from presets
-    /// </summary>
     public static class ParticleSystemFactory
     {
-        /// <summary>
-        /// Create a particle system with a specific preset
-        /// </summary>
         public static ParticleSystem Create(string systemName, string presetName)
         {
             return new ParticleSystem(systemName, presetName);
         }
 
-        /// <summary>
-        /// Create multiple particle systems from a list of preset names
-        /// </summary>
         public static List<ParticleSystem> CreateMultiple(
             params (string systemName, string presetName)[] systems
         )

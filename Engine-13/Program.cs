@@ -18,6 +18,7 @@ class Program
         };
 
         Sdl2Window window = VeldridStartup.CreateWindow(windowCreateInfo);
+        window.WindowState = WindowState.BorderlessFullScreen;
         Console.WriteLine(
             $"[Startup] Created window: Title='{window.Title}', Size={window.Width}x{window.Height}, IsVisible={window.Exists}"
         );

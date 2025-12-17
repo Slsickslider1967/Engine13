@@ -7,6 +7,7 @@ using Engine13.Primitives;
 using Engine13.UI;
 using Engine13.Utilities;
 using Engine13.Utilities.Attributes;
+using Engine13.Utilities.JsonReader;
 using ImGuiNET;
 using SharpGen.Runtime.Win32;
 using Veldrid;
@@ -62,7 +63,7 @@ namespace Engine13.Core
 
         protected override void Initialize()
         {
-            CreateObjects("Water", 1000, 0f, -1f);
+            CreateObjects("Steel", 1000, 0f, -1f);
 
             if (_particleSystems.Count > 0)
             {
@@ -80,6 +81,7 @@ namespace Engine13.Core
         protected override void Update(GameTime gameTime)
         {
             _inputManager.Update();
+            bool presets = false;
 
             _imgui.NewFrame(gameTime.DeltaTime);
 
@@ -101,23 +103,29 @@ namespace Engine13.Core
             }
             if (ImGui.Button("Preset Select"))
             {
-                ImGui.BeginChild("PresetSelect", new Vector2(300, 200), true);
-                ImGui.Text("Select a preset to load:");
+                presets = true;
             }
+            ImGui.Separator();
             if (_showStartWindow = true)
             {
-                ImGui.Separator();
                 ImGui.Text($"Ticks Computed: {_tickCounter}");
                 ImGui.Text($"Tick Time: {_lastTickTime:F2} ms");
                 ImGui.Text($"Avg Speed: {_lastAvgSpeed:F4} units/s");
                 ImGui.Text($"Max Speed: {_lastMaxSpeed:F4} units/s");
                 ImGui.Text($"Avg Pos: {_lastAvgPos.Y:F3} units");
                 ImGui.Text($"Grounded Count: {_lastGroundedCount}");
-                ImGui.End();
             };
+            if(presets)
+            {
+                ImGui.OpenPopup("Presets");
+                ImGui.SetNextWindowSize(new Vector2(200, 150), ImGuiCond.FirstUseEver);
+                
+            }
+
+
+            ImGui.End();
 
             DrawSelectionRect();
-            //LoadGui.ShowDebugTerminal();
 
             if (!_simulationComplete && _tickPositions.Count == 0)
             {
@@ -254,6 +262,15 @@ namespace Engine13.Core
                 }
                 else
                 {
+                    bool TooSmall =
+                        MathF.Abs(SelectEnd.X - SelectStart.X) < 5f
+                        || MathF.Abs(SelectEnd.Y - SelectStart.Y) < 5f;
+                    if (TooSmall)
+                    {
+                        SelectStart = Vector2.Zero;
+                        SelectEnd = Vector2.Zero;
+                    }
+                    
                     IsSelecting = false;
                 }
             }
@@ -262,9 +279,11 @@ namespace Engine13.Core
             {
                 ImGui.Begin("SelectionInfo");
                 ImGui.Text($"Selection from {SelectStart} to {SelectEnd}");
-                if(ImGui.Button("Fill"))
+                if (ImGui.Button("Fill"))
                 {
-                    Logger.Log($"Yet to implement fill selection from {SelectStart} to {SelectEnd}");
+                    Logger.Log(
+                        $"Yet to implement fill selection from {SelectStart} to {SelectEnd}"
+                    );
                 }
                 if (ImGui.Button("Clear Selection"))
                 {

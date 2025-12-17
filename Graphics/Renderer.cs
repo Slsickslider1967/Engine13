@@ -29,6 +29,13 @@ namespace Engine13.Graphics
             this._Pipeline = _Pipeline;
         }
 
+        // Allow the engine to set a fresh per-frame CommandList to avoid reusing
+        // the same underlying VkCommandBuffer across frames/threads.
+        public void SetCommandList(CommandList cl)
+        {
+            CL = cl;
+        }
+
         public void BeginFrame(RgbaFloat clearColor)
         {
             CL.Begin();

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using ImGuiNET;
 
 namespace Engine13.Utilities
 {
@@ -92,7 +93,10 @@ namespace Engine13.Utilities
 
                 try
                 {
-                    var csvLine = string.Join(",", Array.ConvertAll(values, v => EscapeCSV(v?.ToString() ?? "")));
+                    var csvLine = string.Join(
+                        ",",
+                        Array.ConvertAll(values, v => EscapeCSV(v?.ToString() ?? ""))
+                    );
                     writer.WriteLine(csvLine);
                     writer.Flush();
                 }
@@ -147,13 +151,24 @@ namespace Engine13.Utilities
         }
 
         /// <summary>Logs a performance metric to a dedicated CSV file.</summary>
-        public static void LogPerformance(string filename, string metricName, double value, string unit = "ms")
+        public static void LogPerformance(
+            string filename,
+            string metricName,
+            double value,
+            string unit = "ms"
+        )
         {
             if (!_csvWriters.ContainsKey(filename))
             {
                 InitCSV(filename, "Timestamp", "Metric", "Value", "Unit");
             }
-            LogCSV(filename, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff"), metricName, value, unit);
+            LogCSV(
+                filename,
+                DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff"),
+                metricName,
+                value,
+                unit
+            );
         }
 
         private static string EscapeCSV(string value)
@@ -161,7 +176,12 @@ namespace Engine13.Utilities
             if (string.IsNullOrEmpty(value))
                 return value;
 
-            if (value.Contains(',') || value.Contains('"') || value.Contains('\n') || value.Contains('\r'))
+            if (
+                value.Contains(',')
+                || value.Contains('"')
+                || value.Contains('\n')
+                || value.Contains('\r')
+            )
             {
                 return $"\"{value.Replace("\"", "\"\"")}\"";
             }

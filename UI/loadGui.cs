@@ -32,9 +32,7 @@ namespace Engine13.UI
         {
             ImGui.SetNextWindowSize(new System.Numerics.Vector2(600, 400), ImGuiCond.FirstUseEver);
             ImGui.Begin("Debug Terminal");
-            string debugText = Console.In.ReadToEnd();
-            ImGui.Text(debugText);
-            ImGui.End();
         }
+
     }
 }

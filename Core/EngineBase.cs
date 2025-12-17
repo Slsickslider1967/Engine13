@@ -66,7 +66,31 @@ namespace Engine13.Core
                     // Swallow resize errors during transition
                 }
             }
-            Draw();
+            ///<summary>
+            /// Stops vulkan from throwing a fit when shutting down the program
+            /// </summary>
+            CommandList? oldCL = CommandList;
+            CommandList frameCL = GraphicsDevice.ResourceFactory.CreateCommandList();
+            CommandList = frameCL;
+            try
+            {
+                // Give the renderer the new command list to record into
+                Renderer.SetCommandList(frameCL);
+                Draw();
+            }
+            finally
+            {
+                try
+                {
+                    frameCL.Dispose();
+                }
+                catch { }
+
+                if (oldCL != null && !ReferenceEquals(oldCL, frameCL))
+                {
+                    try { oldCL.Dispose(); } catch { }
+                }
+            }
         }
 
         public void Run()
