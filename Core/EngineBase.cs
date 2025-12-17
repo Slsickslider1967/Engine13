@@ -14,8 +14,9 @@ namespace Engine13.Core
         protected GameTime GameTime { get; }
         protected PipeLineManager PipeLineManager { get; }
         protected Renderer Renderer { get; }
-    // Shared CommandList used by Renderer and subsystems (ImGui)
-    protected CommandList CommandList { get; private set; }
+
+        // Shared CommandList used by Renderer and subsystems (ImGui)
+        protected CommandList CommandList { get; private set; }
         protected Input.InputManager InputManager { get; }
         private System.Diagnostics.Stopwatch _frameTimer;
         private ThreadManager _threadManager;
@@ -88,7 +89,11 @@ namespace Engine13.Core
 
                 if (oldCL != null && !ReferenceEquals(oldCL, frameCL))
                 {
-                    try { oldCL.Dispose(); } catch { }
+                    try
+                    {
+                        oldCL.Dispose();
+                    }
+                    catch { }
                 }
             }
         }
@@ -111,9 +116,12 @@ namespace Engine13.Core
 
                 // Queue resize for render thread instead of doing it here
                 if (
-                    Window.Width > 0 && Window.Height > 0 &&
-                    (Window.Width != GraphicsDevice.MainSwapchain.Framebuffer.Width
-                    || Window.Height != GraphicsDevice.MainSwapchain.Framebuffer.Height)
+                    Window.Width > 0
+                    && Window.Height > 0
+                    && (
+                        Window.Width != GraphicsDevice.MainSwapchain.Framebuffer.Width
+                        || Window.Height != GraphicsDevice.MainSwapchain.Framebuffer.Height
+                    )
                 )
                 {
                     _pendingWidth = (uint)Window.Width;

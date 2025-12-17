@@ -20,7 +20,7 @@ namespace Engine13.Core
     {
         private const int MaxFrames = 500;
         private const float SimulationDeltaTime = 1f / 60f; // Physics step size (fixed for stability)
-        private const float PlaybackFps = 60f; // Playback speed (independent of simulation)
+        private float PlaybackFps = 60f;
         private readonly List<Entity> _entities = new();
         private readonly List<ParticleSystem> _particleSystems = new();
         private readonly UpdateManager _updateManager = new();
@@ -49,10 +49,11 @@ namespace Engine13.Core
         private static Vector2 SelectStart;
         private static Vector2 SelectEnd;
 
-        // background precompute control
         private readonly object _tickLock = new();
         private Task? _precomputeTask;
         private bool _isPrecomputing;
+        private bool presets = false;
+        private bool SimulationWindow = false;
 
         public Game(Sdl2Window window, GraphicsDevice graphicsDevice)
             : base(window, graphicsDevice)
@@ -63,7 +64,7 @@ namespace Engine13.Core
 
         protected override void Initialize()
         {
-            CreateObjects("Steel", 1000, 0f, -1f);
+            CreateObjects("Sand", 1000, 0f, -1f);
 
             if (_particleSystems.Count > 0)
             {
@@ -71,9 +72,7 @@ namespace Engine13.Core
                 Renderer.InitializeInstancedRendering(radius, 8);
             }
 
-            // Use the shared command list created in EngineBase so ImGui draws into the same CL
             _imgui = new ImGuiController(Window, GraphicsDevice, CommandList, _inputManager);
-            // Enable diagnostic console printing so we can see draw-data even if UI isn't visible
             _imgui.PrintDrawData = true;
             base.Initialize();
         }
@@ -81,11 +80,9 @@ namespace Engine13.Core
         protected override void Update(GameTime gameTime)
         {
             _inputManager.Update();
-            bool presets = false;
 
-            _imgui.NewFrame(gameTime.DeltaTime);
+            _imgui?.NewFrame(gameTime.DeltaTime);
 
-            // Make the setup window resizable; provide a default size on first use.
             ImGui.SetNextWindowSize(new Vector2(450, 300), ImGuiCond.FirstUseEver);
             ImGui.Begin("Simulation Setup", ref _showStartWindow, ImGuiWindowFlags.None);
             ImGui.Text("Precompute simulation frames before playback.");
@@ -94,7 +91,7 @@ namespace Engine13.Core
             if (ImGui.Button("Start Precompute"))
             {
                 _startRequested = true;
-                _showStartWindow = false;
+                SimulationWindow = true;
             }
             ImGui.SameLine();
             if (ImGui.Button("Stop and Quit"))
@@ -106,7 +103,7 @@ namespace Engine13.Core
                 presets = true;
             }
             ImGui.Separator();
-            if (_showStartWindow = true)
+            if (_showStartWindow == true)
             {
                 ImGui.Text($"Ticks Computed: {_tickCounter}");
                 ImGui.Text($"Tick Time: {_lastTickTime:F2} ms");
@@ -114,14 +111,47 @@ namespace Engine13.Core
                 ImGui.Text($"Max Speed: {_lastMaxSpeed:F4} units/s");
                 ImGui.Text($"Avg Pos: {_lastAvgPos.Y:F3} units");
                 ImGui.Text($"Grounded Count: {_lastGroundedCount}");
-            };
-            if(presets)
+            }
+            ;
+            if (presets)
             {
                 ImGui.OpenPopup("Presets");
                 ImGui.SetNextWindowSize(new Vector2(200, 150), ImGuiCond.FirstUseEver);
-                
+                ImGui.BeginPopup("Presets");
             }
-
+            if (SimulationWindow)
+            {
+                ImGui.SetNextWindowSize(new Vector2(300, 200), ImGuiCond.FirstUseEver);
+                ImGui.Begin("Simulation");
+                if (_isPrecomputing)
+                {
+                    ImGui.Text("Precomputing...");
+                }
+                else
+                {
+                    if (ImGui.Button("Play/Pause"))
+                    {
+                        if (_playbackTimer.IsRunning)
+                        {
+                            _playbackTimer.Stop();
+                        }
+                        else
+                        {
+                            _playbackTimer.Start();
+                        }
+                    }
+                    // Allow selecting a specific precomputed frame (0 .. MaxFrames-1)
+                    int selectedFrame = _tickIndex;
+                    if (ImGui.SliderInt("Frame Select", ref selectedFrame, 0, MaxFrames - 1))
+                    {
+                        _tickIndex = Math.Clamp(selectedFrame, 0, MaxFrames - 1);
+                    }
+                    if (ImGui.Button("Close"))
+                    {
+                        SimulationWindow = false;
+                    }
+                }
+            }
 
             ImGui.End();
 
@@ -270,7 +300,7 @@ namespace Engine13.Core
                         SelectStart = Vector2.Zero;
                         SelectEnd = Vector2.Zero;
                     }
-                    
+
                     IsSelecting = false;
                 }
             }

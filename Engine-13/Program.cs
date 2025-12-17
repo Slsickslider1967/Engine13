@@ -14,7 +14,7 @@ class Program
             X = 100,
             Y = 100,
             WindowWidth = 800,
-            WindowHeight = 600
+            WindowHeight = 600,
         };
 
         Sdl2Window window = VeldridStartup.CreateWindow(windowCreateInfo);

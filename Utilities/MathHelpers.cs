@@ -613,6 +613,25 @@ namespace Engine13.Utilities
             return nearbyEntities;
         }
 
+        // No-allocation overload: fills the provided list with nearby entities.
+        public void GetNearbyEntities(Vector2 position, System.Collections.Generic.List<Entity> outList)
+        {
+            outList.Clear();
+            var cellCoords = GetCellCoords(position);
+
+            for (int dx = -1; dx <= 1; dx++)
+            {
+                for (int dy = -1; dy <= 1; dy++)
+                {
+                    var neighborCoords = (cellCoords.Item1 + dx, cellCoords.Item2 + dy);
+                    if (cells.TryGetValue(neighborCoords, out var list))
+                    {
+                        outList.AddRange(list);
+                    }
+                }
+            }
+        }
+
         public AABB GetCellRange(AABB aabb)
         {
             var minCell = GetCellCoords(aabb.Min);

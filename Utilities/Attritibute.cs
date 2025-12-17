@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Numerics;
 using Engine13.Core;
 using Engine13.Graphics;
+using Engine13.Utilities;
 
 namespace Engine13.Utilities.Attributes;
 
@@ -127,6 +128,8 @@ public sealed class ParticleDynamics : IEntityComponent
     public const float DefaultPressureRadius = 0.025f;
     
     readonly List<Entity>? _allEntities;
+    readonly SpatialGrid? _grid;
+    readonly List<Entity> _neighborBuffer = new();
 
     public float MaxForceMagnitude { get; set; } = 25f;
     public float VelocityDamping { get; set; } = 0.05f;
@@ -136,7 +139,11 @@ public sealed class ParticleDynamics : IEntityComponent
 
     public ParticleDynamics() { }
 
-    public ParticleDynamics(List<Entity> allEntities) => _allEntities = allEntities;
+    public ParticleDynamics(List<Entity> allEntities, SpatialGrid? grid = null)
+    {
+        _allEntities = allEntities;
+        _grid = grid;
+    }
 
     public void Update(Entity entity, GameTime gameTime)
     {
@@ -174,7 +181,7 @@ public sealed class ParticleDynamics : IEntityComponent
 
     Vector2 ComputeInterParticleForces(Entity entity)
     {
-        if (_allEntities == null || _allEntities.Count == 0)
+        if ((_allEntities == null || _allEntities.Count == 0) && _grid == null)
             return Vector2.Zero;
 
         var oc = entity.GetComponent<ObjectCollision>();
@@ -185,7 +192,18 @@ public sealed class ParticleDynamics : IEntityComponent
         float hSq = h * h;
         float restDistance = h * 0.5f;
 
-        foreach (var other in _allEntities)
+        System.Collections.Generic.IEnumerable<Entity> source;
+        if (_grid != null)
+        {
+            _grid.GetNearbyEntities(entity.Position, _neighborBuffer);
+            source = _neighborBuffer;
+        }
+        else
+        {
+            source = _allEntities!;
+        }
+
+        foreach (var other in source)
         {
             if (other == entity)
                 continue;
