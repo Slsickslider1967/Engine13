@@ -209,7 +209,6 @@ namespace Engine13.UI
 
             _pipeline = _factory.CreateGraphicsPipeline(pd);
 
-
             // font
             var io = ImGui.GetIO();
             io.Fonts.GetTexDataAsRGBA32(

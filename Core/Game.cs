@@ -21,6 +21,7 @@ namespace Engine13.Core
         private const int MaxFrames = 500;
         private const float SimulationDeltaTime = 1f / 60f; // Physics step size (fixed for stability)
         private float PlaybackFps = 60f;
+        private int FrameIndex = 0;
         private readonly List<Entity> _entities = new();
         private readonly List<ParticleSystem> _particleSystems = new();
         private readonly UpdateManager _updateManager = new();
@@ -54,6 +55,9 @@ namespace Engine13.Core
         private bool _isPrecomputing;
         private bool presets = false;
         private bool SimulationWindow = false;
+        private bool PrecomputeWindow = false;
+
+        private string PrecomputeName = "Open Precompute Window";
 
         public Game(Sdl2Window window, GraphicsDevice graphicsDevice)
             : base(window, graphicsDevice)
@@ -88,10 +92,9 @@ namespace Engine13.Core
             ImGui.Text("Precompute simulation frames before playback.");
             ImGui.Text($"Particle systems: {_particleSystems.Count}");
             ImGui.Text($"Entities: {_entities.Count}");
-            if (ImGui.Button("Start Precompute"))
+            if (ImGui.Button(PrecomputeName))
             {
-                _startRequested = true;
-                SimulationWindow = true;
+                PrecomputeWindow = true;
             }
             ImGui.SameLine();
             if (ImGui.Button("Stop and Quit"))
@@ -146,11 +149,27 @@ namespace Engine13.Core
                     {
                         _tickIndex = Math.Clamp(selectedFrame, 0, MaxFrames - 1);
                     }
+                    if (ImGui.SliderFloat("Playback FPS", ref PlaybackFps, 1f, 240f))
+                    {
+                        PlaybackFps = Math.Clamp(PlaybackFps, 1f, 240f);
+                    }
                     if (ImGui.Button("Close"))
                     {
                         SimulationWindow = false;
                     }
                 }
+            }
+            if(PrecomputeWindow)
+            {
+                ImGui.Begin("Precompute Settings");
+                if(ImGui.Button("Begin compute"))
+                {
+                    _startRequested = true;
+                    PrecomputeWindow = false;
+                    SimulationWindow = true;
+                    _playbackTimer.Stop();
+                }
+
             }
 
             ImGui.End();
@@ -313,6 +332,12 @@ namespace Engine13.Core
                 {
                     Logger.Log(
                         $"Yet to implement fill selection from {SelectStart} to {SelectEnd}"
+                    );
+                }
+                if (ImGui.Button("Zoom"))
+                {
+                    Logger.Log(
+                        $"Yet to implement zoom to selection from {SelectStart} to {SelectEnd}"
                     );
                 }
                 if (ImGui.Button("Clear Selection"))

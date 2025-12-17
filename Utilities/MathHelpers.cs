@@ -614,7 +614,10 @@ namespace Engine13.Utilities
         }
 
         // No-allocation overload: fills the provided list with nearby entities.
-        public void GetNearbyEntities(Vector2 position, System.Collections.Generic.List<Entity> outList)
+        public void GetNearbyEntities(
+            Vector2 position,
+            System.Collections.Generic.List<Entity> outList
+        )
         {
             outList.Clear();
             var cellCoords = GetCellCoords(position);
