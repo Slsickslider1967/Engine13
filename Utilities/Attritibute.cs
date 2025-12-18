@@ -137,8 +137,6 @@ public sealed class ParticleDynamics : IEntityComponent
     public float PressureRadius { get; set; } = DefaultPressureRadius;
     public bool UseSPHSolver { get; set; }
 
-    public ParticleDynamics() { }
-
     public ParticleDynamics(List<Entity> allEntities, SpatialGrid? grid = null)
     {
         _allEntities = allEntities;

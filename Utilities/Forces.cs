@@ -26,8 +26,8 @@ public static class Forces
 {
     static readonly ConcurrentDictionary<Entity, Vec2> _accumulator = new();
 
-    public static float MaxVelocity { get; set; } = 2.0f;
-    public static float VelocityDamping { get; set; } = 0.99f;  // Reduced from 0.96 for more responsive particles
+    public static float MaxVelocity { get; set; } = 15.0f;
+    public static float VelocityDamping { get; set; } = 0.995f;
 
     public static void Reset() => _accumulator.Clear();
 
@@ -54,10 +54,11 @@ public static class Forces
             if (collision.UseSPHIntegration) continue;
 
             double mass = entity.Mass > 0f ? entity.Mass : 1.0;
-            var deltaVelocity = new Vector2((float)(force.X / mass * dt), (float)(force.Y / mass * dt));
 
-            collision.Velocity *= VelocityDamping;
+            // Semi-implicit integration: first apply acceleration, then damping.
+            var deltaVelocity = new Vector2((float)(force.X / mass * dt), (float)(force.Y / mass * dt));
             collision.Velocity += deltaVelocity;
+            collision.Velocity *= VelocityDamping;
 
             float speed = collision.Velocity.Length();
             if (speed > MaxVelocity)

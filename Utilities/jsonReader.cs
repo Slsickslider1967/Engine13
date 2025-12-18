@@ -2,6 +2,7 @@ using System.Numerics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Engine13.Utilities.Attributes;
+using Vortice.Direct3D11;
 
 namespace Engine13.Utilities.JsonReader
 {
@@ -32,9 +33,15 @@ namespace Engine13.Utilities.JsonReader
         public float MaxForceMagnitude { get; set; } = 50f;
         public float VelocityDamping { get; set; } = 0.03f;
         public float PressureStrength { get; set; } = 2.5f;
+        private int MatericalCount { get; set; } = 1;
         public float PressureRadius { get; set; } = ParticleDynamics.DefaultPressureRadius;
 
         public bool IsFluid { get; set; } = false;
+        public bool IsSolid { get; set; } = false;
+
+        // Bond/spring parameters (Hooke's law)
+        public float BondStiffness { get; set; } = 0f;
+        public float BondDamping { get; set; } = 0f;
 
         // SPH-specific parameters for scientific fluid simulation
         public float SPHRestDensity { get; set; } = 1000f; // kg/m³ (water = 1000)
@@ -72,15 +79,10 @@ namespace Engine13.Utilities.JsonReader
                 Console.WriteLine($"[jsonReader] Loaded {_Presets.Count} presets from JSON");
             }
 
-            if (_Presets.TryGetValue(presetName, out var preset))
+            if (_Presets.TryGetValue(presetName, out var preset) && preset != null)
             {
                 // Debug output
-                if (preset != null)
-                {
-                    Console.WriteLine(
-                        $"[jsonReader] Loaded '{presetName}': IsFluid={preset.IsFluid}"
-                    );
-                }
+                Console.WriteLine($"[jsonReader] Loaded '{presetName}': IsFluid={preset.IsFluid}");
                 return preset;
             }
 
@@ -94,6 +96,33 @@ namespace Engine13.Utilities.JsonReader
             pd.VelocityDamping = VelocityDamping;
             pd.PressureStrength = PressureStrength;
             pd.PressureRadius = PressureRadius;
+        }
+
+        // Returns the number of presets available in the JSON (loads presets if not already loaded)
+        public static int GetPresetCount()
+        {
+            if (_Presets == null)
+            {
+            // calling Load with an empty name will initialize _Presets as a side effect
+            Load(string.Empty);
+            }
+            return _Presets?.Count ?? 0;
+        }
+        
+        public string GetPresetName(int index)
+        {
+            if (_Presets == null)
+            {
+            Load(string.Empty);
+            }
+
+            if (_Presets == null || _Presets.Count == 0)
+            return string.Empty;
+
+            var names = new List<string>(_Presets.Keys);
+            names.Sort(StringComparer.OrdinalIgnoreCase);
+
+            return (index >= 0 && index < names.Count) ? names[index] : string.Empty;
         }
 
         private class PresetCollection

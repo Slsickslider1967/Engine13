@@ -401,7 +401,8 @@ namespace Engine13.Core
             {
                 var pi = _fluidParticles[i];
                 var oc_i = pi.Entity.GetComponent<ObjectCollision>();
-                if (oc_i == null || oc_i.IsStatic) continue;
+                if (oc_i == null || oc_i.IsStatic)
+                    continue;
 
                 Vector2 pressureForce = Vector2.Zero;
                 Vector2 viscosityForce = Vector2.Zero;
@@ -416,7 +417,8 @@ namespace Engine13.Core
                 foreach (var nb in pi.Neighbors)
                 {
                     int j = _fluidParticles.IndexOf(nb);
-                    if (j < 0) continue;
+                    if (j < 0)
+                        continue;
 
                     var pj = nb.Entity;
                     var oc_j = pj.GetComponent<ObjectCollision>();
@@ -424,21 +426,23 @@ namespace Engine13.Core
                     float mj = pj.Mass > 0f ? pj.Mass : 1f;
                     Vector2 rij = pi.Entity.Position - pj.Position;
                     float r = rij.Length();
-                    if (r < 1e-6f) r = 1e-6f;
+                    if (r < 1e-6f)
+                        r = 1e-6f;
                     Vector2 dir = rij / r;
 
                     // pressure
                     Vector2 gradW = SphKernels.SpikyGradient(r, h, dir);
                     float rho_j = MathF.Max(1e-6f, _densities[j]);
                     float p_j = _pressures[j];
-                    Vector2 presTerm = - (mj * (p_i + p_j) / (2f * rho_j)) * gradW;
+                    Vector2 presTerm = -(mj * (p_i + p_j) / (2f * rho_j)) * gradW;
                     pressureForce += presTerm;
 
                     // viscosity
                     if (oc_j != null)
                     {
                         float lap = SphKernels.ViscosityLaplacian(r, h);
-                        viscosityForce += _viscosity * mj * (oc_j.Velocity - oc_i.Velocity) / rho_j * lap;
+                        viscosityForce +=
+                            _viscosity * mj * (oc_j.Velocity - oc_i.Velocity) / rho_j * lap;
                     }
 
                     // color field for surface tension
@@ -457,7 +461,8 @@ namespace Engine13.Core
                 }
 
                 // total force
-                Vector2 totalForce = pressureForce + viscosityForce + surfaceForce + (mi * _gravity);
+                Vector2 totalForce =
+                    pressureForce + viscosityForce + surfaceForce + (mi * _gravity);
                 _forces[i] = totalForce;
             }
 
@@ -466,7 +471,8 @@ namespace Engine13.Core
             {
                 var pi = _fluidParticles[i];
                 var oc = pi.Entity.GetComponent<ObjectCollision>();
-                if (oc == null || oc.IsStatic) continue;
+                if (oc == null || oc.IsStatic)
+                    continue;
 
                 float rho = MathF.Max(1e-6f, _densities[i]);
                 Vector2 accel = _forces[i] / rho;

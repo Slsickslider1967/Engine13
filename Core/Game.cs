@@ -61,6 +61,7 @@ namespace Engine13.Core
         private bool PrecomputeWindow = false;
         private bool HasPrecomputeRun = false;
         private bool _showGraphInWindow = false;
+        private bool _startRunningImmediately = true;
 
         private string PrecomputeName = "Open Precompute Window";
 
@@ -83,6 +84,8 @@ namespace Engine13.Core
 
             _imgui = new ImGuiController(Window, GraphicsDevice, CommandList, _inputManager);
             _imgui.PrintDrawData = true;
+            // Register molecular dynamics bond system so it updates each frame
+            _updateManager.Register(Engine13.Utilities.MolecularDynamicsSystem.Instance);
             // Try to load precompute CSV log for plotting
             try
             {
@@ -214,8 +217,6 @@ namespace Engine13.Core
                 _isPrecomputing = false;
                 _showStartWindow = false;
             }
-
-            // Attempt to reload the CSV we just wrote so the UI can plot it.
             try
             {
                 string csvPath = Path.Combine(Directory.GetCurrentDirectory(), "Ticks.csv");
@@ -268,10 +269,29 @@ namespace Engine13.Core
                 }
             }
 
+            int ObjectNumber = 2000;
+            int MaterialCount = ParticlePresetReader.GetPresetCount();
+
             if (!IsSelecting && SelectStart != SelectEnd)
             {
                 ImGui.Begin("SelectionInfo");
-                ImGui.Text($"Selection from {SelectStart} to {SelectEnd}");
+                int matCount = MaterialCount;
+                if (matCount <= 0)
+                {
+                    ImGui.Text("No presets available");
+                }
+                else
+                {
+                    var presetNames = new string[matCount];
+                    var presetReader = new ParticlePresetReader();
+                    for (int i = 0; i < matCount; i++)
+                        presetNames[i] = presetReader.GetPresetName(i);
+
+                    // Ensure index is in range (ObjectNumber is reused here as the selected preset index)
+                    ObjectNumber = Math.Clamp(ObjectNumber, 0, presetNames.Length - 1);
+
+                    ImGui.Combo("Material", ref ObjectNumber, presetNames, presetNames.Length);
+                }
                 if (ImGui.Button("Fill"))
                 {
                     // Convert screen selection to normalized device coords [-1,1]
@@ -290,12 +310,23 @@ namespace Engine13.Core
                     float bottomRightX = MathF.Max(x0, x1);
                     float bottomRightY = MathF.Max(y0, y1);
 
-                    // Create particles in the selected rectangle.
-                    CreateObjects("Sand", 2000, topLeftX, topLeftY, bottomRightX, bottomRightY);
-
-                    Logger.Log(
-                        $"Filled selection with Water (2000 particles) from {SelectStart} to {SelectEnd} -> world rect ({topLeftX},{topLeftY})-({bottomRightX},{bottomRightY})"
+                    ObjectNumber = CalculateParticleCountForArea(
+                        topLeftX,
+                        topLeftY,
+                        bottomRightX,
+                        bottomRightY,
+                        "Sand"
                     );
+
+                    CreateObjects(
+                        "Sand",
+                        ObjectNumber,
+                        topLeftX,
+                        topLeftY,
+                        bottomRightX,
+                        bottomRightY
+                    );
+
                 }
                 if (ImGui.Button("Zoom"))
                 {
@@ -371,6 +402,30 @@ namespace Engine13.Core
             }
         }
 
+        private int CalculateParticleCountForArea(
+            float topLeftX,
+            float topLeftY,
+            float bottomRightX,
+            float bottomRightY,
+            string materialName
+        )
+        {
+            var tempPs = ParticleSystemFactory.Create("Temp", materialName);
+            float radius = tempPs.Material.ParticleRadius;
+            float diameter = radius * 2f;
+            float horizontalSpacing = diameter * 1.15f;
+            float verticalSpacing = diameter * 1.15f;
+
+            float width = MathF.Max(0.0001f, bottomRightX - topLeftX);
+            float height = MathF.Max(0.0001f, bottomRightY - topLeftY);
+
+            int columns = Math.Max(1, (int)MathF.Floor(width / horizontalSpacing));
+            int rows = Math.Max(1, (int)MathF.Floor(height / verticalSpacing));
+            int capacity = columns * rows;
+
+            return capacity;
+        }
+
         protected override void Draw()
         {
             Renderer.BeginFrame(new RgbaFloat(0.1f, 0.1f, 0.1f, 1f));
@@ -443,10 +498,6 @@ namespace Engine13.Core
             {
                 Stop();
             }
-            if (ImGui.Button("Preset Select"))
-            {
-                presets = true;
-            }
             ImGui.Separator();
             if (_showStartWindow == true)
             {
@@ -492,12 +543,6 @@ namespace Engine13.Core
                 }
                 if (ImGui.Checkbox("Show Graph In Window", ref _showGraphInWindow)) { }
             }
-            if (presets)
-            {
-                ImGui.OpenPopup("Presets");
-                ImGui.SetNextWindowSize(new Vector2(200, 150), ImGuiCond.FirstUseEver);
-                ImGui.BeginPopup("Presets");
-            }
             if (SimulationWindow)
             {
                 ImGui.SetNextWindowSize(new Vector2(300, 200), ImGuiCond.FirstUseEver);
@@ -508,8 +553,13 @@ namespace Engine13.Core
                 }
                 else
                 {
+                    if (!_startRunningImmediately)
+                    {
+                        _playbackTimer.Stop();
+                    }
                     if (ImGui.Button("Play/Pause"))
                     {
+                        _startRunningImmediately = true;
                         if (_playbackTimer.IsRunning)
                         {
                             _playbackTimer.Stop();
@@ -538,6 +588,12 @@ namespace Engine13.Core
                     {
                         PlaybackFps = Math.Clamp(PlaybackFps, 1f, 240f);
                     }
+                    // if (ImGui.Button("Clear Bonds"))
+                    // {
+                    //     Engine13.Utilities.MolecularDynamicsSystem.Instance.ClearAllBonds();
+                    //     Logger.Log("Cleared all bonds from MolecularDynamicsSystem");
+                    // }
+                    ImGui.SameLine();
                     if (ImGui.Button("Close"))
                     {
                         SimulationWindow = false;
@@ -558,6 +614,7 @@ namespace Engine13.Core
                 }
                 ImGui.Separator();
                 ImGui.SliderInt("Max Frames", ref MaxFrames, 100, 5000);
+                if (ImGui.Checkbox("Start Running Immediately", ref _startRunningImmediately)) { }
             }
             if (_showGraphInWindow)
             {
@@ -718,12 +775,9 @@ namespace Engine13.Core
 
             int columns = Math.Max(1, (int)MathF.Floor(width / horizontalSpacing));
             int rows = Math.Max(1, (int)MathF.Floor(height / verticalSpacing));
-
-            // If the computed grid can't hold the requested particles, clamp to capacity so we fill the area.
             int capacity = columns * rows;
             int particlesToCreate = Math.Min(Math.Max(0, particleCount), capacity);
 
-            // Ensure capacity in lists
             _entities.EnsureCapacity(_entities.Count + particlesToCreate + 1);
 
             particleSystem.CreateParticles(
@@ -735,6 +789,38 @@ namespace Engine13.Core
                 _updateManager,
                 _grid
             );
+
+            // If material requests solid/bonded behavior, create Hooke-law bonds between nearby
+            // particles using the preset stiffness/damping values.
+            var mat = particleSystem.Material;
+            if (mat != null && (mat.IsSolid || mat.BondStiffness > 0f))
+            {
+                float bondThreshold = mat.ParticleRadius * 2.2f; // allow near neighbors
+                var neighbors = new System.Collections.Generic.List<Entity>();
+
+                // Optimize membership test for particles created by this system
+                var createdSet = new System.Collections.Generic.HashSet<Entity>(particleSystem.Particles);
+
+                foreach (var e in particleSystem.Particles)
+                {
+                    _grid.GetNearbyEntities(e.Position, neighbors);
+                    foreach (var other in neighbors)
+                    {
+                        if (other == e) continue;
+                        if (!createdSet.Contains(other)) continue; // only bond within same system
+                        // Only create one bond per unordered pair
+                        if (e.GetHashCode() >= other.GetHashCode()) continue;
+                        float dist = Vector2.Distance(e.Position, other.Position);
+                        if (dist <= bondThreshold)
+                        {
+                            float rest = dist;
+                            float k = mat.BondStiffness > 0f ? mat.BondStiffness : 100f;
+                            float c = mat.BondDamping;
+                            Engine13.Utilities.MolecularDynamicsSystem.Instance.AddBond(e, other, k, c, rest);
+                        }
+                    }
+                }
+            }
 
             if (particleSystem.Material.IsFluid)
             {
