@@ -76,9 +76,14 @@ namespace Engine13.Input
             _keysReleasedThisFrame.Clear();
             _mouseButtonsPressedThisFrame.Clear();
             _mouseButtonsReleasedThisFrame.Clear();
+        }
 
-            // Reset per-frame UI inputs
+        // Consume and reset the accumulated mouse wheel delta. Call this when the UI reads the wheel value.
+        public float ConsumeMouseWheel()
+        {
+            float val = MouseWheelDelta;
             MouseWheelDelta = 0f;
+            return val;
         }
 
 
@@ -107,6 +112,10 @@ namespace Engine13.Input
         {
             // SDL2 wheel typically uses e.WheelDelta or vertical Y; adapt if your wrapper differs
             MouseWheelDelta += e.WheelDelta;
+            if (e.WheelDelta != 0f)
+            {
+                System.Console.WriteLine($"[InputManager] MouseWheel event: {e.WheelDelta}");
+            }
         }
 
         private void OnMouseDown(MouseEvent e)

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.IO;
 using System.Numerics;
 using System.Threading.Tasks;
 using Engine13.Graphics;
@@ -11,6 +12,7 @@ using Engine13.Utilities.JsonReader;
 using ImGuiNET;
 using SharpGen.Runtime.Win32;
 using Veldrid;
+using Veldrid.OpenGLBinding;
 using Veldrid.Sdl2;
 using Vulkan;
 
@@ -45,6 +47,7 @@ namespace Engine13.Core
 
         private InputManager _inputManager;
         private ImGuiController? _imgui;
+        private CsvPlotter? _csvPlotter;
 
         private static bool IsSelecting = false;
         private static Vector2 SelectStart;
@@ -56,6 +59,7 @@ namespace Engine13.Core
         private bool presets = false;
         private bool SimulationWindow = false;
         private bool PrecomputeWindow = false;
+        private bool HasPrecomputeRun = false;
 
         private string PrecomputeName = "Open Precompute Window";
 
@@ -78,101 +82,24 @@ namespace Engine13.Core
 
             _imgui = new ImGuiController(Window, GraphicsDevice, CommandList, _inputManager);
             _imgui.PrintDrawData = true;
+            // Try to load precompute CSV log for plotting
+            try
+            {
+                string csvPath = Path.Combine(Directory.GetCurrentDirectory(), "Ticks.csv");
+                _csvPlotter = new CsvPlotter(csvPath);
+            }
+            catch
+            {
+                _csvPlotter = null;
+            }
             base.Initialize();
         }
 
         protected override void Update(GameTime gameTime)
         {
             _inputManager.Update();
-
             _imgui?.NewFrame(gameTime.DeltaTime);
-
-            ImGui.SetNextWindowSize(new Vector2(450, 300), ImGuiCond.FirstUseEver);
-            ImGui.Begin("Simulation Setup", ref _showStartWindow, ImGuiWindowFlags.None);
-            ImGui.Text("Precompute simulation frames before playback.");
-            ImGui.Text($"Particle systems: {_particleSystems.Count}");
-            ImGui.Text($"Entities: {_entities.Count}");
-            if (ImGui.Button(PrecomputeName))
-            {
-                PrecomputeWindow = true;
-            }
-            ImGui.SameLine();
-            if (ImGui.Button("Stop and Quit"))
-            {
-                Stop();
-            }
-            if (ImGui.Button("Preset Select"))
-            {
-                presets = true;
-            }
-            ImGui.Separator();
-            if (_showStartWindow == true)
-            {
-                ImGui.Text($"Ticks Computed: {_tickCounter}");
-                ImGui.Text($"Tick Time: {_lastTickTime:F2} ms");
-                ImGui.Text($"Avg Speed: {_lastAvgSpeed:F4} units/s");
-                ImGui.Text($"Max Speed: {_lastMaxSpeed:F4} units/s");
-                ImGui.Text($"Avg Pos: {_lastAvgPos.Y:F3} units");
-                ImGui.Text($"Grounded Count: {_lastGroundedCount}");
-            }
-            ;
-            if (presets)
-            {
-                ImGui.OpenPopup("Presets");
-                ImGui.SetNextWindowSize(new Vector2(200, 150), ImGuiCond.FirstUseEver);
-                ImGui.BeginPopup("Presets");
-            }
-            if (SimulationWindow)
-            {
-                ImGui.SetNextWindowSize(new Vector2(300, 200), ImGuiCond.FirstUseEver);
-                ImGui.Begin("Simulation");
-                if (_isPrecomputing)
-                {
-                    ImGui.Text("Precomputing...");
-                }
-                else
-                {
-                    if (ImGui.Button("Play/Pause"))
-                    {
-                        if (_playbackTimer.IsRunning)
-                        {
-                            _playbackTimer.Stop();
-                        }
-                        else
-                        {
-                            _playbackTimer.Start();
-                        }
-                    }
-                    // Allow selecting a specific precomputed frame (0 .. MaxFrames-1)
-                    int selectedFrame = _tickIndex;
-                    if (ImGui.SliderInt("Frame Select", ref selectedFrame, 0, MaxFrames - 1))
-                    {
-                        _tickIndex = Math.Clamp(selectedFrame, 0, MaxFrames - 1);
-                    }
-                    if (ImGui.SliderFloat("Playback FPS", ref PlaybackFps, 1f, 240f))
-                    {
-                        PlaybackFps = Math.Clamp(PlaybackFps, 1f, 240f);
-                    }
-                    if (ImGui.Button("Close"))
-                    {
-                        SimulationWindow = false;
-                    }
-                }
-            }
-            if(PrecomputeWindow)
-            {
-                ImGui.Begin("Precompute Settings");
-                if(ImGui.Button("Begin compute"))
-                {
-                    _startRequested = true;
-                    PrecomputeWindow = false;
-                    SimulationWindow = true;
-                    _playbackTimer.Stop();
-                }
-
-            }
-
-            ImGui.End();
+            DrawUI();
 
             DrawSelectionRect();
 
@@ -285,6 +212,22 @@ namespace Engine13.Core
                 _simulationComplete = true;
                 _isPrecomputing = false;
                 _showStartWindow = false;
+            }
+
+            // Attempt to reload the CSV we just wrote so the UI can plot it.
+            try
+            {
+                string csvPath = Path.Combine(Directory.GetCurrentDirectory(), "Ticks.csv");
+                if (_csvPlotter == null)
+                    _csvPlotter = new CsvPlotter(csvPath);
+                else
+                    _csvPlotter.Load();
+
+                Logger.Log($"CsvPlotter loaded after precompute: {csvPath}");
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"CsvPlotter reload failed: {ex.Message}");
             }
 
             _playbackTimer.Start();
@@ -419,13 +362,19 @@ namespace Engine13.Core
                 tickCount = _tickPositions.Count;
                 if (tickCount > 0)
                 {
-                    // Playback loop - uses PlaybackFps (independent of simulation step size)
-                    float elapsedSeconds = (float)_playbackTimer.Elapsed.TotalSeconds;
-                    float frameTime = 1f / PlaybackFps;
-                    float totalSimTime = tickCount * frameTime;
-                    float playbackTime = elapsedSeconds % totalSimTime;
-                    _tickIndex = (int)(playbackTime / frameTime);
-                    _tickIndex = Math.Clamp(_tickIndex, 0, tickCount - 1);
+                    if (_playbackTimer.IsRunning)
+                    {
+                        float elapsedSeconds = (float)_playbackTimer.Elapsed.TotalSeconds;
+                        float frameTime = 1f / PlaybackFps;
+                        float totalSimTime = tickCount * frameTime;
+                        float playbackTime = elapsedSeconds % totalSimTime;
+                        _tickIndex = (int)(playbackTime / frameTime);
+                        _tickIndex = Math.Clamp(_tickIndex, 0, tickCount - 1);
+                    }
+                    else
+                    {
+                        _tickIndex = Math.Clamp(_tickIndex, 0, tickCount - 1);
+                    }
 
                     tickPositions = _tickPositions[_tickIndex];
                 }
@@ -433,7 +382,6 @@ namespace Engine13.Core
 
             if (tickCount == 0)
             {
-                // Still render ImGui (start UI / diagnostics) even when there are no precomputed frames.
                 _imgui?.Render(CommandList);
                 Renderer.EndFrame();
                 return;
@@ -444,6 +392,214 @@ namespace Engine13.Core
             _imgui?.Render(CommandList);
 
             Renderer.EndFrame();
+        }
+
+        private void DrawUI()
+        {
+            ImGui.ShowDemoWindow();
+
+            ImGui.SetNextWindowSize(new Vector2(450, 300), ImGuiCond.FirstUseEver);
+            ImGui.Begin("Simulation Setup", ref _showStartWindow, ImGuiWindowFlags.None);
+            ImGui.Text("Precompute simulation frames before playback.");
+            ImGui.Text($"Particle systems: {_particleSystems.Count}");
+            ImGui.Text($"Entities: {_entities.Count}");
+            if (!HasPrecomputeRun)
+            {
+                if (ImGui.Button(PrecomputeName))
+                {
+                    PrecomputeWindow = true;
+                }
+            }
+            else
+            {
+                if (ImGui.Button(PrecomputeName))
+                {
+                    SimulationWindow = !SimulationWindow;
+                }
+            }
+
+            ImGui.SameLine();
+            if (ImGui.Button("Stop and Quit"))
+            {
+                Stop();
+            }
+            if (ImGui.Button("Preset Select"))
+            {
+                presets = true;
+            }
+            ImGui.Separator();
+            if (_showStartWindow == true)
+            {
+                ImGui.Text($"Ticks Computed: {_tickCounter}");
+                ImGui.Text($"Tick Time: {_lastTickTime:F2} ms");
+                ImGui.Text($"Avg Speed: {_lastAvgSpeed:F4} units/s");
+                ImGui.Text($"Max Speed: {_lastMaxSpeed:F4} units/s");
+                ImGui.Text($"Avg Pos: {_lastAvgPos.Y:F3} units");
+                ImGui.Text($"Grounded Count: {_lastGroundedCount}");
+                ImGui.ProgressBar(
+                    (float)_tickCounter / MaxFrames,
+                    new Vector2(-1, 0),
+                    "Precompute Progress"
+                );
+            }
+            else
+            {
+                if (_csvPlotter != null)
+                {
+                    ImGui.Text($"Ticks Computed: {_tickCounter}");
+
+                    string csvPath = Path.Combine(Directory.GetCurrentDirectory(), "Ticks.csv");
+
+                    // Prefer column 1 as timing column (if file is [tick, time, ...])
+                    var ySeries = _csvPlotter.GetSeries(1) ?? _csvPlotter.GetSeries(0);
+
+                    if (ySeries == null || ySeries.Length == 0)
+                    {
+                        ImGui.Text("No numeric data available in the CSV selected columns.");
+                    }
+                    else
+                    {
+                        float lastValid = 0f;
+                        for (int i = 0; i < ySeries.Length; i++)
+                        {
+                            if (float.IsNaN(ySeries[i]))
+                                ySeries[i] = lastValid;
+                            else
+                                lastValid = ySeries[i];
+                        }
+
+                        float minVal = float.PositiveInfinity;
+                        float maxVal = float.NegativeInfinity;
+                        for (int i = 0; i < ySeries.Length; i++)
+                        {
+                            var v = ySeries[i];
+                            if (float.IsNaN(v))
+                                continue;
+                            if (v < minVal)
+                                minVal = v;
+                            if (v > maxVal)
+                                maxVal = v;
+                        }
+
+                        if (minVal == float.PositiveInfinity)
+                        {
+                            ImGui.Text("Series contains no valid numeric points to plot.");
+                        }
+                        else
+                        {
+                            ImGui.PlotLines(
+                                "Tick Time (ms)",
+                                ref ySeries[0],
+                                ySeries.Length,
+                                0,
+                                $"{_tickCounter}/{MaxFrames}",
+                                minVal,
+                                maxVal,
+                                new System.Numerics.Vector2(-1, 100)
+                            );
+                        }
+                    }
+
+                    if (ImGui.Button("Reload CSV"))
+                    {
+                        try
+                        {
+                            _csvPlotter.Load();
+                            Logger.Log("CSV reloaded from UI");
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.Log($"Reload failed: {ex.Message}");
+                        }
+                    }
+                }
+                else
+                {
+                    ImGui.Text("No Ticks.csv found in working directory.");
+                    if (ImGui.Button("Reload CSV"))
+                    {
+                        try
+                        {
+                            string csvPath = Path.Combine(
+                                Directory.GetCurrentDirectory(),
+                                "Ticks.csv"
+                            );
+                            _csvPlotter = new CsvPlotter(csvPath);
+                        }
+                        catch
+                        {
+                            _csvPlotter = null;
+                        }
+                    }
+                }
+            }
+            if (presets)
+            {
+                ImGui.OpenPopup("Presets");
+                ImGui.SetNextWindowSize(new Vector2(200, 150), ImGuiCond.FirstUseEver);
+                ImGui.BeginPopup("Presets");
+            }
+            if (SimulationWindow)
+            {
+                ImGui.SetNextWindowSize(new Vector2(300, 200), ImGuiCond.FirstUseEver);
+                ImGui.Begin("Simulation");
+                if (_isPrecomputing)
+                {
+                    ImGui.Text("Precomputing...");
+                }
+                else
+                {
+                    if (ImGui.Button("Play/Pause"))
+                    {
+                        if (_playbackTimer.IsRunning)
+                        {
+                            _playbackTimer.Stop();
+                        }
+                        else
+                        {
+                            _playbackTimer.Start();
+                        }
+                    }
+                    int selectedFrame = _tickIndex;
+                    int maxFrame = MaxFrames - 1;
+                    lock (_tickLock)
+                    {
+                        if (_tickPositions.Count > 0)
+                            maxFrame = Math.Min(MaxFrames - 1, _tickPositions.Count - 1);
+                    }
+
+                    if (ImGui.SliderInt("Frame Select", ref selectedFrame, 0, maxFrame))
+                    {
+                        _tickIndex = Math.Clamp(selectedFrame, 0, maxFrame);
+                        if (_playbackTimer.IsRunning)
+                            _playbackTimer.Stop();
+                    }
+
+                    if (ImGui.SliderFloat("Playback FPS", ref PlaybackFps, 1f, 240f))
+                    {
+                        PlaybackFps = Math.Clamp(PlaybackFps, 1f, 240f);
+                    }
+                    if (ImGui.Button("Close"))
+                    {
+                        SimulationWindow = false;
+                    }
+                }
+            }
+            if (PrecomputeWindow)
+            {
+                ImGui.Begin("Precompute Settings");
+                if (ImGui.Button("Begin compute"))
+                {
+                    _startRequested = true;
+                    PrecomputeWindow = false;
+                    SimulationWindow = true;
+                    HasPrecomputeRun = true;
+                    PrecomputeName = "Show/Hide Simulation Settings";
+                    _playbackTimer.Stop();
+                }
+            }
+
+            ImGui.End();
         }
 
         private void RunCollisionDetection(float stepDelta)

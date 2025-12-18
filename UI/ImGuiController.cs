@@ -32,6 +32,7 @@ namespace Engine13.UI
         private Texture? _fontTexture;
         private TextureView? _fontTextureView;
         private Sampler? _fontSampler;
+        private float _lastConsumedWheel = 0f;
 
         // Diagnostics
         private bool _printDrawData = true; // enabled during debug by default
@@ -76,7 +77,49 @@ namespace Engine13.UI
             io.MouseDown[0] = _input.IsMouseButtonDown(MouseButton.Left);
             io.MouseDown[1] = _input.IsMouseButtonDown(MouseButton.Right);
             io.MouseDown[2] = _input.IsMouseButtonDown(MouseButton.Middle);
-            io.MouseWheel = _input.MouseWheelDelta;
+
+            // Wheel (vertical) from input manager; horizontal not yet supported there so set to 0
+            float wheel = _input.ConsumeMouseWheel();
+            io.MouseWheel = wheel;
+            _lastConsumedWheel = wheel;
+            io.MouseWheelH = 0f;
+
+            // Debug trace when non-zero
+            if (io.MouseWheel != 0f)
+            {
+                System.Console.WriteLine($"[ImGuiController] NewFrame: io.MouseWheel={io.MouseWheel}, consumedWheel={wheel}");
+            }
+
+            // Populate ImGui key state safely. ImGui expects a KeysDown array; guard bounds.
+            const int ImGuiKeyCount = 512;
+            int keyArraySize = (int)io.KeysDown.Count;
+            int clearCount = Math.Min(keyArraySize, ImGuiKeyCount);
+            for (int k = 0; k < clearCount; k++)
+                io.KeysDown[k] = false;
+
+            foreach (var key in _input.KeysDown)
+            {
+                int keyIndex = (int)key;
+                if (keyIndex >= 0 && keyIndex < clearCount)
+                    io.KeysDown[keyIndex] = true;
+            }
+
+            // Modifier keys
+            io.KeyCtrl = _input.IsKeyDown(Key.ControlLeft) || _input.IsKeyDown(Key.ControlRight);
+            io.KeyShift = _input.IsKeyDown(Key.ShiftLeft) || _input.IsKeyDown(Key.ShiftRight);
+            io.KeyAlt = _input.IsKeyDown(Key.AltLeft) || _input.IsKeyDown(Key.AltRight);
+            // Determine Super (Meta/Windows/Command) from pressed key names if enum varies by platform
+            bool keySuper = false;
+            foreach (var k in _input.KeysDown)
+            {
+                var n = k.ToString().ToLowerInvariant();
+                if (n.Contains("command") || n.Contains("win") || n.Contains("super") || n.Contains("meta"))
+                {
+                    keySuper = true;
+                    break;
+                }
+            }
+            io.KeySuper = keySuper;
 
             ImGui.NewFrame();
         }
@@ -121,13 +164,14 @@ namespace Engine13.UI
             }
             ImGui.Separator();
             ImGui.Checkbox("Print draw-data to console", ref _printDrawData);
+            ImGui.Text($"WantCaptureMouse: {io.WantCaptureMouse}");
+            ImGui.Text($"LastConsumedWheel: {_lastConsumedWheel}");
             if (ImGui.Button("Show ImGui Demo Window"))
             {
                 ImGui.ShowDemoWindow();
             }
             ImGui.End();
         }
-
         private void CreateDeviceResources()
         {
             _vertexBuffer = _factory.CreateBuffer(
@@ -208,6 +252,7 @@ namespace Engine13.UI
             };
 
             _pipeline = _factory.CreateGraphicsPipeline(pd);
+
 
             // font
             var io = ImGui.GetIO();
