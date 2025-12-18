@@ -20,7 +20,7 @@ namespace Engine13.Core
 {
     public class Game : EngineBase
     {
-        private const int MaxFrames = 500;
+        private int MaxFrames = 500;
         private const float SimulationDeltaTime = 1f / 60f; // Physics step size (fixed for stability)
         private float PlaybackFps = 60f;
         private int FrameIndex = 0;
@@ -60,6 +60,7 @@ namespace Engine13.Core
         private bool SimulationWindow = false;
         private bool PrecomputeWindow = false;
         private bool HasPrecomputeRun = false;
+        private bool _showGraphInWindow = false;
 
         private string PrecomputeName = "Open Precompute Window";
 
@@ -273,8 +274,27 @@ namespace Engine13.Core
                 ImGui.Text($"Selection from {SelectStart} to {SelectEnd}");
                 if (ImGui.Button("Fill"))
                 {
+                    // Convert screen selection to normalized device coords [-1,1]
+                    var winSize = WindowBounds.GetWindowSize();
+                    float sx = winSize.X > 0 ? winSize.X : 1f;
+                    float sy = winSize.Y > 0 ? winSize.Y : 1f;
+
+                    float x0 = SelectStart.X / sx * 2f - 1f;
+                    float y0 = SelectStart.Y / sy * 2f - 1f;
+                    float x1 = SelectEnd.X / sx * 2f - 1f;
+                    float y1 = SelectEnd.Y / sy * 2f - 1f;
+
+                    // Ensure top-left / bottom-right ordering
+                    float topLeftX = MathF.Min(x0, x1);
+                    float topLeftY = MathF.Min(y0, y1);
+                    float bottomRightX = MathF.Max(x0, x1);
+                    float bottomRightY = MathF.Max(y0, y1);
+
+                    // Create particles in the selected rectangle.
+                    CreateObjects("Sand", 2000, topLeftX, topLeftY, bottomRightX, bottomRightY);
+
                     Logger.Log(
-                        $"Yet to implement fill selection from {SelectStart} to {SelectEnd}"
+                        $"Filled selection with Water (2000 particles) from {SelectStart} to {SelectEnd} -> world rect ({topLeftX},{topLeftY})-({bottomRightX},{bottomRightY})"
                     );
                 }
                 if (ImGui.Button("Zoom"))
@@ -444,94 +464,33 @@ namespace Engine13.Core
             }
             else
             {
-                if (_csvPlotter != null)
+                if (!_showGraphInWindow)
                 {
-                    ImGui.Text($"Ticks Computed: {_tickCounter}");
-
-                    string csvPath = Path.Combine(Directory.GetCurrentDirectory(), "Ticks.csv");
-
-                    // Prefer column 1 as timing column (if file is [tick, time, ...])
-                    var ySeries = _csvPlotter.GetSeries(1) ?? _csvPlotter.GetSeries(0);
-
-                    if (ySeries == null || ySeries.Length == 0)
+                    if (_csvPlotter != null)
                     {
-                        ImGui.Text("No numeric data available in the CSV selected columns.");
+                        ShowGraphGuiWindow(_csvPlotter);
                     }
                     else
                     {
-                        float lastValid = 0f;
-                        for (int i = 0; i < ySeries.Length; i++)
+                        ImGui.Text("No Ticks.csv found in working directory.");
+                        if (ImGui.Button("Reload CSV"))
                         {
-                            if (float.IsNaN(ySeries[i]))
-                                ySeries[i] = lastValid;
-                            else
-                                lastValid = ySeries[i];
-                        }
-
-                        float minVal = float.PositiveInfinity;
-                        float maxVal = float.NegativeInfinity;
-                        for (int i = 0; i < ySeries.Length; i++)
-                        {
-                            var v = ySeries[i];
-                            if (float.IsNaN(v))
-                                continue;
-                            if (v < minVal)
-                                minVal = v;
-                            if (v > maxVal)
-                                maxVal = v;
-                        }
-
-                        if (minVal == float.PositiveInfinity)
-                        {
-                            ImGui.Text("Series contains no valid numeric points to plot.");
-                        }
-                        else
-                        {
-                            ImGui.PlotLines(
-                                "Tick Time (ms)",
-                                ref ySeries[0],
-                                ySeries.Length,
-                                0,
-                                $"{_tickCounter}/{MaxFrames}",
-                                minVal,
-                                maxVal,
-                                new System.Numerics.Vector2(-1, 100)
-                            );
-                        }
-                    }
-
-                    if (ImGui.Button("Reload CSV"))
-                    {
-                        try
-                        {
-                            _csvPlotter.Load();
-                            Logger.Log("CSV reloaded from UI");
-                        }
-                        catch (Exception ex)
-                        {
-                            Logger.Log($"Reload failed: {ex.Message}");
+                            try
+                            {
+                                string csvPath = Path.Combine(
+                                    Directory.GetCurrentDirectory(),
+                                    "Ticks.csv"
+                                );
+                                _csvPlotter = new CsvPlotter(csvPath);
+                            }
+                            catch
+                            {
+                                _csvPlotter = null;
+                            }
                         }
                     }
                 }
-                else
-                {
-                    ImGui.Text("No Ticks.csv found in working directory.");
-                    if (ImGui.Button("Reload CSV"))
-                    {
-                        try
-                        {
-                            string csvPath = Path.Combine(
-                                Directory.GetCurrentDirectory(),
-                                "Ticks.csv"
-                            );
-                            _csvPlotter = new CsvPlotter(csvPath);
-                        }
-                        catch
-                        {
-                            _csvPlotter = null;
-                        }
-                    }
-                }
+                if (ImGui.Checkbox("Show Graph In Window", ref _showGraphInWindow)) { }
             }
             if (presets)
             {
@@ -597,9 +556,87 @@ namespace Engine13.Core
                     PrecomputeName = "Show/Hide Simulation Settings";
                     _playbackTimer.Stop();
                 }
+                ImGui.Separator();
+                ImGui.SliderInt("Max Frames", ref MaxFrames, 100, 5000);
+            }
+            if (_showGraphInWindow)
+            {
+                ImGui.Begin("Tick Graph");
+                ShowGraphGuiWindow(_csvPlotter);
+                ImGui.End();
             }
 
             ImGui.End();
+        }
+
+        private void ShowGraphGuiWindow(CsvPlotter csvPlotter)
+        {
+            ImGui.Text($"Ticks Computed: {_tickCounter}");
+
+            string csvPath = Path.Combine(Directory.GetCurrentDirectory(), "Ticks.csv");
+
+            // Prefer column 1 as timing column (if file is [tick, time, ...])
+            var ySeries = _csvPlotter.GetSeries(1) ?? _csvPlotter.GetSeries(0);
+
+            if (ySeries == null || ySeries.Length == 0)
+            {
+                ImGui.Text("No numeric data available in the CSV selected columns.");
+            }
+            else
+            {
+                float lastValid = 0f;
+                for (int i = 0; i < ySeries.Length; i++)
+                {
+                    if (float.IsNaN(ySeries[i]))
+                        ySeries[i] = lastValid;
+                    else
+                        lastValid = ySeries[i];
+                }
+
+                float minVal = float.PositiveInfinity;
+                float maxVal = float.NegativeInfinity;
+                for (int i = 0; i < ySeries.Length; i++)
+                {
+                    var v = ySeries[i];
+                    if (float.IsNaN(v))
+                        continue;
+                    if (v < minVal)
+                        minVal = v;
+                    if (v > maxVal)
+                        maxVal = v;
+                }
+
+                if (minVal == float.PositiveInfinity)
+                {
+                    ImGui.Text("Series contains no valid numeric points to plot.");
+                }
+                else
+                {
+                    ImGui.PlotLines(
+                        "Tick Time (ms)",
+                        ref ySeries[0],
+                        ySeries.Length,
+                        0,
+                        $"{_tickCounter}/{MaxFrames}",
+                        minVal,
+                        maxVal,
+                        new System.Numerics.Vector2(-1, 100)
+                    );
+                }
+
+                if (ImGui.Button("Reload CSV"))
+                {
+                    try
+                    {
+                        _csvPlotter.Load();
+                        Logger.Log("CSV reloaded from UI");
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Log($"Reload failed: {ex.Message}");
+                    }
+                }
+            }
         }
 
         private void RunCollisionDetection(float stepDelta)
@@ -671,17 +708,29 @@ namespace Engine13.Core
                 materialName
             );
 
-            float areaSize = (bottomRightX - topLeftX) * (bottomRightY - topLeftY);
             float radius = particleSystem.Material.ParticleRadius;
-            int totalParticlesPerArea = (int)(areaSize / (MathF.PI * radius * radius));
+            float diameter = radius * 2f;
+            float horizontalSpacing = diameter * 1.15f;
+            float verticalSpacing = diameter * 1.15f;
 
-            _entities.EnsureCapacity(_entities.Count + particleCount + 1);
+            float width = MathF.Max(0.0001f, bottomRightX - topLeftX);
+            float height = MathF.Max(0.0001f, bottomRightY - topLeftY);
+
+            int columns = Math.Max(1, (int)MathF.Floor(width / horizontalSpacing));
+            int rows = Math.Max(1, (int)MathF.Floor(height / verticalSpacing));
+
+            // If the computed grid can't hold the requested particles, clamp to capacity so we fill the area.
+            int capacity = columns * rows;
+            int particlesToCreate = Math.Min(Math.Max(0, particleCount), capacity);
+
+            // Ensure capacity in lists
+            _entities.EnsureCapacity(_entities.Count + particlesToCreate + 1);
 
             particleSystem.CreateParticles(
                 GraphicsDevice,
-                particleCount,
+                particlesToCreate,
                 topLeftPos,
-                25,
+                columns,
                 _entities,
                 _updateManager,
                 _grid

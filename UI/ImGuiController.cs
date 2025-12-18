@@ -83,13 +83,7 @@ namespace Engine13.UI
             io.MouseWheel = wheel;
             _lastConsumedWheel = wheel;
             io.MouseWheelH = 0f;
-
-            // Debug trace when non-zero
-            if (io.MouseWheel != 0f)
-            {
-                System.Console.WriteLine($"[ImGuiController] NewFrame: io.MouseWheel={io.MouseWheel}, consumedWheel={wheel}");
-            }
-
+            
             // Populate ImGui key state safely. ImGui expects a KeysDown array; guard bounds.
             const int ImGuiKeyCount = 512;
             int keyArraySize = (int)io.KeysDown.Count;
