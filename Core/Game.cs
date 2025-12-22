@@ -235,6 +235,8 @@ namespace Engine13.Core
             _playbackTimer.Start();
         }
 
+        private int SelectionMaterial;
+
         private void DrawSelectionRect()
         {
             var io = ImGui.GetIO();
@@ -289,8 +291,12 @@ namespace Engine13.Core
 
                     // Ensure index is in range (ObjectNumber is reused here as the selected preset index)
                     ObjectNumber = Math.Clamp(ObjectNumber, 0, presetNames.Length - 1);
-
-                    ImGui.Combo("Material", ref ObjectNumber, presetNames, presetNames.Length);
+                    int selected = ObjectNumber;
+                    if (ImGui.Combo("Material", ref selected, presetNames, presetNames.Length))
+                    {
+                        ObjectNumber = Math.Clamp(selected, 0, presetNames.Length - 1);
+                    }
+                    //SelectionMaterial = presetNames[ObjectNumber];
                 }
                 if (ImGui.Button("Fill"))
                 {
