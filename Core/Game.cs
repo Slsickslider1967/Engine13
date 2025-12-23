@@ -4,7 +4,6 @@ using System.Numerics;
 using System.Threading.Tasks;
 using Engine13.Graphics;
 using Engine13.Input;
-using Engine13.Primitives;
 using Engine13.UI;
 using Engine13.Utilities;
 using Engine13.Utilities.Attributes;
@@ -601,6 +600,13 @@ namespace Engine13.Core
                         {
                             _playbackTimer.Start();
                         }
+                    }
+                    ImGui.SameLine();
+                    if(ImGui.Button("Stop and Reset"))
+                    {
+                        _isPrecomputing = false;
+                        _playbackTimer.Stop();
+                        _tickIndex = 0;
                     }
                     int selectedFrame = _tickIndex;
                     int maxFrame = MaxFrames - 1;
