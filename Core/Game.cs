@@ -276,6 +276,26 @@ namespace Engine13.Core
 
             if (!IsSelecting && SelectStart != SelectEnd)
             {
+                // Position the selection UI at the bottom-right of the selection
+                float selMinX = MathF.Min(SelectStart.X, SelectEnd.X);
+                float selMinY = MathF.Min(SelectStart.Y, SelectEnd.Y);
+                float selMaxX = MathF.Max(SelectStart.X, SelectEnd.X);
+                float selMaxY = MathF.Max(SelectStart.Y, SelectEnd.Y);
+
+                var winSize = WindowBounds.GetWindowSize();
+                float winW = winSize.X > 0 ? winSize.X : 1f;
+                float winH = winSize.Y > 0 ? winSize.Y : 1f;
+
+                const float padding = 8f;
+                float desiredX = selMaxX + padding;
+                float desiredY = selMaxY + padding;
+
+                // Clamp so the window stays on-screen
+                float posX = MathF.Max(0f, MathF.Min(desiredX, winW - 10f));
+                float posY = MathF.Max(0f, MathF.Min(desiredY, winH - 10f));
+
+                ImGui.SetNextWindowPos(new Vector2(posX, posY), ImGuiCond.Always);
+
                 ImGui.Begin("SelectionInfo");
                 int matCount = MaterialCount;
                 if (matCount <= 0)
@@ -301,14 +321,20 @@ namespace Engine13.Core
                 if (ImGui.Button("Fill"))
                 {
                     // Convert screen selection to normalized device coords [-1,1]
-                    var winSize = WindowBounds.GetWindowSize();
-                    float sx = winSize.X > 0 ? winSize.X : 1f;
-                    float sy = winSize.Y > 0 ? winSize.Y : 1f;
 
-                    float x0 = SelectStart.X / sx * 2f - 1f;
-                    float y0 = SelectStart.Y / sy * 2f - 1f;
-                    float x1 = SelectEnd.X / sx * 2f - 1f;
-                    float y1 = SelectEnd.Y / sy * 2f - 1f;
+                    // Map pixel selection directly into renderer world bounds to avoid
+                    // small mismatches from manual NDC/projection math.
+                    var (left, right, top, bottom) = WindowBounds.GetNormalizedBounds();
+
+                    float worldX0 = left + (SelectStart.X / winW) * (right - left);
+                    float worldY0 = top + (SelectStart.Y / winH) * (bottom - top);
+                    float worldX1 = left + (SelectEnd.X / winW) * (right - left);
+                    float worldY1 = top + (SelectEnd.Y / winH) * (bottom - top);
+
+                    float x0 = worldX0;
+                    float y0 = worldY0;
+                    float x1 = worldX1;
+                    float y1 = worldY1;
 
                     // Ensure top-left / bottom-right ordering
                     float topLeftX = MathF.Min(x0, x1);
@@ -479,7 +505,8 @@ namespace Engine13.Core
         {
             ImGui.ShowDemoWindow();
 
-            ImGui.SetNextWindowSize(new Vector2(450, 300), ImGuiCond.FirstUseEver);
+            ImGui.SetNextWindowSize(new Vector2(528, 274), ImGuiCond.Appearing);
+            ImGui.SetNextWindowPos(new Vector2(60, 60), ImGuiCond.Appearing);
             ImGui.Begin("Simulation Setup", ref _showStartWindow, ImGuiWindowFlags.None);
             ImGui.Text("Precompute simulation frames before playback.");
             ImGui.Text($"Particle systems: {_particleSystems.Count}");
@@ -521,6 +548,7 @@ namespace Engine13.Core
             }
             else
             {
+                if (ImGui.Checkbox("Show Graph In Window", ref _showGraphInWindow)) { }
                 if (!_showGraphInWindow)
                 {
                     if (_csvPlotter != null)
@@ -547,7 +575,6 @@ namespace Engine13.Core
                         }
                     }
                 }
-                if (ImGui.Checkbox("Show Graph In Window", ref _showGraphInWindow)) { }
             }
             if (SimulationWindow)
             {
@@ -625,7 +652,14 @@ namespace Engine13.Core
             if (_showGraphInWindow)
             {
                 ImGui.Begin("Tick Graph");
-                ShowGraphGuiWindow(_csvPlotter);
+                if (_csvPlotter != null)
+                {
+                    ShowGraphGuiWindow(_csvPlotter);
+                }
+                else
+                {
+                    ImGui.Text("No Ticks.csv found in working directory.");
+                }
                 ImGui.End();
             }
 
@@ -639,7 +673,7 @@ namespace Engine13.Core
             string csvPath = Path.Combine(Directory.GetCurrentDirectory(), "Ticks.csv");
 
             // Prefer column 1 as timing column (if file is [tick, time, ...])
-            var ySeries = _csvPlotter.GetSeries(1) ?? _csvPlotter.GetSeries(0);
+            var ySeries = csvPlotter.GetSeries(1) ?? csvPlotter.GetSeries(0);
 
             if (ySeries == null || ySeries.Length == 0)
             {
@@ -691,7 +725,7 @@ namespace Engine13.Core
                 {
                     try
                     {
-                        _csvPlotter.Load();
+                        csvPlotter.Load();
                         Logger.Log("CSV reloaded from UI");
                     }
                     catch (Exception ex)
