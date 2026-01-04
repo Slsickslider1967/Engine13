@@ -1,6 +1,7 @@
 using System.Numerics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Engine13.Core;
 using Engine13.Utilities.Attributes;
 using Vortice.Direct3D11;
 
@@ -98,26 +99,29 @@ namespace Engine13.Utilities.JsonReader
             pd.PressureRadius = PressureRadius;
         }
 
-        // Returns the number of presets available in the JSON (loads presets if not already loaded)
+        public void ApplyTo(ParticleSystem ps)
+        {
+            if (ps == null)
+                return;
+        }
         public static int GetPresetCount()
         {
             if (_Presets == null)
             {
-            // calling Load with an empty name will initialize _Presets as a side effect
-            Load(string.Empty);
+                Load(string.Empty);
             }
             return _Presets?.Count ?? 0;
         }
-        
+
         public string GetPresetName(int index)
         {
             if (_Presets == null)
             {
-            Load(string.Empty);
+                Load(string.Empty);
             }
 
             if (_Presets == null || _Presets.Count == 0)
-            return string.Empty;
+                return string.Empty;
 
             var names = new List<string>(_Presets.Keys);
             names.Sort(StringComparer.OrdinalIgnoreCase);

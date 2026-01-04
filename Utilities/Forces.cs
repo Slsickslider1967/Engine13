@@ -53,16 +53,16 @@ public static class Forces
             // Skip SPH particles - they handle everything in StepFluid()
             if (collision.UseSPHIntegration) continue;
 
-            double mass = entity.Mass > 0f ? entity.Mass : 1.0;
-
-            // Semi-implicit integration: first apply acceleration, then damping.
-            var deltaVelocity = new Vector2((float)(force.X / mass * dt), (float)(force.Y / mass * dt));
-            collision.Velocity += deltaVelocity;
-            collision.Velocity *= VelocityDamping;
-
-            float speed = collision.Velocity.Length();
-            if (speed > MaxVelocity)
-                collision.Velocity *= MaxVelocity / speed;
+            float mass = PhysicsMath.SafeMass(entity.Mass);
+            var forceVec = new Vector2((float)force.X, (float)force.Y);
+            collision.Velocity = PhysicsMath.ApplyImpulse(
+                collision.Velocity,
+                forceVec,
+                mass,
+                (float)dt,
+                VelocityDamping,
+                MaxVelocity
+            );
         }
     }
 }

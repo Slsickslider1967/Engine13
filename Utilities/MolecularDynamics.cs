@@ -61,25 +61,19 @@ namespace Engine13.Utilities
                 Vector2 pa = a.Position;
                 Vector2 pb = b.Position;
                 Vector2 delta = pb - pa;
-                float dist = delta.Length();
-                if (dist <= 1e-6f) continue;
-                Vector2 dir = delta / dist;
-
-                // Hooke spring: F = -k * (x - x0)
-                float stretch = dist - bond.RestLength;
-                float springForce = -bond.Stiffness * stretch;
-
-                // Damping along bond: proportional to relative velocity along direction
                 Vector2 va = ocA != null ? ocA.Velocity : a.Velocity;
                 Vector2 vb = ocB != null ? ocB.Velocity : b.Velocity;
                 Vector2 relVel = vb - va;
-                float relVelAlong = Vector2.Dot(relVel, dir);
-                float dampForce = -bond.Damping * relVelAlong;
+                Vector2 forceVec = PhysicsMath.HookeDampedForce(
+                    delta,
+                    bond.RestLength,
+                    bond.Stiffness,
+                    relVel,
+                    bond.Damping
+                );
+                if (forceVec == Vector2.Zero) continue;
 
-                float total = springForce + dampForce;
-
-                // Apply equal and opposite forces
-                var f = new Vec2(total * dir.X, total * dir.Y);
+                var f = new Vec2(forceVec.X, forceVec.Y);
                 Forces.AddForce(a, f);
                 Forces.AddForce(b, new Vec2(-f.X, -f.Y));
             }

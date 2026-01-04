@@ -10,8 +10,8 @@
       "Friction": 0.3,
       "EnableEdgeCollision": true,
       "MaxForceMagnitude": 100.0,
-      "VelocityDamping": 0.02,
-      "PressureStrength": 2.0,
+      "VelocityDamping": 0.08,
+      "PressureStrength": 1.0,
       "PressureRadius": 0.025
     },
     "Sand": {
@@ -23,10 +23,10 @@
       "Restitution": 0.0,
       "Friction": 0.95,
       "EnableEdgeCollision": true,
-      "MaxForceMagnitude": 60.0,
-      "VelocityDamping": 0.12,
-      "PressureStrength": 3.5,
-      "PressureRadius": 0.012
+      "MaxForceMagnitude": 80.0,
+      "VelocityDamping": 0.25,
+      "PressureStrength": 1.5,
+      "PressureRadius": 0.015
     },
     "WetSand": {
       "Name": "WetSand",
@@ -37,10 +37,10 @@
       "Restitution": 0.02,
       "Friction": 0.5,
       "EnableEdgeCollision": true,
-      "MaxForceMagnitude": 60.0,
-      "VelocityDamping": 0.08,
-      "PressureStrength": 1.5,
-      "PressureRadius": 0.012
+      "MaxForceMagnitude": 80.0,
+      "VelocityDamping": 0.15,
+      "PressureStrength": 1.0,
+      "PressureRadius": 0.015
     },
     "Gravel": {
       "Name": "Gravel",
@@ -51,9 +51,9 @@
       "Restitution": 0.2,
       "Friction": 0.4,
       "EnableEdgeCollision": true,
-      "MaxForceMagnitude": 150.0,
-      "VelocityDamping": 0.02,
-      "PressureStrength": 4.0,
+      "MaxForceMagnitude": 120.0,
+      "VelocityDamping": 0.1,
+      "PressureStrength": 2.0,
       "PressureRadius": 0.03
     },
     "Steel": {
@@ -241,8 +241,8 @@
       "IsFluid": true,
       "SPHRestDensity": 1000.0,
       "SPHGasConstant": 2000.0,
-      "SPHViscosity": 0.001,
-      "SPHSurfaceTension": 0.0728
+      "SPHViscosity": 0.01,
+      "SPHSurfaceTension": 0.01
     },
     "Oil": {
       "Name": "Oil",

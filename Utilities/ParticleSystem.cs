@@ -9,37 +9,13 @@ using Veldrid;
 
 namespace Engine13.Core
 {
-    public class FluidParticle
-    {
-        public Entity Entity { get; set; } = null!;
-        public List<FluidParticle> Neighbors { get; } = new();
-    }
-
     public class ParticleSystem
     {
         public string Name { get; }
         public ParticlePresetReader Material { get; }
         public List<Entity> Particles { get; } = new();
 
-        readonly List<FluidParticle> _fluidParticles = new();
-        readonly Dictionary<Entity, FluidParticle> _fluidMap = new();
-
-        float _smoothingRadius;
-        float _stiffness;
-        float _viscosity;
-        float _restDensity;
-        float _surfaceTension;
-        float[]? _densities;
-        float[]? _pressures;
-        Vector2[]? _forces;
-        float[]? _colorField;
-        Vector2[]? _gradColor;
-        float[]? _lapColor;
-        float _particleRadius;
-        float _maxVelocity = 2f;
-        float _damping = 0.95f;
-        Vector2 _gravity;
-        readonly List<Entity> _neighborEntityBuffer = new();
+        private readonly SPH _sph = new();
 
         public ParticleSystem(string name, ParticlePresetReader material)
         {
@@ -295,197 +271,49 @@ namespace Engine13.Core
             if (!Material.IsFluid)
                 return;
 
-            _smoothingRadius = Material.PressureRadius * 2f;
-            _stiffness = Material.SPHGasConstant;
-            _viscosity = Material.SPHViscosity;
-            _restDensity = Material.SPHRestDensity;
-            _surfaceTension = Material.SPHSurfaceTension;
-            _particleRadius = Material.ParticleRadius;
-            _gravity = new Vector2(0f, Material.GravityStrength);
-            _damping = 1f - (Material.VelocityDamping * 0.25f);
-
-            _fluidParticles.Clear();
-            _fluidMap.Clear();
-
+            // Configure the SPH solver with material properties
+            _sph.Configure(
+                smoothingRadius: Material.PressureRadius * 2.5f,
+                gasConstant: Material.SPHGasConstant * 1.0f, // Full strength
+                viscosity: Material.SPHViscosity * 1.0f, // Normal viscosity
+                restDensity: Material.SPHRestDensity,
+                particleRadius: Material.ParticleRadius,
+                gravity: new Vector2(0f, Material.GravityStrength),
+                damping: 0.98f,
+                maxVelocity: 5f
+            );
+            
+            // Register all particles with the SPH solver
+            _sph.Clear();
             foreach (var particle in Particles)
             {
-                var fp = new FluidParticle { Entity = particle };
-                _fluidParticles.Add(fp);
-                _fluidMap[particle] = fp;
-
-                var pd = particle.GetComponent<ParticleDynamics>();
-                if (pd != null)
-                    pd.UseSPHSolver = true;
-
-                var oc = particle.GetComponent<ObjectCollision>();
-                if (oc != null)
-                    oc.UseSPHIntegration = true;
+                _sph.AddParticle(particle);
             }
+        }
 
-            int n = _fluidParticles.Count;
-            _densities = new float[n];
-            _pressures = new float[n];
-            _forces = new Vector2[n];
-            _colorField = new float[n];
-            _gradColor = new Vector2[n];
-            _lapColor = new float[n];
+        public int FluidCount => _sph.ParticleCount;
+
+        public void GetFluidDebugData(
+            Dictionary<Entity, int> entityToIndex,
+            Span<float> densitiesOut,
+            Span<float> pressuresOut,
+            Span<int> neighborCountsOut
+        )
+        {
+            _sph.GetAllDebugData(entityToIndex, densitiesOut, pressuresOut, neighborCountsOut);
+        }
+
+        public bool TryGetEntityAt(int index, out Entity entity)
+        {
+            return _sph.TryGetEntityAt(index, out entity);
         }
 
         public void StepFluid(float dt, SpatialGrid grid)
         {
-            if (!Material.IsFluid || _fluidParticles.Count == 0)
+            if (!Material.IsFluid)
                 return;
-
-            float h = _smoothingRadius;
-            float h2 = h * h;
-            int n = _fluidParticles.Count;
-
-            // Ensure buffers
-            if (_densities == null || _densities.Length < n)
-            {
-                _densities = new float[n];
-                _pressures = new float[n];
-                _forces = new Vector2[n];
-                _colorField = new float[n];
-                _gradColor = new Vector2[n];
-                _lapColor = new float[n];
-            }
-
-            // Neighbor build (no-alloc)
-            for (int i = 0; i < n; i++)
-            {
-                var p = _fluidParticles[i];
-                p.Neighbors.Clear();
-                grid.GetNearbyEntities(p.Entity.Position, _neighborEntityBuffer);
-                foreach (var other in _neighborEntityBuffer)
-                {
-                    if (other == p.Entity)
-                        continue;
-                    if (!_fluidMap.TryGetValue(other, out var fp))
-                        continue;
-                    if (Vector2.DistanceSquared(p.Entity.Position, fp.Entity.Position) < h2)
-                        p.Neighbors.Add(fp);
-                }
-            }
-
-            // Density pass
-            for (int i = 0; i < n; i++)
-            {
-                _densities[i] = 0f;
-                var pi = _fluidParticles[i];
-                // self contribution
-                float mi = pi.Entity.Mass > 0f ? pi.Entity.Mass : 1f;
-                _densities[i] += mi * SphKernels.Poly6(0f, h);
-
-                foreach (var nb in pi.Neighbors)
-                {
-                    float mj = nb.Entity.Mass > 0f ? nb.Entity.Mass : 1f;
-                    float r = Vector2.Distance(pi.Entity.Position, nb.Entity.Position);
-                    _densities[i] += mj * SphKernels.Poly6(r, h);
-                }
-            }
-
-            // Pressure
-            for (int i = 0; i < n; i++)
-            {
-                float rho = MathF.Max(1e-6f, _densities[i]);
-                _pressures[i] = _stiffness * MathF.Max(0f, rho - _restDensity);
-                _forces[i] = Vector2.Zero;
-                _colorField![i] = 0f;
-                _gradColor![i] = Vector2.Zero;
-                _lapColor![i] = 0f;
-            }
-
-            // Force pass
-            for (int i = 0; i < n; i++)
-            {
-                var pi = _fluidParticles[i];
-                var oc_i = pi.Entity.GetComponent<ObjectCollision>();
-                if (oc_i == null || oc_i.IsStatic)
-                    continue;
-
-                Vector2 pressureForce = Vector2.Zero;
-                Vector2 viscosityForce = Vector2.Zero;
-
-                float rho_i = MathF.Max(1e-6f, _densities[i]);
-                float p_i = _pressures[i];
-
-                // include self in color field
-                float mi = pi.Entity.Mass > 0f ? pi.Entity.Mass : 1f;
-                _colorField![i] += mi / rho_i * SphKernels.Poly6(0f, h);
-
-                foreach (var nb in pi.Neighbors)
-                {
-                    int j = _fluidParticles.IndexOf(nb);
-                    if (j < 0)
-                        continue;
-
-                    var pj = nb.Entity;
-                    var oc_j = pj.GetComponent<ObjectCollision>();
-
-                    float mj = pj.Mass > 0f ? pj.Mass : 1f;
-                    Vector2 rij = pi.Entity.Position - pj.Position;
-                    float r = rij.Length();
-                    if (r < 1e-6f)
-                        r = 1e-6f;
-                    Vector2 dir = rij / r;
-
-                    // pressure
-                    Vector2 gradW = SphKernels.SpikyGradient(r, h, dir);
-                    float rho_j = MathF.Max(1e-6f, _densities[j]);
-                    float p_j = _pressures[j];
-                    Vector2 presTerm = -(mj * (p_i + p_j) / (2f * rho_j)) * gradW;
-                    pressureForce += presTerm;
-
-                    // viscosity
-                    if (oc_j != null)
-                    {
-                        float lap = SphKernels.ViscosityLaplacian(r, h);
-                        viscosityForce +=
-                            _viscosity * mj * (oc_j.Velocity - oc_i.Velocity) / rho_j * lap;
-                    }
-
-                    // color field for surface tension
-                    float W = SphKernels.Poly6(r, h);
-                    _colorField[i] += mj / rho_j * W;
-                    _gradColor[i] += (mj / rho_j) * SphKernels.SpikyGradient(r, h, dir);
-                    _lapColor[i] += mj / rho_j * SphKernels.ViscosityLaplacian(r, h);
-                }
-
-                // surface tension
-                Vector2 surfaceForce = Vector2.Zero;
-                float gradMag = _gradColor[i].Length();
-                if (gradMag > 1e-6f)
-                {
-                    surfaceForce = -_surfaceTension * _lapColor[i] * (_gradColor[i] / gradMag);
-                }
-
-                // total force
-                Vector2 totalForce =
-                    pressureForce + viscosityForce + surfaceForce + (mi * _gravity);
-                _forces[i] = totalForce;
-            }
-
-            // Integrate
-            for (int i = 0; i < n; i++)
-            {
-                var pi = _fluidParticles[i];
-                var oc = pi.Entity.GetComponent<ObjectCollision>();
-                if (oc == null || oc.IsStatic)
-                    continue;
-
-                float rho = MathF.Max(1e-6f, _densities[i]);
-                Vector2 accel = _forces[i] / rho;
-                oc.Velocity += accel * dt;
-
-                // damping, clamp
-                oc.Velocity *= _damping;
-                float speed = oc.Velocity.Length();
-                if (speed > _maxVelocity)
-                    oc.Velocity *= _maxVelocity / speed;
-
-                pi.Entity.Position += oc.Velocity * dt;
-            }
+                
+            _sph.Step(dt, grid);
         }
     }
 

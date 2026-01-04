@@ -48,6 +48,10 @@
               "target": "Package",
               "version": "[1.89.6, )"
             },
+            "Newtonsoft.Json": {
+              "target": "Package",
+              "version": "[13.0.3, )"
+            },
             "Veldrid": {
               "target": "Package",
               "version": "[4.9.0, )"

@@ -158,8 +158,10 @@ public sealed class ParticleDynamics : IEntityComponent
 
         if (VelocityDamping > 0f)
         {
+            var oc = entity.GetComponent<ObjectCollision>();
+            Vector2 vel = oc != null ? oc.Velocity : entity.Velocity;
             float mass = entity.Mass > 0f ? entity.Mass : 1f;
-            totalForce -= VelocityDamping * mass * entity.Velocity;
+            totalForce -= VelocityDamping * mass * vel;
         }
 
         if (totalForce == Vector2.Zero)
@@ -179,29 +181,23 @@ public sealed class ParticleDynamics : IEntityComponent
 
     Vector2 ComputeInterParticleForces(Entity entity)
     {
-        if ((_allEntities == null || _allEntities.Count == 0) && _grid == null)
+        if (_grid == null)
             return Vector2.Zero;
 
         var oc = entity.GetComponent<ObjectCollision>();
         bool isFluid = oc?.IsFluid ?? false;
+        
+        // If fluid, SPH solver handles all forces - skip this entirely
+        if (isFluid)
+            return Vector2.Zero;
 
         Vector2 totalForce = Vector2.Zero;
         float h = PressureRadius;
         float hSq = h * h;
-        float restDistance = h * 0.5f;
 
-        System.Collections.Generic.IEnumerable<Entity> source;
-        if (_grid != null)
-        {
-            _grid.GetNearbyEntities(entity.Position, _neighborBuffer);
-            source = _neighborBuffer;
-        }
-        else
-        {
-            source = _allEntities!;
-        }
+        _grid.GetNearbyEntities(entity.Position, _neighborBuffer);
 
-        foreach (var other in source)
+        foreach (var other in _neighborBuffer)
         {
             if (other == entity)
                 continue;
@@ -215,34 +211,15 @@ public sealed class ParticleDynamics : IEntityComponent
             float dist = MathF.Sqrt(distSq);
             Vector2 dir = delta / dist;
 
-            if (dist < restDistance)
+            // Simple inverse-square repulsion (like electrostatic force)
+            // Gets very strong when particles are close
+            float targetDist = (entity.CollisionRadius + other.CollisionRadius) * 1.2f;
+            if (dist < targetDist)
             {
-                float overlap = 1f - dist / restDistance;
-                float pressureMag = PressureStrength * overlap * 0.1f;
-                totalForce += dir * pressureMag;
-
-                float verticalAlignment = MathF.Abs(dir.Y);
-                if (verticalAlignment > 0.95f)
-                {
-                    float lateralDir =
-                        MathF.Abs(dir.X) > 0.001f ? MathF.Sign(dir.X)
-                        : ((entity.GetHashCode() ^ other.GetHashCode()) & 1) == 0 ? 1f
-                        : -1f;
-                    float lateralStrength = PressureStrength * overlap * 0.015f;
-                    totalForce += new Vector2(lateralDir * lateralStrength, 0f);
-                }
-            }
-
-            if (isFluid)
-            {
-                var otherOc = other.GetComponent<ObjectCollision>();
-                if (otherOc != null && oc != null)
-                {
-                    float viscosityStrength = 0.15f;
-                    float w = 1f - dist / h;
-                    Vector2 velocityDiff = otherOc.Velocity - oc.Velocity;
-                    totalForce += velocityDiff * w * viscosityStrength;
-                }
+                // Inverse square gets naturally stronger as particles get closer
+                float ratio = targetDist / dist;
+                float forceMag = PressureStrength * ratio * ratio;
+                totalForce += dir * forceMag;
             }
         }
 
@@ -362,16 +339,19 @@ public sealed class EdgeCollision : IEntityComponent
         if (oc == null)
             return;
 
+        // Moderate damping for fluids - allow them to flow along walls
+        float extraDamping = oc.IsFluid ? 0.85f : 1.0f;
+
         if (isXAxis)
         {
             float vX = oc.Velocity.X;
-            vX = MathF.Abs(vX) < sleepVelocity ? 0f : -vX * oc.Restitution;
+            vX = MathF.Abs(vX) < sleepVelocity ? 0f : -vX * oc.Restitution * extraDamping;
             oc.Velocity = new Vector2(vX, oc.Velocity.Y);
         }
         else
         {
             float vY = oc.Velocity.Y;
-            vY = MathF.Abs(vY) < sleepVelocity ? 0f : -vY * oc.Restitution;
+            vY = MathF.Abs(vY) < sleepVelocity ? 0f : -vY * oc.Restitution * extraDamping;
             oc.Velocity = new Vector2(oc.Velocity.X, vY);
         }
     }
@@ -380,8 +360,19 @@ public sealed class EdgeCollision : IEntityComponent
     {
         var (left, right, top, bottom) = GetBounds();
         var position = entity.Position;
-        float halfWidth = entity.Size.X * 0.5f;
-        float halfHeight = entity.Size.Y * 0.5f;
+        
+        // For circular entities, use CollisionRadius; otherwise fall back to Size
+        float halfWidth, halfHeight;
+        if (entity.CollisionShape == Engine13.Graphics.Entity.CollisionShapeType.Circle && entity.CollisionRadius > 0f)
+        {
+            halfWidth = entity.CollisionRadius;
+            halfHeight = entity.CollisionRadius;
+        }
+        else
+        {
+            halfWidth = entity.Size.X * 0.5f;
+            halfHeight = entity.Size.Y * 0.5f;
+        }
 
         if (_loop)
         {
@@ -401,8 +392,8 @@ public sealed class EdgeCollision : IEntityComponent
         {
             var oc = entity.GetComponent<ObjectCollision>();
             const float sleepVelocity = 0.05f;
-            // Use particle radius for recovery to prevent tunneling
-            float recovery = MathF.Max(halfWidth, halfHeight) * 0.1f;
+            // Use stronger recovery for fluids to prevent tunneling
+            float recovery = MathF.Max(halfWidth, halfHeight) * (oc?.IsFluid == true ? 0.15f : 0.08f);
 
             if (position.X < left + halfWidth)
             {
@@ -459,6 +450,12 @@ public sealed class ObjectCollision : IEntityComponent
 
         if (!IsStatic)
         {
+            // Clamp velocity to prevent instability
+            const float maxVelocity = 15f;
+            float velMag = Velocity.Length();
+            if (velMag > maxVelocity)
+                Velocity = Velocity * (maxVelocity / velMag);
+
             var pos = entity.Position;
             pos += Velocity * gameTime.DeltaTime;
             entity.Position = pos;

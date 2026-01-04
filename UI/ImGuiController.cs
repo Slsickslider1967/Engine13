@@ -341,7 +341,7 @@ namespace Engine13.UI
 
             if (vtxSize > _vertexBufferSize)
             {
-                _vertexBuffer.Dispose();
+                _vertexBuffer?.Dispose();
                 _vertexBufferSize = Math.Max(vtxSize, _vertexBufferSize * 2);
                 _vertexBuffer = _factory.CreateBuffer(
                     new BufferDescription(
@@ -353,7 +353,7 @@ namespace Engine13.UI
 
             if (idxSize > _indexBufferSize)
             {
-                _indexBuffer.Dispose();
+                _indexBuffer?.Dispose();
                 _indexBufferSize = Math.Max(idxSize, _indexBufferSize * 2);
                 _indexBuffer = _factory.CreateBuffer(
                     new BufferDescription(
@@ -386,12 +386,17 @@ namespace Engine13.UI
             var width = Math.Max(1, _gd.MainSwapchain.Framebuffer.Width);
             var height = Math.Max(1, _gd.MainSwapchain.Framebuffer.Height);
             var proj = Matrix4x4.CreateOrthographicOffCenter(0, width, 0, height, -1f, 1f);
-            _gd.UpdateBuffer(_projBuffer!, 0, ref proj);
 
-            cl.SetPipeline(_pipeline!);
-            cl.SetVertexBuffer(0, _vertexBuffer!);
-            cl.SetIndexBuffer(_indexBuffer!, IndexFormat.UInt16);
-            cl.SetGraphicsResourceSet(0, _fontSet!);
+            // Ensure required resources are present
+            if (_projBuffer == null || _pipeline == null || _vertexBuffer == null || _indexBuffer == null || _fontSet == null)
+                return;
+
+            _gd.UpdateBuffer(_projBuffer, 0, ref proj);
+
+            cl.SetPipeline(_pipeline);
+            cl.SetVertexBuffer(0, _vertexBuffer);
+            cl.SetIndexBuffer(_indexBuffer, IndexFormat.UInt16);
+            cl.SetGraphicsResourceSet(0, _fontSet);
 
             uint vtxBase = 0;
             uint idxBase = 0;

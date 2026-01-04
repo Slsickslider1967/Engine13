@@ -271,12 +271,12 @@ namespace Engine13.Utilities
 
     public static class PhysicsSolver
     {
-        private const float PenetrationSlop = 0.0005f;
+        private const float PenetrationSlop = 0.0001f;
         private const float PositionalCorrectionPercent = 0.8f;
-        private const float MaxPenetrationCorrection = 0.1f;
-        private const float BaumgarteScalar = 0.3f;
-        private const float RestitutionVelocityThreshold = 0.1f;
-        private const float StaticToDynamicFrictionRatio = 0.6f;
+        private const float MaxPenetrationCorrection = 0.2f;
+        private const float BaumgarteScalar = 0.15f;
+        private const float RestitutionVelocityThreshold = 0.05f;
+        private const float StaticToDynamicFrictionRatio = 0.7f;
         private const float GroundNormalThreshold = 0.6f;
         private const float RestingRelativeVelocityThreshold = 0.3f;
         private const float MassIgnoreRatio = 1000f;
@@ -338,8 +338,13 @@ namespace Engine13.Utilities
             float penetrationDepth = MathF.Max(mtvLen - PenetrationSlop, 0f);
             if (penetrationDepth > 0f)
             {
+                // Increase correction for fluids to prevent phasing
+                bool isFluidA = objA?.IsFluid ?? false;
+                bool isFluidB = objB?.IsFluid ?? false;
+                float correctionPercent = (isFluidA || isFluidB) ? 0.9f : PositionalCorrectionPercent;
+                
                 float correctionMag = MathF.Min(
-                    penetrationDepth * PositionalCorrectionPercent,
+                    penetrationDepth * correctionPercent,
                     MaxPenetrationCorrection
                 );
                 Vector2 correction = (correctionMag / invMassSum) * normal;
@@ -367,8 +372,9 @@ namespace Engine13.Utilities
             if (objB != null)
                 restitutionCandidateB = objB.Restitution;
 
+            // Use geometric mean for more realistic material combination
             float restitution = Math.Clamp(
-                MathF.Max(restitutionCandidateA, restitutionCandidateB),
+                MathF.Sqrt(MathF.Max(restitutionCandidateA * restitutionCandidateB, 0f)),
                 0f,
                 1f
             );
@@ -388,6 +394,10 @@ namespace Engine13.Utilities
             float normalImpulseScalar = (-(1f + restitution) * relVelN + bias) / invMassSum;
             if (normalImpulseScalar < 0f)
                 normalImpulseScalar = 0f;
+            
+            // For nearly resting contacts, reduce impulse to prevent energy injection
+            if (MathF.Abs(relVelN) < 0.3f && penetrationDepth < 0.002f)
+                normalImpulseScalar *= 0.5f;
 
             Vector2 normalImpulse = normalImpulseScalar * normal;
 
@@ -405,11 +415,9 @@ namespace Engine13.Utilities
                 velocityB = objB.Velocity;
             relativeVelocity = velocityB - velocityA;
 
-            Vector2 tangent = relativeVelocity - (Vector2.Dot(relativeVelocity, normal) * normal);
-            float tangentLenSq = tangent.LengthSquared();
-            if (tangentLenSq > 1e-12f)
+            Vector2 tangent = relativeVelocity - PhysicsMath.Project(relativeVelocity, normal);
+            if (PhysicsMath.TryNormalize(tangent, 1e-12f, out tangent, out _))
             {
-                tangent /= MathF.Sqrt(tangentLenSq);
                 float muA = 0.5f;
                 if (objA != null)
                     muA = objA.Friction;
@@ -475,25 +483,76 @@ namespace Engine13.Utilities
             }
         }
 
-        private static Vector2 ClampVelocity(Vector2 velocity)
+        private static Vector2 ClampVelocity(Vector2 velocity) => PhysicsMath.ClampMagnitude(velocity, MaxLinearVelocity);
+    }
+
+    public static class PhysicsMath
+    {
+        public static float SafeMass(float mass, float fallback = 1f) => mass > 0f ? mass : fallback;
+
+        public static float SafeInvMass(float mass, float fallback = 0f) => mass > 0f ? 1f / mass : fallback;
+
+        public static Vector2 ClampMagnitude(Vector2 value, float max)
         {
-            float speedSq = velocity.LengthSquared();
-            float maxSpeedSq = MaxLinearVelocity * MaxLinearVelocity;
-            if (speedSq > maxSpeedSq)
+            float maxSq = max * max;
+            float lenSq = value.LengthSquared();
+            if (lenSq <= maxSq)
+                return value;
+
+            float len = MathF.Sqrt(lenSq);
+            if (len <= 1e-12f)
+                return Vector2.Zero;
+
+            return value * (max / len);
+        }
+
+        public static bool TryNormalize(Vector2 value, float epsilon, out Vector2 dir, out float length)
+        {
+            length = value.Length();
+            if (length <= epsilon)
             {
-                float speed = MathF.Sqrt(speedSq);
-                if (speed > 1e-12f)
-                {
-                    float scale = MaxLinearVelocity / speed;
-                    velocity *= scale;
-                }
-                else
-                {
-                    velocity = Vector2.Zero;
-                }
+                dir = Vector2.Zero;
+                return false;
             }
 
-            return velocity;
+            dir = value / length;
+            return true;
+        }
+
+        public static Vector2 Project(Vector2 value, Vector2 onto) => Vector2.Dot(value, onto) * onto;
+
+        /// <summary>Returns the damped Hooke + dashpot force along delta.</summary>
+        public static Vector2 HookeDampedForce(
+            Vector2 delta,
+            float restLength,
+            float stiffness,
+            Vector2 relativeVelocity,
+            float damping
+        )
+        {
+            if (!TryNormalize(delta, 1e-6f, out var dir, out var dist))
+                return Vector2.Zero;
+            float stretch = dist - restLength;
+            float springForce = -stiffness * stretch;
+            float relAlong = Vector2.Dot(relativeVelocity, dir);
+            float dampForce = -damping * relAlong;
+            float total = springForce + dampForce;
+            return total * dir;
+        }
+
+        public static Vector2 ApplyImpulse(
+            Vector2 velocity,
+            Vector2 force,
+            float mass,
+            float deltaTime,
+            float damping,
+            float maxSpeed
+        )
+        {
+            float safeMass = SafeMass(mass);
+            Vector2 deltaV = force * (deltaTime / safeMass);
+            Vector2 v = (velocity + deltaV) * damping;
+            return ClampMagnitude(v, maxSpeed);
         }
     }
 
@@ -1004,6 +1063,69 @@ namespace Engine13.Utilities
             }
 
             return r;
+        }
+    }
+
+    /// <summary>
+    /// Helper class for calculating particle grid layouts within a rectangular area
+    /// </summary>
+    public static class ParticleGridLayout
+    {
+        /// <summary>
+        /// Calculates how many particles fit in a selection area and their grid configuration
+        /// </summary>
+        /// <param name="selectionMinX">Left edge of selection area (world coordinates)</param>
+        /// <param name="selectionMinY">Bottom edge of selection area (world coordinates, lower Y value)</param>
+        /// <param name="selectionMaxX">Right edge of selection area (world coordinates)</param>
+        /// <param name="selectionMaxY">Top edge of selection area (world coordinates, higher Y value)</param>
+        /// <param name="particleRadius">Radius of each particle</param>
+        /// <param name="spacingFactor">Multiplier for spacing between particle centers (e.g., 1.15 for 15% gap)</param>
+        /// <returns>Tuple containing (particle capacity, columns, rows, origin position)</returns>
+        public static (int capacity, int columns, int rows, Vector2 origin) CalculateParticleGrid(
+            float selectionMinX,
+            float selectionMinY,
+            float selectionMaxX,
+            float selectionMaxY,
+            float particleRadius,
+            float spacingFactor = 1.15f
+        )
+        {
+            // Calculate selection area dimensions
+            float selectionWidth = MathF.Max(0.0001f, selectionMaxX - selectionMinX);
+            float selectionHeight = MathF.Max(0.0001f, selectionMaxY - selectionMinY);
+
+            // Calculate spacing between particle centers
+            float diameter = particleRadius * 2f;
+            float horizontalSpacing = diameter * spacingFactor;
+            float verticalSpacing = diameter * spacingFactor;
+
+            // Calculate how many particles fit
+            // We need at least one particle radius of margin on each edge
+            float availableWidth = selectionWidth - (2f * particleRadius);
+            float availableHeight = selectionHeight - (2f * particleRadius);
+
+            // Calculate columns and rows
+            // First particle goes at origin + radius, then we add spacing * (n-1) more particles
+            int columns = availableWidth > 0 
+                ? Math.Max(1, (int)MathF.Floor(availableWidth / horizontalSpacing) + 1) 
+                : 1;
+            int rows = availableHeight > 0 
+                ? Math.Max(1, (int)MathF.Floor(availableHeight / verticalSpacing) + 1) 
+                : 1;
+
+            int capacity = columns * rows;
+
+            // Calculate the actual grid dimensions that will be used
+            float gridWidth = (columns - 1) * horizontalSpacing;
+            float gridHeight = (rows - 1) * verticalSpacing;
+
+            // Center the grid within the selection area
+            float originX = selectionMinX + particleRadius + (availableWidth - gridWidth) / 2f;
+            float originY = selectionMinY + particleRadius + (availableHeight - gridHeight) / 2f;
+
+            var origin = new Vector2(originX, originY);
+
+            return (capacity, columns, rows, origin);
         }
     }
 }

@@ -246,7 +246,7 @@ namespace Engine13.Graphics
             _SharedCircleIndexCount = indices.Length;
         }
 
-        public void DrawInstanced(List<Entity> entities, Vector2[] positions)
+        public void DrawInstanced(List<Entity> entities, Vector2[] positions, Vector4[]? colors = null)
         {
             var instancedPipeline = _Pipeline.GetInstancedPipeline();
             if (instancedPipeline == null || _SharedCircleVertexBuffer == null) return;
@@ -270,10 +270,11 @@ namespace Engine13.Graphics
                 int offset = i * 6;
                 instanceData[offset] = positions[i].X;
                 instanceData[offset + 1] = positions[i].Y;
-                instanceData[offset + 2] = entities[i].Color.X;
-                instanceData[offset + 3] = entities[i].Color.Y;
-                instanceData[offset + 4] = entities[i].Color.Z;
-                instanceData[offset + 5] = entities[i].Color.W;
+                var c = colors != null && i < colors.Length ? colors[i] : entities[i].Color;
+                instanceData[offset + 2] = c.X;
+                instanceData[offset + 3] = c.Y;
+                instanceData[offset + 4] = c.Z;
+                instanceData[offset + 5] = c.W;
             }
             GD.UpdateBuffer(_InstanceBuffer, 0, instanceData);
 

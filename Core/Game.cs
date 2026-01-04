@@ -23,7 +23,7 @@ namespace Engine13.Core
         private int MaxFrames = 500;
         private const float SimulationDeltaTime = 1f / 60f; // Physics step size (fixed for stability)
         private float PlaybackFps = 60f;
-        private int FrameIndex = 0;
+
         private readonly List<Entity> _entities = new();
         private readonly List<ParticleSystem> _particleSystems = new();
         private readonly UpdateManager _updateManager = new();
@@ -31,6 +31,7 @@ namespace Engine13.Core
         private readonly List<Vector2[]> _tickPositions = new();
         private readonly Stopwatch _tickTimer = Stopwatch.StartNew();
         private readonly Stopwatch _playbackTimer = new();
+        private float _playbackStartOffsetSeconds = 0f; // accumulated playback position when paused
 
         private int _tickIndex;
         private int _tickCounter;
@@ -52,18 +53,29 @@ namespace Engine13.Core
         private static bool IsSelecting = false;
         private static Vector2 SelectStart;
         private static Vector2 SelectEnd;
+        private int _selectionPresetIndex = 0;
+        private string _selectionMaterial = "Sand";
 
         private readonly object _tickLock = new();
         private Task? _precomputeTask;
         private bool _isPrecomputing;
-        private bool presets = false;
+
         private bool SimulationWindow = false;
         private bool PrecomputeWindow = false;
         private bool HasPrecomputeRun = false;
         private bool _showGraphInWindow = false;
         private bool _startRunningImmediately = true;
 
+        private bool _overlayDensity;
+        private bool _overlayPressure;
+        private bool _overlayNeighbors;
+        private float _overlayMin = 0f;
+        private float _overlayMax = 1f;
+        private Vector4[] _overlayColors = Array.Empty<Vector4>();
+        private readonly Dictionary<Entity, int> _entityIndexMap = new();
+
         private string PrecomputeName = "Open Precompute Window";
+        private const float GraphPlotHeight = 100f;
 
         public Game(Sdl2Window window, GraphicsDevice graphicsDevice)
             : base(window, graphicsDevice)
@@ -74,19 +86,12 @@ namespace Engine13.Core
 
         protected override void Initialize()
         {
-            CreateObjects("Sand", 1000, 0f, -1f);
-
-            if (_particleSystems.Count > 0)
-            {
-                float radius = _particleSystems[0].Material.ParticleRadius;
-                Renderer.InitializeInstancedRendering(radius, 8);
-            }
+            float defaultRadius = 0.01f;
+            Renderer.InitializeInstancedRendering(defaultRadius, 8);
 
             _imgui = new ImGuiController(Window, GraphicsDevice, CommandList, _inputManager);
             _imgui.PrintDrawData = true;
-            // Register molecular dynamics bond system so it updates each frame
             _updateManager.Register(Engine13.Utilities.MolecularDynamicsSystem.Instance);
-            // Try to load precompute CSV log for plotting
             try
             {
                 string csvPath = Path.Combine(Directory.GetCurrentDirectory(), "Ticks.csv");
@@ -235,8 +240,6 @@ namespace Engine13.Core
             _playbackTimer.Start();
         }
 
-        private int SelectionMaterial;
-
         private void DrawSelectionRect()
         {
             var io = ImGui.GetIO();
@@ -271,13 +274,10 @@ namespace Engine13.Core
                 }
             }
 
-            int ObjectNumber = 2000;
-            int MaterialCount = ParticlePresetReader.GetPresetCount();
-
             if (!IsSelecting && SelectStart != SelectEnd)
             {
                 ImGui.Begin("SelectionInfo");
-                int matCount = MaterialCount;
+                int matCount = ParticlePresetReader.GetPresetCount();
                 if (matCount <= 0)
                 {
                     ImGui.Text("No presets available");
@@ -289,50 +289,62 @@ namespace Engine13.Core
                     for (int i = 0; i < matCount; i++)
                         presetNames[i] = presetReader.GetPresetName(i);
 
-                    // Ensure index is in range (ObjectNumber is reused here as the selected preset index)
-                    ObjectNumber = Math.Clamp(ObjectNumber, 0, presetNames.Length - 1);
-                    int selected = ObjectNumber;
+                    _selectionPresetIndex = Math.Clamp(
+                        _selectionPresetIndex,
+                        0,
+                        presetNames.Length - 1
+                    );
+                    int selected = _selectionPresetIndex;
                     if (ImGui.Combo("Material", ref selected, presetNames, presetNames.Length))
                     {
-                        ObjectNumber = Math.Clamp(selected, 0, presetNames.Length - 1);
+                        _selectionPresetIndex = Math.Clamp(selected, 0, presetNames.Length - 1);
+                        _selectionMaterial = presetNames[_selectionPresetIndex];
                     }
-                    //SelectionMaterial = presetNames[ObjectNumber];
+
+                    if (string.IsNullOrWhiteSpace(_selectionMaterial))
+                        _selectionMaterial = presetNames[_selectionPresetIndex];
                 }
                 if (ImGui.Button("Fill"))
                 {
-                    // Convert screen selection to normalized device coords [-1,1]
                     var winSize = WindowBounds.GetWindowSize();
+                    var bounds = WindowBounds.GetNormalizedBounds();
                     float sx = winSize.X > 0 ? winSize.X : 1f;
                     float sy = winSize.Y > 0 ? winSize.Y : 1f;
 
-                    float x0 = SelectStart.X / sx * 2f - 1f;
-                    float y0 = SelectStart.Y / sy * 2f - 1f;
-                    float x1 = SelectEnd.X / sx * 2f - 1f;
-                    float y1 = SelectEnd.Y / sy * 2f - 1f;
+                    float x0 = bounds.left + (bounds.right - bounds.left) * (SelectStart.X / sx);
+                    // Screen Y increases downward (0 at top), world Y increases downward too (top=-1, bottom=1)
+                    // So we map: screen 0 -> world -1, screen height -> world 1
+                    float y0 = bounds.top + (bounds.bottom - bounds.top) * (SelectStart.Y / sy);
+                    float x1 = bounds.left + (bounds.right - bounds.left) * (SelectEnd.X / sx);
+                    float y1 = bounds.top + (bounds.bottom - bounds.top) * (SelectEnd.Y / sy);
 
-                    // Ensure top-left / bottom-right ordering
-                    float topLeftX = MathF.Min(x0, x1);
-                    float topLeftY = MathF.Min(y0, y1);
-                    float bottomRightX = MathF.Max(x0, x1);
-                    float bottomRightY = MathF.Max(y0, y1);
+                    float minX = MathF.Min(x0, x1);
+                    float maxX = MathF.Max(x0, x1);
+                    float minY = MathF.Min(y0, y1);
+                    float maxY = MathF.Max(y0, y1);
 
-                    ObjectNumber = CalculateParticleCountForArea(
-                        topLeftX,
-                        topLeftY,
-                        bottomRightX,
-                        bottomRightY,
-                        "Sand"
+                    // Use 1.15f to match ParticleSystem.CreateParticles hardcoded spacing
+                    const float selectionSpacing = 1.15f;
+                    var layout = CalculateFillLayout(
+                        minX,
+                        minY,
+                        maxX,
+                        maxY,
+                        _selectionMaterial,
+                        selectionSpacing
                     );
 
                     CreateObjects(
-                        "Sand",
-                        ObjectNumber,
-                        topLeftX,
-                        topLeftY,
-                        bottomRightX,
-                        bottomRightY
+                        _selectionMaterial,
+                        layout.capacity,
+                        minX,
+                        minY,
+                        maxX,
+                        maxY,
+                        layout.columns,
+                        layout.origin,
+                        selectionSpacing
                     );
-
                 }
                 if (ImGui.Button("Zoom"))
                 {
@@ -408,28 +420,28 @@ namespace Engine13.Core
             }
         }
 
-        private int CalculateParticleCountForArea(
-            float topLeftX,
-            float topLeftY,
-            float bottomRightX,
-            float bottomRightY,
-            string materialName
+        private (int capacity, int columns, Vector2 origin) CalculateFillLayout(
+            float minX,
+            float minY,
+            float maxX,
+            float maxY,
+            string materialName,
+            float spacingFactor = 1.15f
         )
         {
             var tempPs = ParticleSystemFactory.Create("Temp", materialName);
             float radius = tempPs.Material.ParticleRadius;
-            float diameter = radius * 2f;
-            float horizontalSpacing = diameter * 1.15f;
-            float verticalSpacing = diameter * 1.15f;
 
-            float width = MathF.Max(0.0001f, bottomRightX - topLeftX);
-            float height = MathF.Max(0.0001f, bottomRightY - topLeftY);
+            var (capacity, columns, rows, origin) = ParticleGridLayout.CalculateParticleGrid(
+                minX,
+                minY,
+                maxX,
+                maxY,
+                radius,
+                spacingFactor
+            );
 
-            int columns = Math.Max(1, (int)MathF.Floor(width / horizontalSpacing));
-            int rows = Math.Max(1, (int)MathF.Floor(height / verticalSpacing));
-            int capacity = columns * rows;
-
-            return capacity;
+            return (capacity, columns, origin);
         }
 
         protected override void Draw()
@@ -437,50 +449,142 @@ namespace Engine13.Core
             Renderer.BeginFrame(new RgbaFloat(0.1f, 0.1f, 0.1f, 1f));
 
             Vector2[]? tickPositions = null;
+            Vector4[]? colors = null;
             int tickCount;
             lock (_tickLock)
             {
                 tickCount = _tickPositions.Count;
                 if (tickCount > 0)
                 {
-                    if (_playbackTimer.IsRunning)
-                    {
-                        float elapsedSeconds = (float)_playbackTimer.Elapsed.TotalSeconds;
-                        float frameTime = 1f / PlaybackFps;
-                        float totalSimTime = tickCount * frameTime;
-                        float playbackTime = elapsedSeconds % totalSimTime;
-                        _tickIndex = (int)(playbackTime / frameTime);
-                        _tickIndex = Math.Clamp(_tickIndex, 0, tickCount - 1);
-                    }
-                    else
-                    {
-                        _tickIndex = Math.Clamp(_tickIndex, 0, tickCount - 1);
-                    }
+                    float frameTime = 1f / MathF.Max(PlaybackFps, 1f);
+                    float totalSimTime = MathF.Max(frameTime, tickCount * frameTime);
 
+                    float playbackTime = _playbackStartOffsetSeconds;
+                    if (_playbackTimer.IsRunning)
+                        playbackTime += (float)_playbackTimer.Elapsed.TotalSeconds;
+
+                    // Wrap playback time to recorded range
+                    playbackTime %= totalSimTime;
+
+                    _tickIndex = Math.Clamp((int)(playbackTime / frameTime), 0, tickCount - 1);
                     tickPositions = _tickPositions[_tickIndex];
                 }
             }
 
             if (tickCount == 0)
             {
+                tickPositions = new Vector2[_entities.Count];
+                for (int i = 0; i < _entities.Count; i++)
+                    tickPositions[i] = _entities[i].Position;
+
+                colors = BuildOverlayColors(tickPositions);
+                Renderer.DrawInstanced(_entities, tickPositions, colors);
                 _imgui?.Render(CommandList);
                 Renderer.EndFrame();
                 return;
             }
 
-            Renderer.DrawInstanced(_entities, tickPositions!);
+            if (tickPositions == null || tickPositions.Length < _entities.Count)
+            {
+                tickPositions = new Vector2[_entities.Count];
+                for (int i = 0; i < _entities.Count; i++)
+                    tickPositions[i] = _entities[i].Position;
+            }
+
+            colors = BuildOverlayColors(tickPositions);
+            Renderer.DrawInstanced(_entities, tickPositions, colors);
 
             _imgui?.Render(CommandList);
 
             Renderer.EndFrame();
         }
 
+        private Vector4[] BuildOverlayColors(Vector2[] positions)
+        {
+            int count = Math.Min(_entities.Count, positions.Length);
+            if (_overlayColors.Length < count)
+                Array.Resize(ref _overlayColors, count);
+
+            for (int i = 0; i < count; i++)
+                _overlayColors[i] = _entities[i].Color;
+
+            if (
+                (!_overlayDensity && !_overlayPressure && !_overlayNeighbors)
+                || _particleSystems.Count == 0
+            )
+                return _overlayColors;
+
+            _entityIndexMap.Clear();
+            for (int i = 0; i < count; i++)
+                _entityIndexMap[_entities[i]] = i;
+
+            var ps = _particleSystems.Find(p => p.Material.IsFluid);
+            if (ps == null)
+                return _overlayColors;
+
+            int fluidCount = ps.FluidCount;
+            if (fluidCount == 0)
+                return _overlayColors;
+
+            Span<float> dens = fluidCount <= 256 ? stackalloc float[256] : new float[fluidCount];
+            Span<float> pres = fluidCount <= 256 ? stackalloc float[256] : new float[fluidCount];
+            Span<int> neigh = fluidCount <= 256 ? stackalloc int[256] : new int[fluidCount];
+
+            ps.GetFluidDebugData(_entityIndexMap, dens, pres, neigh);
+
+            float minVal = _overlayMin;
+            float maxVal = _overlayMax;
+            if (maxVal <= minVal + 1e-6f)
+                maxVal = minVal + 1f;
+            float invRange = 1f / (maxVal - minVal);
+
+            for (int i = 0; i < fluidCount; i++)
+            {
+                if (!ps.TryGetEntityAt(i, out var e))
+                    continue;
+                if (!_entityIndexMap.TryGetValue(e, out int idx))
+                    continue;
+
+                float v =
+                    _overlayDensity ? dens[i]
+                    : _overlayPressure ? pres[i]
+                    : neigh[i];
+                float t = Math.Clamp((v - minVal) * invRange, 0f, 1f);
+                _overlayColors[idx] = MapGradient(t);
+            }
+
+            return _overlayColors;
+        }
+
+        private static Vector4 MapGradient(float t)
+        {
+            t = Math.Clamp(t, 0f, 1f);
+            float r = t;
+            float g = 1f - MathF.Abs(t - 0.5f) * 2f;
+            float b = 1f - t;
+            if (g < 0f)
+                g = 0f;
+            return new Vector4(r, g, b, 1f);
+        }
+
         private void DrawUI()
         {
-            ImGui.ShowDemoWindow();
+            var io = ImGui.GetIO();
+            var display = io.DisplaySize;
+            const float margin = 10f;
+            const float spacing = 6f;
 
-            ImGui.SetNextWindowSize(new Vector2(450, 300), ImGuiCond.FirstUseEver);
+            var mainSize = new Vector2(450, 300);
+            var mainPos = new Vector2(margin, margin);
+            ImGui.SetNextWindowSize(mainSize, ImGuiCond.Always);
+            ImGui.SetNextWindowPos(mainPos, ImGuiCond.Always);
             ImGui.Begin("Simulation Setup", ref _showStartWindow, ImGuiWindowFlags.None);
+
+            var mainWinPos = ImGui.GetWindowPos();
+            var mainWinSize = ImGui.GetWindowSize();
+            float columnX = mainWinPos.X;
+            float nextY = mainWinPos.Y + mainWinSize.Y + spacing;
+            float mainRight = mainWinPos.X + mainWinSize.X;
             ImGui.Text("Precompute simulation frames before playback.");
             ImGui.Text($"Particle systems: {_particleSystems.Count}");
             ImGui.Text($"Entities: {_entities.Count}");
@@ -521,6 +625,7 @@ namespace Engine13.Core
             }
             else
             {
+                if (ImGui.Checkbox("Show Graph In Window", ref _showGraphInWindow)) { }
                 if (!_showGraphInWindow)
                 {
                     if (_csvPlotter != null)
@@ -547,11 +652,12 @@ namespace Engine13.Core
                         }
                     }
                 }
-                if (ImGui.Checkbox("Show Graph In Window", ref _showGraphInWindow)) { }
             }
             if (SimulationWindow)
             {
-                ImGui.SetNextWindowSize(new Vector2(300, 200), ImGuiCond.FirstUseEver);
+                var simSize = new Vector2(300, 200);
+                ImGui.SetNextWindowSize(simSize, ImGuiCond.Always);
+                ImGui.SetNextWindowPos(new Vector2(columnX, nextY), ImGuiCond.Always);
                 ImGui.Begin("Simulation");
                 if (_isPrecomputing)
                 {
@@ -561,6 +667,7 @@ namespace Engine13.Core
                 {
                     if (!_startRunningImmediately)
                     {
+                        // Keep playback timer stopped until user presses play; accumulate offset only when running
                         _playbackTimer.Stop();
                     }
                     if (ImGui.Button("Play/Pause"))
@@ -568,11 +675,13 @@ namespace Engine13.Core
                         _startRunningImmediately = true;
                         if (_playbackTimer.IsRunning)
                         {
-                            _playbackTimer.Stop();
+                            _playbackStartOffsetSeconds += (float)
+                                _playbackTimer.Elapsed.TotalSeconds;
+                            _playbackTimer.Reset();
                         }
                         else
                         {
-                            _playbackTimer.Start();
+                            _playbackTimer.Restart();
                         }
                     }
                     int selectedFrame = _tickIndex;
@@ -586,28 +695,35 @@ namespace Engine13.Core
                     if (ImGui.SliderInt("Frame Select", ref selectedFrame, 0, maxFrame))
                     {
                         _tickIndex = Math.Clamp(selectedFrame, 0, maxFrame);
+                        float frameTime = 1f / MathF.Max(PlaybackFps, 1f);
+                        _playbackStartOffsetSeconds = _tickIndex * frameTime;
                         if (_playbackTimer.IsRunning)
-                            _playbackTimer.Stop();
+                            _playbackTimer.Reset();
                     }
 
                     if (ImGui.SliderFloat("Playback FPS", ref PlaybackFps, 1f, 240f))
                     {
                         PlaybackFps = Math.Clamp(PlaybackFps, 1f, 240f);
+                        float frameTime = 1f / PlaybackFps;
+                        _playbackStartOffsetSeconds = _tickIndex * frameTime;
+                        if (_playbackTimer.IsRunning)
+                            _playbackTimer.Reset();
                     }
-                    // if (ImGui.Button("Clear Bonds"))
-                    // {
-                    //     Engine13.Utilities.MolecularDynamicsSystem.Instance.ClearAllBonds();
-                    //     Logger.Log("Cleared all bonds from MolecularDynamicsSystem");
-                    // }
                     ImGui.SameLine();
                     if (ImGui.Button("Close"))
                     {
                         SimulationWindow = false;
                     }
                 }
+                var simWinSize = ImGui.GetWindowSize();
+                ImGui.End();
+                nextY += simWinSize.Y + spacing;
             }
             if (PrecomputeWindow)
             {
+                var preSize = new Vector2(300, 160);
+                ImGui.SetNextWindowSize(preSize, ImGuiCond.Always);
+                ImGui.SetNextWindowPos(new Vector2(columnX, nextY), ImGuiCond.Always);
                 ImGui.Begin("Precompute Settings");
                 if (ImGui.Button("Begin compute"))
                 {
@@ -621,9 +737,22 @@ namespace Engine13.Core
                 ImGui.Separator();
                 ImGui.SliderInt("Max Frames", ref MaxFrames, 100, 5000);
                 if (ImGui.Checkbox("Start Running Immediately", ref _startRunningImmediately)) { }
+                var preWinSize = ImGui.GetWindowSize();
+                ImGui.End();
+                nextY += preWinSize.Y + spacing;
             }
             if (_showGraphInWindow)
             {
+                float graphX = mainRight + spacing;
+                float graphW = MathF.Max(80f, display.X - graphX - margin);
+
+                float buttonH = ImGui.GetFrameHeightWithSpacing();
+                float titleBarApprox = 24f;
+                float padding = 12f;
+                float graphH = GraphPlotHeight + buttonH + titleBarApprox + padding;
+
+                ImGui.SetNextWindowPos(new Vector2(graphX, mainWinPos.Y), ImGuiCond.Always);
+                ImGui.SetNextWindowSize(new Vector2(graphW, graphH + 15), ImGuiCond.Always);
                 ImGui.Begin("Tick Graph");
                 ShowGraphGuiWindow(_csvPlotter);
                 ImGui.End();
@@ -632,72 +761,75 @@ namespace Engine13.Core
             ImGui.End();
         }
 
-        private void ShowGraphGuiWindow(CsvPlotter csvPlotter)
+        private void ShowGraphGuiWindow(CsvPlotter? csvPlotter)
         {
             ImGui.Text($"Ticks Computed: {_tickCounter}");
 
-            string csvPath = Path.Combine(Directory.GetCurrentDirectory(), "Ticks.csv");
+            if (csvPlotter == null)
+            {
+                ImGui.Text("No CSV plotter available.");
+                return;
+            }
 
             // Prefer column 1 as timing column (if file is [tick, time, ...])
-            var ySeries = _csvPlotter.GetSeries(1) ?? _csvPlotter.GetSeries(0);
+            float[]? ySeries = csvPlotter.GetSeries(1) ?? csvPlotter.GetSeries(0);
 
             if (ySeries == null || ySeries.Length == 0)
             {
                 ImGui.Text("No numeric data available in the CSV selected columns.");
+                return;
+            }
+
+            float lastValid = 0f;
+            for (int i = 0; i < ySeries.Length; i++)
+            {
+                if (float.IsNaN(ySeries[i]))
+                    ySeries[i] = lastValid;
+                else
+                    lastValid = ySeries[i];
+            }
+
+            float minVal = float.PositiveInfinity;
+            float maxVal = float.NegativeInfinity;
+            for (int i = 0; i < ySeries.Length; i++)
+            {
+                var v = ySeries[i];
+                if (float.IsNaN(v))
+                    continue;
+                if (v < minVal)
+                    minVal = v;
+                if (v > maxVal)
+                    maxVal = v;
+            }
+
+            if (minVal == float.PositiveInfinity)
+            {
+                ImGui.Text("Series contains no valid numeric points to plot.");
             }
             else
             {
-                float lastValid = 0f;
-                for (int i = 0; i < ySeries.Length; i++)
-                {
-                    if (float.IsNaN(ySeries[i]))
-                        ySeries[i] = lastValid;
-                    else
-                        lastValid = ySeries[i];
-                }
+                ImGui.PlotLines(
+                    "Tick Time (ms)",
+                    ref ySeries[0],
+                    ySeries.Length,
+                    0,
+                    $"{_tickCounter}/{MaxFrames}",
+                    minVal,
+                    maxVal,
+                    new System.Numerics.Vector2(-1, GraphPlotHeight)
+                );
+            }
 
-                float minVal = float.PositiveInfinity;
-                float maxVal = float.NegativeInfinity;
-                for (int i = 0; i < ySeries.Length; i++)
+            if (ImGui.Button("Reload CSV"))
+            {
+                try
                 {
-                    var v = ySeries[i];
-                    if (float.IsNaN(v))
-                        continue;
-                    if (v < minVal)
-                        minVal = v;
-                    if (v > maxVal)
-                        maxVal = v;
+                    csvPlotter.Load();
+                    Logger.Log("CSV reloaded from UI");
                 }
-
-                if (minVal == float.PositiveInfinity)
+                catch (Exception ex)
                 {
-                    ImGui.Text("Series contains no valid numeric points to plot.");
-                }
-                else
-                {
-                    ImGui.PlotLines(
-                        "Tick Time (ms)",
-                        ref ySeries[0],
-                        ySeries.Length,
-                        0,
-                        $"{_tickCounter}/{MaxFrames}",
-                        minVal,
-                        maxVal,
-                        new System.Numerics.Vector2(-1, 100)
-                    );
-                }
-
-                if (ImGui.Button("Reload CSV"))
-                {
-                    try
-                    {
-                        _csvPlotter.Load();
-                        Logger.Log("CSV reloaded from UI");
-                    }
-                    catch (Exception ex)
-                    {
-                        Logger.Log($"Reload failed: {ex.Message}");
-                    }
+                    Logger.Log($"Reload failed: {ex.Message}");
                 }
             }
         }
@@ -711,7 +843,7 @@ namespace Engine13.Core
                     collision.IsGrounded = false;
             }
 
-            const int iterations = 4;
+            const int iterations = 6;
             for (int iter = 0; iter < iterations; iter++)
             {
                 var collisionPairs = _grid.GetCollisionPairs();
@@ -723,9 +855,13 @@ namespace Engine13.Core
                 {
                     var objA = pair.EntityA.GetComponent<ObjectCollision>();
                     var objB = pair.EntityB.GetComponent<ObjectCollision>();
-                    if (objA != null && objB != null && objA.IsFluid && objB.IsFluid)
+                    
+                    // Skip only fluid-fluid collisions - SPH handles them
+                    // But allow fluid-solid collisions for walls
+                    bool isFluidFluid = objA != null && objB != null && objA.IsFluid && objB.IsFluid;
+                    if (isFluidFluid)
                         continue;
-
+                    
                     if (
                         CollisionInfo.AreColliding(
                             pair.EntityA,
@@ -742,7 +878,8 @@ namespace Engine13.Core
                 if (!anyContacts)
                     break;
 
-                if (iter < iterations - 1 && iter % 2 == 1)
+                // Update grid after each iteration for better convergence
+                if (iter < iterations - 1)
                     _grid.UpdateAllAabb(_entities);
             }
         }
@@ -758,30 +895,38 @@ namespace Engine13.Core
         private void CreateObjects(
             string materialName = "Sand",
             int particleCount = 1000,
-            float topLeftX = -0.3f,
-            float topLeftY = -0.4f,
-            float bottomRightX = 0.3f,
-            float bottomRightY = 0.4f
+            float minX = -0.3f,
+            float minY = -0.4f,
+            float maxX = 0.3f,
+            float maxY = 0.4f,
+            int? columnsOverride = null,
+            Vector2? originOverride = null,
+            float spacingFactor = 1.15f
         )
         {
-            var topLeftPos = new Vector2(topLeftX, topLeftY);
-
             var particleSystem = ParticleSystemFactory.Create(
                 $"{materialName}Object",
                 materialName
             );
 
+            particleSystem.Material.ApplyTo(particleSystem);
+
             float radius = particleSystem.Material.ParticleRadius;
-            float diameter = radius * 2f;
-            float horizontalSpacing = diameter * 1.15f;
-            float verticalSpacing = diameter * 1.15f;
 
-            float width = MathF.Max(0.0001f, bottomRightX - topLeftX);
-            float height = MathF.Max(0.0001f, bottomRightY - topLeftY);
+            // Use the helper to calculate proper grid layout
+            var (capacity, columns, rows, origin) = ParticleGridLayout.CalculateParticleGrid(
+                minX,
+                minY,
+                maxX,
+                maxY,
+                radius,
+                spacingFactor
+            );
 
-            int columns = Math.Max(1, (int)MathF.Floor(width / horizontalSpacing));
-            int rows = Math.Max(1, (int)MathF.Floor(height / verticalSpacing));
-            int capacity = columns * rows;
+            // Allow overrides if provided
+            int finalColumns = columnsOverride ?? columns;
+            Vector2 finalOrigin = originOverride ?? origin;
+            
             int particlesToCreate = Math.Min(Math.Max(0, particleCount), capacity);
 
             _entities.EnsureCapacity(_entities.Count + particlesToCreate + 1);
@@ -789,8 +934,8 @@ namespace Engine13.Core
             particleSystem.CreateParticles(
                 GraphicsDevice,
                 particlesToCreate,
-                topLeftPos,
-                columns,
+                finalOrigin,
+                finalColumns,
                 _entities,
                 _updateManager,
                 _grid
@@ -805,24 +950,35 @@ namespace Engine13.Core
                 var neighbors = new System.Collections.Generic.List<Entity>();
 
                 // Optimize membership test for particles created by this system
-                var createdSet = new System.Collections.Generic.HashSet<Entity>(particleSystem.Particles);
+                var createdSet = new System.Collections.Generic.HashSet<Entity>(
+                    particleSystem.Particles
+                );
 
                 foreach (var e in particleSystem.Particles)
                 {
                     _grid.GetNearbyEntities(e.Position, neighbors);
                     foreach (var other in neighbors)
                     {
-                        if (other == e) continue;
-                        if (!createdSet.Contains(other)) continue; // only bond within same system
+                        if (other == e)
+                            continue;
+                        if (!createdSet.Contains(other))
+                            continue; // only bond within same system
                         // Only create one bond per unordered pair
-                        if (e.GetHashCode() >= other.GetHashCode()) continue;
+                        if (e.GetHashCode() >= other.GetHashCode())
+                            continue;
                         float dist = Vector2.Distance(e.Position, other.Position);
                         if (dist <= bondThreshold)
                         {
                             float rest = dist;
                             float k = mat.BondStiffness > 0f ? mat.BondStiffness : 100f;
                             float c = mat.BondDamping;
-                            Engine13.Utilities.MolecularDynamicsSystem.Instance.AddBond(e, other, k, c, rest);
+                            Engine13.Utilities.MolecularDynamicsSystem.Instance.AddBond(
+                                e,
+                                other,
+                                k,
+                                c,
+                                rest
+                            );
                         }
                     }
                 }
