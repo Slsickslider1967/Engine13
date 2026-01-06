@@ -273,21 +273,33 @@ namespace Engine13.Core
 
             // Configure the SPH solver with material properties
             _sph.Configure(
-                smoothingRadius: Material.PressureRadius * 2.5f,
-                gasConstant: Material.SPHGasConstant * 1.0f, // Full strength
-                viscosity: Material.SPHViscosity * 1.0f, // Normal viscosity
+                smoothingRadius: Material.ParticleRadius * 4.0f, // Larger radius for better neighbor detection
+                gasConstant: Material.SPHGasConstant * 0.5f, // Gentler pressure
+                viscosity: Material.SPHViscosity,
                 restDensity: Material.SPHRestDensity,
                 particleRadius: Material.ParticleRadius,
                 gravity: new Vector2(0f, Material.GravityStrength),
-                damping: 0.98f,
-                maxVelocity: 5f
+                damping: 0.99f,
+                maxVelocity: 3.0f
             );
             
             // Register all particles with the SPH solver
             _sph.Clear();
+            var random = new Random();
             foreach (var particle in Particles)
             {
                 _sph.AddParticle(particle);
+                
+                // Add tiny random velocity perturbations to break lattice symmetry
+                // This creates more realistic, chaotic fluid behavior
+                var oc = particle.GetComponent<Engine13.Utilities.Attributes.ObjectCollision>();
+                if (oc != null)
+                {
+                    float perturbMagnitude = 0.01f;  // Very small perturbation to avoid adding energy
+                    float vx = (float)(random.NextDouble() * 2.0 - 1.0) * perturbMagnitude;
+                    float vy = (float)(random.NextDouble() * 2.0 - 1.0) * perturbMagnitude;
+                    oc.Velocity = new Vector2(vx, vy);
+                }
             }
         }
 
@@ -314,6 +326,16 @@ namespace Engine13.Core
                 return;
                 
             _sph.Step(dt, grid);
+        }
+
+        public (int particleCount, float avgDensity, float maxDensity, float avgPressure, 
+                float avgViscosity, float avgNeighbors, float avgVelocity, float maxVelocity) GetSPHDebugInfo()
+        {
+            if (!Material.IsFluid)
+                return (0, 0f, 0f, 0f, 0f, 0f, 0f, 0f);
+                
+            return (_sph.ParticleCount, _sph.AvgDensity, _sph.MaxDensity, _sph.AvgPressure,
+                    _sph.AvgViscosityForce, _sph.AvgNeighbors, _sph.AvgVelocity, _sph.MaxVelocity);
         }
     }
 

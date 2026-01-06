@@ -6,7 +6,10 @@ using System.Collections.Generic;
 
 namespace Engine13.Utilities
 {
-    // Simple CSV reader and transposer that exposes columns as float arrays for ImGui plotting.
+    /// <summary>
+    ///     Simple CSV file reader for plotting data.
+    ///     Loads all data into memory for easy access to columns/series.
+    /// </summary>
     public class CsvPlotter
     {
         private readonly string _filePath;
@@ -67,7 +70,6 @@ namespace Engine13.Utilities
             }
         }
 
-        // Returns null if column not available
         public float[]? GetSeries(int columnIndex)
         {
             if (!Loaded) return null;

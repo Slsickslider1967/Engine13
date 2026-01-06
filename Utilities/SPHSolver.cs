@@ -12,7 +12,6 @@ namespace Engine13.Utilities
     /// </summary>
     internal static class SPHKernels
     {
-        // Poly6 kernel (2D) - normalized coefficient depends on h
         public static float Poly6(float r, float h)
         {
             if (h <= 0f)
@@ -22,6 +21,7 @@ namespace Engine13.Utilities
             if (r >= h)
                 return 0f;
             float hr2 = h * h - r * r;
+            // 2D Poly6 kernel: 4/(π*h^8)
             float coeff = 4f / (MathF.PI * MathF.Pow(h, 8));
             return coeff * hr2 * hr2 * hr2;
         }
@@ -36,7 +36,8 @@ namespace Engine13.Utilities
             if (dir.LengthSquared() <= 1e-12f)
                 return Vector2.Zero;
             float x = h - r;
-            float coeff = -30f / (MathF.PI * MathF.Pow(h, 5));
+            // 2D Spiky gradient: -10/(π*h^5) for better stability
+            float coeff = -10f / (MathF.PI * MathF.Pow(h, 5));
             return coeff * x * x * dir;
         }
 
@@ -49,7 +50,8 @@ namespace Engine13.Utilities
                 r = 0f;
             if (r >= h)
                 return 0f;
-            float coeff = 40f / (MathF.PI * MathF.Pow(h, 5));
+            // 2D Viscosity laplacian: 10/(π*h^5)
+            float coeff = 10f / (MathF.PI * MathF.Pow(h, 5));
             return coeff * (h - r);
         }
     }
@@ -78,12 +80,22 @@ namespace Engine13.Utilities
         private readonly List<Entity> _neighborBuffer = new();
         private readonly Dictionary<FluidParticle, int> _particleIndexMap = new();
 
+        // Debug tracking
+        public float AvgDensity { get; private set; }
+        public float MaxDensity { get; private set; }
+        public float AvgPressure { get; private set; }
+        public float AvgViscosityForce { get; private set; }
+        public float AvgNeighbors { get; private set; }
+        public int CollisionCount { get; private set; }
+        public float AvgVelocity { get; private set; }
+        public float MaxVelocity { get; private set; }
+
         public int ParticleCount => _particles.Count;
 
         public SPH()
         {
-            _maxVelocity = 2f;
-            _damping = 0.995f; // Less damping to allow flow
+            _maxVelocity = 3.0f; // Limit velocity for stability
+            _damping = 0.99f; // Light damping
         }
 
         /// <summary>
@@ -172,6 +184,9 @@ namespace Engine13.Utilities
 
             // Step 5: Integrate (update velocities and positions)
             Integrate(dt);
+
+            // Step 6: Compute debug statistics
+            ComputeDebugStats();
         }
 
         private void FindNeighbors(SpatialGrid grid)
@@ -247,22 +262,36 @@ namespace Engine13.Utilities
 
         private void ComputePressures()
         {
-            // Use Tait equation: p = B * ((ρ/ρ_0)^γ - 1)
-            // For weak compressibility: simplified to p = k * (ρ - ρ_0)
+            // Pressure based on how much particles overlap their ideal separation (2 * radius)
+            float targetSeparation = _particleRadius * 2f;
+
             for (int i = 0; i < _particles.Count; i++)
             {
-                float rho = _densities[i];
-                float densityError = rho - _restDensity;
+                var particle = _particles[i];
+                float pressure = 0f;
 
-                // Linear stiffness for stability (Becker & Teschner 2007)
-                _pressures[i] = _gasConstant * MathF.Max(0f, densityError);
+                // Check distance to neighbors - if closer than target separation, apply pressure
+                foreach (var neighbor in particle.Neighbors)
+                {
+                    Vector2 diff = particle.Entity.Position - neighbor.Entity.Position;
+                    float dist = diff.Length();
+
+                    if (dist < targetSeparation && dist > 0.0001f)
+                    {
+                        // Pressure increases as particles get closer than target separation
+                        float overlap = targetSeparation - dist;
+                        pressure += _gasConstant * overlap;
+                    }
+                }
+
+                _pressures[i] = pressure;
             }
         }
 
         private void ComputeForces()
         {
-            float h = _smoothingRadius;
-            float h2 = h * h;
+            // Use particle radius for separation - particles should be 2*radius apart
+            float targetSeparation = _particleRadius * 2f;
 
             // Build index map once
             _particleIndexMap.Clear();
@@ -280,18 +309,8 @@ namespace Engine13.Utilities
                     continue;
                 }
 
-                if (particle.Neighbors.Count == 0)
-                {
-                    _forces[i] = Vector2.Zero;
-                    continue;
-                }
-
                 Vector2 pressureForce = Vector2.Zero;
-                Vector2 viscosityForce = Vector2.Zero;
                 Vector2 pos = particle.Entity.Position;
-                float rho_i = _densities[i];
-                float p_i = _pressures[i];
-                float mass_i = PhysicsMath.SafeMass(particle.Entity.Mass);
 
                 for (int nIdx = 0; nIdx < particle.Neighbors.Count; nIdx++)
                 {
@@ -300,85 +319,145 @@ namespace Engine13.Utilities
                     if (!_particleIndexMap.TryGetValue(neighbor, out int j))
                         continue;
 
-                    float dx = pos.X - neighbor.Entity.Position.X;
-                    float dy = pos.Y - neighbor.Entity.Position.Y;
-                    float distSq = dx * dx + dy * dy;
+                    Vector2 diff = pos - neighbor.Entity.Position;
+                    float distSq = diff.LengthSquared();
 
-                    if (distSq <= 1e-6f || distSq >= h2)
+                    if (distSq <= 1e-8f)
                         continue;
 
                     float dist = MathF.Sqrt(distSq);
-                    Vector2 dir = new Vector2(dx / dist, dy / dist);
 
-                    float rho_j = _densities[j];
-                    float p_j = _pressures[j];
-                    float mass_j = PhysicsMath.SafeMass(neighbor.Entity.Mass);
+                    // Only apply force if particles are closer than target separation
+                    if (dist >= targetSeparation)
+                        continue;
 
-                    // Strong pressure-based repulsion
-                    if (p_i > 0f || p_j > 0f)
-                    {
-                        float avgPressure = (p_i + p_j) * 0.5f;
-                        float q = 1f - (dist / h);
-                        // Direct force proportional to pressure and inverse distance
-                        pressureForce += dir * (avgPressure * q * 50f);
-                    }
+                    Vector2 dir = diff / dist;
+
+                    // Strong force with very steep falloff - only active when very close
+                    float overlap = targetSeparation - dist;
+                    float normalizedOverlap = overlap / targetSeparation; // 0 to 1
                     
-                    // Strong close-range repulsion to prevent overlap
-                    float minDist = _particleRadius * 2.0f;
-                    if (dist < minDist)
-                    {
-                        float penetration = minDist - dist;
-                        float repulsionForce = (penetration / minDist) * 100f;
-                        pressureForce += dir * repulsionForce;
-                    }
-
-                    // Viscosity damping
-                    var oc_j = neighbor.Entity.GetComponent<ObjectCollision>();
-                    if (oc_j != null)
-                    {
-                        Vector2 velDiff = oc_j.Velocity - oc.Velocity;
-                        float q = 1f - (dist / h);
-                        viscosityForce += velDiff * (q * _viscosity * 0.5f);
-                    }
+                    // Power of 6 for very steep falloff - force drops to near zero quickly
+                    float falloff = MathF.Pow(normalizedOverlap, 6f);
+                    
+                    float avgPressure = (_pressures[i] + _pressures[j]) * 0.5f;
+                    float forceMag = avgPressure * falloff * 0.02f; // Much smaller multiplier
+                    
+                    pressureForce += dir * forceMag;
                 }
 
-                _forces[i] = pressureForce + viscosityForce;
+                _forces[i] = pressureForce;
             }
         }
 
         private void Integrate(float dt)
         {
-            // Realistic limits for water simulation
-            const float maxAccel = 500f; // Higher for strong forces
+            // Get screen bounds to check for floor proximity
+            var bounds = Engine13.Utilities.WindowBounds.GetNormalizedBounds();
+            float floorY = bounds.bottom;
             
             for (int i = 0; i < _particles.Count; i++)
             {
                 var particle = _particles[i];
                 var oc = particle.Entity.GetComponent<ObjectCollision>();
-                
+
                 if (oc == null || oc.IsStatic)
                     continue;
+
+                float mass = PhysicsMath.SafeMass(particle.Entity.Mass);
                 
-                // Use forces directly (already scaled appropriately)
-                Vector2 accel = _forces[i] + _gravity;
+                // Apply SPH pressure forces (keeps particles separated)
+                Vector2 accel = _forces[i] / mass;
                 
-                // Clamp acceleration to prevent instability
+                // Check if particle is near floor
+                float distToFloor = floorY - particle.Entity.Position.Y;
+                bool nearFloor = distToFloor <= _particleRadius * 1.5f;
+                
+                // If near floor, don't allow SPH forces to push downward
+                if (nearFloor && accel.Y > 0f)
+                {
+                    accel.Y = 0f; // Cancel downward acceleration from SPH
+                }
+                
+                // Add gravity
+                accel += _gravity;
+                
+                // Limit acceleration to prevent explosions
                 float accelMag = accel.Length();
-                if (accelMag > maxAccel)
-                    accel *= maxAccel / accelMag;
+                if (accelMag > 100f)
+                    accel *= 100f / accelMag;
                 
                 // Update velocity
                 oc.Velocity += accel * dt;
-                oc.Velocity *= _damping;
                 
-                // Limit velocity
-                float maxVel = _maxVelocity * 3f;
-                oc.Velocity = PhysicsMath.ClampMagnitude(oc.Velocity, maxVel);
+                // If near floor and moving downward, clamp downward velocity
+                if (nearFloor && oc.Velocity.Y > 0f)
+                {
+                    oc.Velocity = new Vector2(oc.Velocity.X, MathF.Min(oc.Velocity.Y, 0.1f));
+                }
                 
-                // Update position
-                particle.Entity.Position += oc.Velocity * dt;
+                // Apply different damping for horizontal vs vertical - allow more horizontal flow
+                Vector2 vel = oc.Velocity;
+                vel.X *= 0.99f; // Less damping horizontally for better flow
+                vel.Y *= 0.98f; // More damping vertically to prevent bouncing
+                
+                // Apply different velocity limits - allow more horizontal movement
+                float horizSpeed = MathF.Abs(vel.X);
+                if (horizSpeed > 3.5f)
+                    vel.X *= 3.5f / horizSpeed;
+                
+                float vertSpeed = MathF.Abs(vel.Y);
+                if (vertSpeed > 2.5f)
+                    vel.Y *= 2.5f / vertSpeed;
+                
+                oc.Velocity = vel;
             }
-        }        /// <summary>
+        }        private void ComputeDebugStats()
+        {
+            if (_particles.Count == 0)
+            {
+                AvgDensity = MaxDensity = AvgPressure = AvgViscosityForce = AvgNeighbors = 0f;
+                AvgVelocity = MaxVelocity = 0f;
+                return;
+            }
+
+            float sumDensity = 0f,
+                maxDens = 0f;
+            float sumPressure = 0f;
+            float sumViscosity = 0f;
+            float sumNeighbors = 0f;
+            float sumVel = 0f,
+                maxVel = 0f;
+
+            for (int i = 0; i < _particles.Count; i++)
+            {
+                var particle = _particles[i];
+                sumDensity += _densities[i];
+                maxDens = MathF.Max(maxDens, _densities[i]);
+                sumPressure += _pressures[i];
+                sumViscosity += _forces[i].Length();
+                sumNeighbors += particle.Neighbors.Count;
+
+                var oc = particle.Entity.GetComponent<ObjectCollision>();
+                if (oc != null)
+                {
+                    float vel = oc.Velocity.Length();
+                    sumVel += vel;
+                    maxVel = MathF.Max(maxVel, vel);
+                }
+            }
+
+            int count = _particles.Count;
+            AvgDensity = sumDensity / count;
+            MaxDensity = maxDens;
+            AvgPressure = sumPressure / count;
+            AvgViscosityForce = sumViscosity / count;
+            AvgNeighbors = sumNeighbors / count;
+            AvgVelocity = sumVel / count;
+            MaxVelocity = maxVel;
+        }
+
+        /// <summary>
         /// Get debug information for a specific particle.
         /// </summary>
         public bool TryGetDebugInfo(

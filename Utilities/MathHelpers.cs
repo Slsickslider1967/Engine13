@@ -271,14 +271,14 @@ namespace Engine13.Utilities
 
     public static class PhysicsSolver
     {
-        private const float PenetrationSlop = 0.0001f;
-        private const float PositionalCorrectionPercent = 0.8f;
-        private const float MaxPenetrationCorrection = 0.2f;
-        private const float BaumgarteScalar = 0.15f;
-        private const float RestitutionVelocityThreshold = 0.05f;
-        private const float StaticToDynamicFrictionRatio = 0.7f;
-        private const float GroundNormalThreshold = 0.6f;
-        private const float RestingRelativeVelocityThreshold = 0.3f;
+        private const float PenetrationSlop = 0.001f;
+        private const float PositionalCorrectionPercent = 0.4f;  // Reduced from 0.6 to prevent energy injection
+        private const float MaxPenetrationCorrection = 0.01f;  // Reduced from 0.02 to prevent corner glitching
+        private const float BaumgarteScalar = 0.08f;  // Reduced for stability
+        private const float RestitutionVelocityThreshold = 0.2f;
+        private const float StaticToDynamicFrictionRatio = 0.8f;
+        private const float GroundNormalThreshold = 0.7f;
+        private const float RestingRelativeVelocityThreshold = 0.15f;
         private const float MassIgnoreRatio = 1000f;
         private const float MaxLinearVelocity = 15f;
 
@@ -294,6 +294,9 @@ namespace Engine13.Utilities
 
             var objA = entityA.GetComponent<ObjectCollision>();
             var objB = entityB.GetComponent<ObjectCollision>();
+            
+            // Check if this is a fluid collision
+            bool isFluidCollision = (objA != null && objA.IsFluid) || (objB != null && objB.IsFluid);
 
             float invMassA =
                 (objA == null || objA.IsStatic || objA.Mass <= 0f) ? 0f : 1f / objA.Mass;
@@ -309,17 +312,9 @@ namespace Engine13.Utilities
                     ? float.PositiveInfinity
                     : objB.Mass;
 
-            if (massAVal < float.PositiveInfinity && massBVal < float.PositiveInfinity)
-            {
-                if (massAVal > massBVal * MassIgnoreRatio)
-                {
-                    invMassA = 0f;
-                }
-                else if (massBVal > massAVal * MassIgnoreRatio)
-                {
-                    invMassB = 0f;
-                }
-            }
+            // Removed mass ratio check - it was violating momentum conservation
+            // Instead, natural mass ratios will produce correct physics
+            // Heavy objects will move less, light objects will move more
 
             float invMassSum = invMassA + invMassB;
             if (invMassSum <= 1e-8f)
@@ -335,23 +330,93 @@ namespace Engine13.Utilities
 
             deltaTime = MathF.Max(deltaTime, 1e-5f);
 
-            float penetrationDepth = MathF.Max(mtvLen - PenetrationSlop, 0f);
+            // For fluids, correct ANY penetration immediately
+            // For solids, allow small slop
+            float slop = isFluidCollision ? 0f : PenetrationSlop;
+            float penetrationDepth = MathF.Max(mtvLen - slop, 0f);
             if (penetrationDepth > 0f)
             {
-                // Increase correction for fluids to prevent phasing
-                bool isFluidA = objA?.IsFluid ?? false;
-                bool isFluidB = objB?.IsFluid ?? false;
-                float correctionPercent = (isFluidA || isFluidB) ? 0.9f : PositionalCorrectionPercent;
+                // Apply positional correction to ALL collisions including fluids
+                // Fluids: 100% correction to prevent any overlap accumulation
+                float correctionPercent = isFluidCollision ? 1.0f : PositionalCorrectionPercent;
+                float maxCorrection = isFluidCollision ? 1.0f : MaxPenetrationCorrection;
                 
                 float correctionMag = MathF.Min(
                     penetrationDepth * correctionPercent,
-                    MaxPenetrationCorrection
+                    maxCorrection
                 );
                 Vector2 correction = (correctionMag / invMassSum) * normal;
-                if (objA != null && invMassA > 0f)
-                    entityA.Position -= correction * invMassA;
-                if (objB != null && invMassB > 0f)
-                    entityB.Position += correction * invMassB;
+                
+                // For fluids, always ensure exact radius separation
+                if (isFluidCollision)
+                {
+                    // ABSOLUTE CLAMPING - make it physically impossible to overlap
+                    float totalRadius = (entityA.CollisionRadius + entityB.CollisionRadius);
+                    Vector2 delta = entityB.Position - entityA.Position;
+                    float dist = delta.Length();
+                    
+                    if (dist < totalRadius)
+                    {
+                        if (dist < 0.0001f)
+                        {
+                            // Particles exactly on top of each other - push apart horizontally
+                            if (objA != null && invMassA > 0f && !objA.IsStatic)
+                                entityA.Position -= new Vector2(totalRadius * 0.5f, 0f);
+                            if (objB != null && invMassB > 0f && !objB.IsStatic)
+                                entityB.Position += new Vector2(totalRadius * 0.5f, 0f);
+                        }
+                        else
+                        {
+                            Vector2 separationDir = delta / dist;
+                            float overlap = totalRadius - dist;
+                            
+                            bool aMovable = objA != null && invMassA > 0f && !objA.IsStatic;
+                            bool bMovable = objB != null && invMassB > 0f && !objB.IsStatic;
+                            
+                            // Check if either particle is grounded (against floor)
+                            bool aGrounded = objA != null && objA.IsGrounded;
+                            bool bGrounded = objB != null && objB.IsGrounded;
+                            
+                            if (aMovable && bMovable)
+                            {
+                                if (aGrounded && !bGrounded)
+                                {
+                                    // A is on floor - move B away from A (upward)
+                                    entityB.Position = entityA.Position + separationDir * totalRadius;
+                                }
+                                else if (bGrounded && !aGrounded)
+                                {
+                                    // B is on floor - move A away from B (upward)
+                                    entityA.Position = entityB.Position - separationDir * totalRadius;
+                                }
+                                else
+                                {
+                                    // Neither grounded or both grounded - split equally from midpoint
+                                    Vector2 midpoint = (entityA.Position + entityB.Position) * 0.5f;
+                                    entityA.Position = midpoint - separationDir * (totalRadius * 0.5f);
+                                    entityB.Position = midpoint + separationDir * (totalRadius * 0.5f);
+                                }
+                            }
+                            else if (aMovable)
+                            {
+                                // Only A movable - move A away from B
+                                entityA.Position = entityB.Position - separationDir * totalRadius;
+                            }
+                            else if (bMovable)
+                            {
+                                // Only B movable - move B away from A
+                                entityB.Position = entityA.Position + separationDir * totalRadius;
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    if (objA != null && invMassA > 0f)
+                        entityA.Position -= correction * invMassA;
+                    if (objB != null && invMassB > 0f)
+                        entityB.Position += correction * invMassB;
+                }
             }
 
             Vector2 velocityA = Vector2.Zero;
@@ -372,32 +437,62 @@ namespace Engine13.Utilities
             if (objB != null)
                 restitutionCandidateB = objB.Restitution;
 
-            // Use geometric mean for more realistic material combination
+            // Use minimum restitution for more predictable behavior
+            // (softer material dominates)
             float restitution = Math.Clamp(
-                MathF.Sqrt(MathF.Max(restitutionCandidateA * restitutionCandidateB, 0f)),
+                MathF.Min(restitutionCandidateA, restitutionCandidateB),
                 0f,
                 1f
             );
+            
+            // Only apply restitution if impact velocity is significant
             if (MathF.Abs(relVelN) < RestitutionVelocityThreshold)
                 restitution = 0f;
 
+            // For fluid collisions, force restitution to exactly 0
+            if (isFluidCollision)
+                restitution = 0f;
+
             float bias = 0f;
-            if (penetrationDepth > 0f)
+            if (penetrationDepth > PenetrationSlop)
             {
-                float maxBias =
-                    (MaxPenetrationCorrection > 0f)
-                        ? MaxPenetrationCorrection / deltaTime
-                        : float.PositiveInfinity;
-                bias = MathF.Min(BaumgarteScalar * penetrationDepth / deltaTime, maxBias);
+                // For fluids, NO bias correction - it causes bouncing
+                // For solids, use soft bias for stability
+                if (!isFluidCollision)
+                {
+                    bias = BaumgarteScalar * penetrationDepth / deltaTime;
+                }
+            }
+
+            // For fluid-fluid collisions - only position correction, no velocity change
+            // SPH pressure handles the repulsion forces
+            bool isFluidFluid = (objA != null && objA.IsFluid) && (objB != null && objB.IsFluid);
+            if (isFluidFluid)
+            {
+                return; // Position already corrected above, SPH handles forces
+            }
+            
+            // For fluid-solid collisions, stop normal motion but allow sliding
+            if (isFluidCollision)
+            {
+                if (objA != null && objA.IsFluid && invMassA > 0f)
+                {
+                    float velAlongNormal = Vector2.Dot(objA.Velocity, normal);
+                    if (velAlongNormal < 0f)
+                        objA.Velocity -= normal * velAlongNormal; // Cancel normal velocity, no boost
+                }
+                if (objB != null && objB.IsFluid && invMassB > 0f)
+                {
+                    float velAlongNormal = Vector2.Dot(objB.Velocity, normal);
+                    if (velAlongNormal > 0f)
+                        objB.Velocity -= normal * velAlongNormal; // Cancel normal velocity, no boost
+                }
+                return;
             }
 
             float normalImpulseScalar = (-(1f + restitution) * relVelN + bias) / invMassSum;
             if (normalImpulseScalar < 0f)
                 normalImpulseScalar = 0f;
-            
-            // For nearly resting contacts, reduce impulse to prevent energy injection
-            if (MathF.Abs(relVelN) < 0.3f && penetrationDepth < 0.002f)
-                normalImpulseScalar *= 0.5f;
 
             Vector2 normalImpulse = normalImpulseScalar * normal;
 
@@ -447,6 +542,31 @@ namespace Engine13.Utilities
                     objA.Velocity -= frictionImpulse * invMassA;
                 if (objB != null && invMassB > 0f)
                     objB.Velocity += frictionImpulse * invMassB;
+                
+                // Apply torque for rolling (circular objects only)
+                if (entityA.CollisionShape == Entity.CollisionShapeType.Circle && objA != null && invMassA > 0f)
+                {
+                    float radiusA = entityA.CollisionRadius > 0f ? entityA.CollisionRadius : MathF.Max(entityA.Size.X, entityA.Size.Y) * 0.5f;
+                    // Torque = r × F, for 2D: τ = r * F_tangent
+                    // Angular impulse = τ * dt / I, where I = 0.5 * m * r^2 for disk
+                    float momentOfInertia = 0.5f * objA.Mass * radiusA * radiusA;
+                    if (momentOfInertia > 1e-8f)
+                    {
+                        float angularImpulse = -radiusA * Vector2.Dot(frictionImpulse, tangent) / momentOfInertia;
+                        objA.AngularVelocity += angularImpulse;
+                    }
+                }
+                
+                if (entityB.CollisionShape == Entity.CollisionShapeType.Circle && objB != null && invMassB > 0f)
+                {
+                    float radiusB = entityB.CollisionRadius > 0f ? entityB.CollisionRadius : MathF.Max(entityB.Size.X, entityB.Size.Y) * 0.5f;
+                    float momentOfInertia = 0.5f * objB.Mass * radiusB * radiusB;
+                    if (momentOfInertia > 1e-8f)
+                    {
+                        float angularImpulse = radiusB * Vector2.Dot(frictionImpulse, tangent) / momentOfInertia;
+                        objB.AngularVelocity += angularImpulse;
+                    }
+                }
             }
 
             velocityA = Vector2.Zero;

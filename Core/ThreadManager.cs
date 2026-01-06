@@ -16,15 +16,12 @@ namespace Engine13.Core
         private Thread _renderThread;
         private volatile bool _isRunning;
         private readonly object _stateLock = new object();
-
-        // Queue-based task management
         private readonly ConcurrentQueue<UpdateTask> _updateTaskQueue =
             new ConcurrentQueue<UpdateTask>();
         private readonly ConcurrentQueue<RenderTask> _renderTaskQueue =
             new ConcurrentQueue<RenderTask>();
         private readonly AutoResetEvent _updateTaskAvailable = new AutoResetEvent(false);
         private readonly AutoResetEvent _renderTaskAvailable = new AutoResetEvent(false);
-
         private System.Diagnostics.Stopwatch _frameTimer;
         private readonly Action _updateAction;
         private readonly Action _drawAction;
@@ -50,11 +47,23 @@ namespace Engine13.Core
 
         public void Stop()
         {
+            if (!_isRunning)
+                return;
+
             _isRunning = false;
 
-            // Signal threads to wake up and exit
-            _updateTaskAvailable.Set();
-            _renderTaskAvailable.Set();
+            // Signal threads to wake up and exit (only if not disposed)
+            try
+            {
+                _updateTaskAvailable?.Set();
+            }
+            catch (ObjectDisposedException) { }
+
+            try
+            {
+                _renderTaskAvailable?.Set();
+            }
+            catch (ObjectDisposedException) { }
 
             _updateThread?.Join(1000);
             _renderThread?.Join(1000);
@@ -116,7 +125,6 @@ namespace Engine13.Core
         {
             while (_isRunning)
             {
-                // Wait for render tasks to be available or timeout after 16ms (~60fps)
                 _renderTaskAvailable.WaitOne(16);
 
                 if (!_isRunning)
@@ -153,7 +161,14 @@ namespace Engine13.Core
 
             if (disposing)
             {
-                Stop();
+                // Stop threads first (but don't dispose wait handles yet)
+                _isRunning = false;
+
+                // Give threads a moment to finish
+                _updateThread?.Join(1000);
+                _renderThread?.Join(1000);
+
+                // Now safe to dispose wait handles
                 _updateTaskAvailable?.Dispose();
                 _renderTaskAvailable?.Dispose();
             }

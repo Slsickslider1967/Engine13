@@ -16,6 +16,11 @@ using Veldrid.OpenGLBinding;
 using Veldrid.Sdl2;
 using Vulkan;
 
+/// <summary>
+/// This is the big main file where most of the game logic lives and runs.
+/// It handles initializing the simulation, running the precomputation of frames,
+/// and then playing back the recorded frames with UI controls.
+/// </summary>
 namespace Engine13.Core
 {
     public class Game : EngineBase
@@ -27,7 +32,7 @@ namespace Engine13.Core
         private readonly List<Entity> _entities = new();
         private readonly List<ParticleSystem> _particleSystems = new();
         private readonly UpdateManager _updateManager = new();
-        private readonly SpatialGrid _grid = new(0.005f);
+        private readonly SpatialGrid _grid = new(0.025f); // Increased from 0.005 to 4x typical particle radius
         private readonly List<Vector2[]> _tickPositions = new();
         private readonly Stopwatch _tickTimer = Stopwatch.StartNew();
         private readonly Stopwatch _playbackTimer = new();
@@ -137,14 +142,33 @@ namespace Engine13.Core
 
         private void LogInImGui()
         {
-            ImGui.SetNextWindowSize(new Vector2(300, 160), ImGuiCond.FirstUseEver);
+            ImGui.SetNextWindowSize(new Vector2(400, 300), ImGuiCond.FirstUseEver);
             ImGui.Begin("Simulation Debug", ref _showGuiDebug, ImGuiWindowFlags.None);
             ImGui.Text($"Ticks Computed: {_tickCounter}");
             ImGui.Text($"Tick Time: {_lastTickTime:F2} ms");
-            ImGui.Text($"Avg Speed: {_lastAvgSpeed:F4} units/s");
-            ImGui.Text($"Max Speed: {_lastMaxSpeed:F4} units/s");
-            ImGui.Text($"Avg Pos: {_lastAvgPos.Y:F3} units");
-            ImGui.Text($"Grounded Count: {_lastGroundedCount}");
+            ImGui.Separator();
+            ImGui.Text("Global Stats:");
+            ImGui.Text($"  Avg Speed: {_lastAvgSpeed:F4} units/s");
+            ImGui.Text($"  Max Speed: {_lastMaxSpeed:F4} units/s");
+            ImGui.Text($"  Avg Pos Y: {_lastAvgPos.Y:F3} units");
+            ImGui.Text($"  Grounded: {_lastGroundedCount}");
+
+            // SPH Debug Info
+            var fluidSystem = _particleSystems.Find(ps => ps.Material.IsFluid);
+            if (fluidSystem != null)
+            {
+                ImGui.Separator();
+                ImGui.Text("SPH Fluid Debug:");
+                var debugInfo = fluidSystem.GetSPHDebugInfo();
+                ImGui.Text($"  Particles: {debugInfo.particleCount}");
+                ImGui.Text($"  Avg Density: {debugInfo.avgDensity:F2}");
+                ImGui.Text($"  Max Density: {debugInfo.maxDensity:F2}");
+                ImGui.Text($"  Avg Pressure: {debugInfo.avgPressure:F2}");
+                ImGui.Text($"  Avg Viscosity: {debugInfo.avgViscosity:F3}");
+                ImGui.Text($"  Avg Neighbors: {debugInfo.avgNeighbors:F1}");
+                ImGui.Text($"  Avg Velocity: {debugInfo.avgVelocity:F3}");
+                ImGui.Text($"  Max Velocity: {debugInfo.maxVelocity:F3}");
+            }
             ImGui.End();
         }
 
@@ -169,11 +193,24 @@ namespace Engine13.Core
                 double tickStart = _tickTimer.Elapsed.TotalMilliseconds;
 
                 GameTime.OverrideDeltaTime(SimulationDeltaTime);
+
+                // Update forces and SPH velocities first
                 _updateManager.Update(GameTime);
 
                 foreach (var ps in _particleSystems)
                     ps.StepFluid(SimulationDeltaTime, _grid);
 
+                // FIRST: Enforce edge boundaries immediately after SPH
+                // This prevents particles from being pushed through floor/walls by SPH forces
+                foreach (var entity in _entities)
+                {
+                    var edgeCollision = entity.GetComponent<EdgeCollision>();
+                    if (edgeCollision != null)
+                        edgeCollision.Update(entity, GameTime);
+                }
+
+                // SECOND: Run collision detection to prevent particle-particle phasing
+                // This runs AFTER floor check so particles near floor stay inside bounds
                 _grid.UpdateAllAabb(_entities);
                 RunCollisionDetection(SimulationDeltaTime);
 
@@ -184,6 +221,16 @@ namespace Engine13.Core
                 var (avgSpeed, maxSpeed, _) = ParticleDynamics.GetVelocityStats(_entities);
                 var (avgPos, minY, maxY) = ParticleDynamics.GetPositionStats(_entities);
                 int groundedCount = ParticleDynamics.GetGroundedCount(_entities);
+
+                // Get SPH debug info for logging
+                string sphDebug = "";
+                var fluidSystem = _particleSystems.Find(ps => ps.Material.IsFluid);
+                if (fluidSystem != null)
+                {
+                    var debugInfo = fluidSystem.GetSPHDebugInfo();
+                    sphDebug =
+                        $" | SPH: dens={debugInfo.avgDensity:F1}/{debugInfo.maxDensity:F1} press={debugInfo.avgPressure:F2} visc={debugInfo.avgViscosity:F3} nbr={debugInfo.avgNeighbors:F1} vel={debugInfo.avgVelocity:F3}/{debugInfo.maxVelocity:F3}";
+                }
 
                 lock (_tickLock)
                 {
@@ -209,7 +256,7 @@ namespace Engine13.Core
                 );
 
                 Logger.Log(
-                    $"Tick: {_tickCounter} | Time: {tickTime:F2}ms | AvgSpd: {avgSpeed:F4} | MaxSpd: {maxSpeed:F4} | AvgY: {avgPos.Y:F3}"
+                    $"Tick: {_tickCounter} | Time: {tickTime:F2}ms | AvgSpd: {avgSpeed:F4} | MaxSpd: {maxSpeed:F4} | AvgY: {avgPos.Y:F3}{sphDebug}"
                 );
             }
 
@@ -843,7 +890,8 @@ namespace Engine13.Core
                     collision.IsGrounded = false;
             }
 
-            const int iterations = 6;
+            const int iterations = 30;
+
             for (int iter = 0; iter < iterations; iter++)
             {
                 var collisionPairs = _grid.GetCollisionPairs();
@@ -851,17 +899,14 @@ namespace Engine13.Core
                     break;
 
                 bool anyContacts = false;
+
                 foreach (var pair in collisionPairs)
                 {
                     var objA = pair.EntityA.GetComponent<ObjectCollision>();
                     var objB = pair.EntityB.GetComponent<ObjectCollision>();
-                    
-                    // Skip only fluid-fluid collisions - SPH handles them
-                    // But allow fluid-solid collisions for walls
-                    bool isFluidFluid = objA != null && objB != null && objA.IsFluid && objB.IsFluid;
-                    if (isFluidFluid)
-                        continue;
-                    
+
+                    // Process ALL collisions - let ResolveCollision handle fluid logic
+
                     if (
                         CollisionInfo.AreColliding(
                             pair.EntityA,
@@ -926,7 +971,7 @@ namespace Engine13.Core
             // Allow overrides if provided
             int finalColumns = columnsOverride ?? columns;
             Vector2 finalOrigin = originOverride ?? origin;
-            
+
             int particlesToCreate = Math.Min(Math.Max(0, particleCount), capacity);
 
             _entities.EnsureCapacity(_entities.Count + particlesToCreate + 1);
