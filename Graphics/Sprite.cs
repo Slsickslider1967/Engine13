@@ -24,18 +24,18 @@ namespace Engine13.Graphics
         // Visual properties
         public Vector4 Tint
         {
-            get => _entity.Color;
-            set => _entity.Color = value;
+            get => _entity.Colour;
+            set => _entity.Colour = value;
         }
 
         public float Alpha
         {
-            get => _entity.Color.W;
+            get => _entity.Colour.W;
             set =>
-                _entity.Color = new Vector4(
-                    _entity.Color.X,
-                    _entity.Color.Y,
-                    _entity.Color.Z,
+                _entity.Colour = new Vector4(
+                    _entity.Colour.X,
+                    _entity.Colour.Y,
+                    _entity.Colour.Z,
                     value
                 );
         }

@@ -3,6 +3,7 @@ using Engine13.Core;
 using Veldrid;
 using Veldrid.Sdl2;
 using Veldrid.StartupUtilities;
+using Vulkan.Xlib;
 
 class Program
 {
@@ -13,8 +14,8 @@ class Program
             WindowTitle = "Engine-13",
             X = 100,
             Y = 100,
-            WindowWidth = 800,
-            WindowHeight = 600,
+            WindowWidth = 1600,
+            WindowHeight = 900,
         };
 
         Sdl2Window window = VeldridStartup.CreateWindow(windowCreateInfo);

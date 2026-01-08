@@ -100,14 +100,14 @@ namespace Engine13.Graphics
 
             if (_Pipeline.ColorLayout != null)
             {
-                entity.EnsureColorResources(GD, _Pipeline.ColorLayout);
-                if (entity.ColorBuffer != null)
+                entity.EnsureColourResources(GD, _Pipeline.ColorLayout);
+                if (entity.ColourBuffer != null)
                 {
-                    GD.UpdateBuffer(entity.ColorBuffer, 0, entity.Color);
+                    GD.UpdateBuffer(entity.ColourBuffer, 0, entity.Colour);
                 }
-                if (entity.ColorResourceSet != null)
+                if (entity.ColourResourceSet != null)
                 {
-                    CL.SetGraphicsResourceSet(2, entity.ColorResourceSet);
+                    CL.SetGraphicsResourceSet(2, entity.ColourResourceSet);
                 }
             }
 
@@ -270,7 +270,7 @@ namespace Engine13.Graphics
                 int offset = i * 6;
                 instanceData[offset] = positions[i].X;
                 instanceData[offset + 1] = positions[i].Y;
-                var c = colors != null && i < colors.Length ? colors[i] : entities[i].Color;
+                var c = colors != null && i < colors.Length ? colors[i] : entities[i].Colour;
                 instanceData[offset + 2] = c.X;
                 instanceData[offset + 3] = c.Y;
                 instanceData[offset + 4] = c.Z;

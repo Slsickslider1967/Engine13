@@ -79,7 +79,7 @@ namespace Engine13.Graphics
         public Vector2 Position { get; set; } = Vector2.Zero;
         public Vector2 Velocity { get; set; } = Vector2.Zero;
         public float Rotation { get; set; } = 0f; // Rotation in radians
-        public Vector4 Color { get; set; } = new Vector4(1f, 1f, 1f, 1f);
+        public Vector4 Colour { get; set; } = new Vector4(1f, 1f, 1f, 1f);
         public float Mass { get; set; } = 1f;
         public Vector2 Size { get; set; }
         public CollisionShapeType CollisionShape { get; set; } = CollisionShapeType.ConvexPolygon;
@@ -94,8 +94,8 @@ namespace Engine13.Graphics
 
         public DeviceBuffer? PositionBuffer { get; private set; }
         public ResourceSet? PositionResourceSet { get; private set; }
-        public DeviceBuffer? ColorBuffer { get; private set; }
-        public ResourceSet? ColorResourceSet { get; private set; }
+        public DeviceBuffer? ColourBuffer { get; private set; }
+        public ResourceSet? ColourResourceSet { get; private set; }
 
         private AABB? _cachedAABB;
         private Vector2 _cachedAABBPosition;
@@ -225,17 +225,17 @@ namespace Engine13.Graphics
             }
         }
 
-        public void EnsureColorResources(GraphicsDevice gd, ResourceLayout layout)
+        public void EnsureColourResources(GraphicsDevice gd, ResourceLayout layout)
         {
             if (layout == null)
                 return;
-            if (ColorBuffer == null)
+            if (ColourBuffer == null)
             {
-                ColorBuffer = gd.ResourceFactory.CreateBuffer(
+                ColourBuffer = gd.ResourceFactory.CreateBuffer(
                     new BufferDescription(16, BufferUsage.UniformBuffer)
                 );
-                ColorResourceSet = gd.ResourceFactory.CreateResourceSet(
-                    new ResourceSetDescription(layout, ColorBuffer)
+                ColourResourceSet = gd.ResourceFactory.CreateResourceSet(
+                    new ResourceSetDescription(layout, ColourBuffer)
                 );
             }
         }
@@ -283,10 +283,10 @@ namespace Engine13.Primitives
             return entity;
         }
 
-        public Engine13.Graphics.Entity Quad(float Width, float Height, Vector4 color)
+        public Engine13.Graphics.Entity Quad(float Width, float Height, Vector4 colour)
         {
             var entity = Quad(Width, Height);
-            entity.Color = color;
+            entity.Colour = colour;
             entity.Size = new Vector2(Width, Height);
             return entity;
         }
@@ -316,8 +316,8 @@ namespace Engine13.Primitives
             GraphicsDevice GD,
             float Width,
             float Height,
-            Vector4 color
-        ) => new QuadFactory(GD).Quad(Width, Height, color);
+            Vector4 colour
+        ) => new QuadFactory(GD).Quad(Width, Height, colour);
 
         public static void UpdateQuad(
             Engine13.Graphics.Entity entity,
@@ -347,10 +347,10 @@ namespace Engine13.Primitives
             return entity;
         }
 
-        public Engine13.Graphics.Entity Cube(float Size, Vector4 color)
+        public Engine13.Graphics.Entity Cube(float Size, Vector4 colour)
         {
             var entity = Cube(Size);
-            entity.Color = color;
+            entity.Colour = colour;
             entity.Size = new Vector2(Size, Size);
             return entity;
         }
@@ -375,8 +375,8 @@ namespace Engine13.Primitives
         public static Engine13.Graphics.Entity CreateCube(
             GraphicsDevice GD,
             float Size,
-            Vector4 color
-        ) => new CubeFactory(GD).Cube(Size, color);
+            Vector4 colour
+        ) => new CubeFactory(GD).Cube(Size, colour);
 
         public static void UpdateCube(
             Engine13.Graphics.Entity entity,
@@ -448,13 +448,13 @@ namespace Engine13.Primitives
 
         public Engine13.Graphics.Entity Circle(
             float Radius,
-            Vector4 color,
+            Vector4 colour,
             int LatitudeSegments = 16,
             int LongitudeSegments = 16
         )
         {
             var entity = Circle(Radius, LatitudeSegments, LongitudeSegments);
-            entity.Color = color;
+            entity.Colour = colour;
             entity.Size = new Vector2(Radius * 2f, Radius * 2f);
             entity.CollisionShape = Engine13.Graphics.Entity.CollisionShapeType.Circle;
             entity.CollisionRadius = Radius;
@@ -485,10 +485,10 @@ namespace Engine13.Primitives
         public static Engine13.Graphics.Entity CreateCircle(
             GraphicsDevice GD,
             float Radius,
-            Vector4 color,
+            Vector4 colour,
             int LatitudeSegments = 16,
             int LongitudeSegments = 16
-        ) => new CircleFactory(GD).Circle(Radius, color, LatitudeSegments, LongitudeSegments);
+        ) => new CircleFactory(GD).Circle(Radius, colour, LatitudeSegments, LongitudeSegments);
 
         public static void UpdateCircle(
             Engine13.Graphics.Entity entity,

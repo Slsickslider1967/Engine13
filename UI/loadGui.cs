@@ -4,17 +4,25 @@ using System.Numerics;
 using Engine13.Core;
 using Engine13.Graphics;
 using Engine13.Utilities;
+using Engine13.Utilities.Attributes;
 using Engine13.Utilities.JsonReader;
 using ImGuiNET;
 
 namespace Engine13.UI
 {
-    public static partial class LoadGui
+    public class LoadGui
     {
         // Selection state
         private static bool IsSelecting = false;
         private static Vector2 SelectStart;
         private static Vector2 SelectEnd;
+
+        private static bool _EditorWindow = false;
+        private static bool _SimulationWindow = false;
+        private static bool _SingularPlacementMode = false;
+        private static bool _GridSnapMode = false;
+
+        private static bool SelectionEdit = false;
         
         private const float GraphPlotHeight = 100f;
 
@@ -138,7 +146,7 @@ namespace Engine13.UI
                 }
             }
 
-            if (!IsSelecting && SelectStart != SelectEnd)
+            if (!IsSelecting && SelectStart != SelectEnd && SelectionEdit)
             {
                 ImGui.Begin("SelectionInfo");
                 int matCount = ParticlePresetReader.GetPresetCount();
@@ -248,6 +256,9 @@ namespace Engine13.UI
                     ImDrawFlags.None,
                     1.5f
                 );
+
+                //Impliment EntitySelectedVisualizer to change/outline selected entities
+                
             }
             else
             {
@@ -306,12 +317,10 @@ namespace Engine13.UI
 
         public static void DrawUI(
             ref bool showStartWindow,
-            ref bool simulationWindow,
             ref bool precomputeWindow,
             ref bool hasPrecomputeRun,
             ref bool showGraphInWindow,
             ref bool startRunningImmediately,
-            ref bool editorWindow,
             ref string precomputeName,
             ref string editorName,
             ref bool startRequested,
@@ -333,7 +342,7 @@ namespace Engine13.UI
             CsvPlotter? csvPlotter,
             Action stopCallback,
             Action restartCallback,
-            Action showEditorWindowCallback
+            Action clearParticlesCallback
         )
         {
             var io = ImGui.GetIO();
@@ -368,18 +377,32 @@ namespace Engine13.UI
             {
                 if (ImGui.Button(precomputeName))
                 {
-                    simulationWindow = !simulationWindow;
+                    _SimulationWindow = !_SimulationWindow;
+                    precomputeName = _SimulationWindow
+                        ? "Hide Simulation Settings"
+                        : "Show Simulation Settings";
                 }
             }
+
+            ///<Summary>
+            /// This section toggles the editor window visibility.
+            /// </Summary>
             
-            if (editorWindow)
+            if (_EditorWindow)
             {
                 editorName = "Hide Editor Window";
-                showEditorWindowCallback();
+                if (ImGui.Button(editorName))
+                {
+                    _EditorWindow = false;
+                }
             }
             else
             {
                 editorName = "Show Editor Window";
+                if (ImGui.Button(editorName))
+                {
+                    _EditorWindow = true;
+                }
             }
 
             ImGui.NewLine();
@@ -422,13 +445,26 @@ namespace Engine13.UI
                         ImGui.Text("No Ticks.csv found in working directory.");
                         if (ImGui.Button("Reload CSV"))
                         {
-                            // This will be handled by the callback
+                            try
+                            {
+                                csvPlotter = new CsvPlotter("Ticks.csv");
+                                csvPlotter.Load();
+                                Logger.Log("CSV loaded from UI");
+                            }
+                            catch (Exception ex)
+                            {
+                                Logger.Log($"CSV load failed: {ex.Message}");
+                            }
                         }
                     }
                 }
             }
+
+            ///<summary>
+            /// Simulation control window
+            /// </summary>
             
-            if (simulationWindow)
+            if (_SimulationWindow)
             {
                 var simSize = new Vector2(300, 200);
                 ImGui.SetNextWindowSize(simSize, ImGuiCond.Always);
@@ -497,7 +533,7 @@ namespace Engine13.UI
                     ImGui.SameLine();
                     if (ImGui.Button("Close"))
                     {
-                        simulationWindow = false;
+                        _SimulationWindow = false;
                     }
                 }
                 var simWinSize = ImGui.GetWindowSize();
@@ -515,9 +551,9 @@ namespace Engine13.UI
                 {
                     startRequested = true;
                     precomputeWindow = false;
-                    simulationWindow = true;
+                    _SimulationWindow = true;
                     hasPrecomputeRun = true;
-                    precomputeName = "Show/Hide Simulation Settings";
+                    precomputeName = "Hide Simulation Settings";
                     playbackTimer.Stop();
                 }
                 ImGui.Separator();
@@ -545,7 +581,7 @@ namespace Engine13.UI
                 ImGui.End();
             }
             
-            if (editorWindow)
+            if (_EditorWindow)
             {
                 var editorSize = new Vector2(400, 400);
                 ImGui.SetNextWindowSize(editorSize, ImGuiCond.Always);
@@ -554,15 +590,24 @@ namespace Engine13.UI
                     ImGuiCond.Always
                 );
                 ImGui.Begin("Editor Window");
+                ImGui.Text("Editor functionality goes here.");
+                ImGui.Separator();
+                ImGui.Checkbox("Selection Edit Mode", ref SelectionEdit);
+                ImGui.Checkbox("Singular placement", ref _SingularPlacementMode);
+                if (_SingularPlacementMode)
+                {
+                    ImGui.Checkbox("Grid Snap", ref _GridSnapMode);
+                }
+
+                ImGui.Separator();
+                if (ImGui.Button("Clear all particles"))
+                {
+                   clearParticlesCallback();
+                }
                 ImGui.End();
             }
 
             ImGui.End();
-        }
-
-        public static void ShowEditorWindow()
-        {
-            // This is just a stub - actual editor window is drawn in DrawUI
         }
 
         public static void ShowGraphGuiWindow(
@@ -640,6 +685,7 @@ namespace Engine13.UI
                 }
             }
         }
+
 
         public static Vector2 GetSelectStart() => SelectStart;
 

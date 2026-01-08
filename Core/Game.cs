@@ -67,7 +67,6 @@ namespace Engine13.Core
         private bool HasPrecomputeRun = false;
         private bool _showGraphInWindow = false;
         private bool _startRunningImmediately = true;
-        private bool _EditorWindow = false;
 
         private bool _overlayDensity;
         private bool _overlayPressure;
@@ -115,12 +114,10 @@ namespace Engine13.Core
             // Call UI methods from LoadGui
             LoadGui.DrawUI(
                 ref _showStartWindow,
-                ref SimulationWindow,
                 ref PrecomputeWindow,
                 ref HasPrecomputeRun,
                 ref _showGraphInWindow,
                 ref _startRunningImmediately,
-                ref _EditorWindow,
                 ref PrecomputeName,
                 ref EditorName,
                 ref _startRequested,
@@ -142,7 +139,7 @@ namespace Engine13.Core
                 _csvPlotter,
                 Stop,
                 Restart,
-                ShowEditorWindow
+                ClearAllParticles
             );
 
             LoadGui.DrawSelectionRect(
@@ -201,16 +198,11 @@ namespace Engine13.Core
                 // Reset forces before any calculations
                 Forces.Reset();
 
-                // FIRST: Calculate SPH forces and add them to the Forces system
                 foreach (var ps in _particleSystems)
                     ps.StepFluid(SimulationDeltaTime, _grid);
 
-                // SECOND: Update forces (includes gravity, particle dynamics, AND SPH forces)
-                // Note: UpdateManager will NOT call Forces.Reset() again
                 _updateManager.Update(GameTime);
 
-                // FIRST: Enforce edge boundaries immediately after SPH
-                // This prevents particles from being pushed through floor/walls by SPH forces
                 foreach (var entity in _entities)
                 {
                     var edgeCollision = entity.GetComponent<EdgeCollision>();
@@ -218,8 +210,6 @@ namespace Engine13.Core
                         edgeCollision.Update(entity, GameTime);
                 }
 
-                // SECOND: Run collision detection to prevent particle-particle phasing
-                // This runs AFTER floor check so particles near floor stay inside bounds
                 _grid.UpdateAllAabb(_entities);
                 RunCollisionDetection(SimulationDeltaTime);
 
@@ -321,6 +311,11 @@ namespace Engine13.Core
             ParticleDynamics.RemoveParticlesInArea(_entities, minX, minY, maxX, maxY);
         }
 
+        private void ClearAllParticles()
+        {
+            ParticleDynamics.RemoveAllParticles(_entities);
+        }
+
         protected override void Draw()
         {
             Renderer.BeginFrame(new RgbaFloat(0.1f, 0.1f, 0.1f, 1f));
@@ -383,7 +378,7 @@ namespace Engine13.Core
                 Array.Resize(ref _overlayColors, count);
 
             for (int i = 0; i < count; i++)
-                _overlayColors[i] = _entities[i].Color;
+                _overlayColors[i] = _entities[i].Colour;
 
             if (
                 (!_overlayDensity && !_overlayPressure && !_overlayNeighbors)
@@ -442,11 +437,6 @@ namespace Engine13.Core
             if (g < 0f)
                 g = 0f;
             return new Vector4(r, g, b, 1f);
-        }
-
-        public void ShowEditorWindow()
-        {
-            _EditorWindow = true;
         }
 
         private void CreateObjectsWrapper(

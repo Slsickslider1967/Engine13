@@ -191,6 +191,11 @@ public sealed class ParticleDynamics : IEntityComponent
         });
     }
 
+    public static void RemoveAllParticles(List<Entity> entities)
+    {
+        entities.Clear();
+    }
+
     Vector2 ComputeInterParticleForces(Entity entity)
     {
         if (_grid == null)
