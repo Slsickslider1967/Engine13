@@ -93,7 +93,7 @@ namespace Engine13.Core
 
             _imgui = new ImGuiController(Window, GraphicsDevice, CommandList, _inputManager);
             _imgui.PrintDrawData = true;
-            _updateManager.Register(Engine13.Utilities.MolecularDynamicsSystem.Instance);
+            _updateManager.Register(MolecularDynamicsSystem.Instance);
             try
             {
                 string csvPath = Path.Combine(Directory.GetCurrentDirectory(), "Ticks.csv");
@@ -110,7 +110,7 @@ namespace Engine13.Core
         {
             _inputManager.Update();
             _imgui?.NewFrame(gameTime.DeltaTime);
-            
+
             // Call UI methods from LoadGui
             LoadGui.DrawUI(
                 ref _showStartWindow,
@@ -290,7 +290,7 @@ namespace Engine13.Core
         {
             var SelectStart = LoadGui.GetSelectStart();
             var SelectEnd = LoadGui.GetSelectEnd();
-            
+
             var winSize = WindowBounds.GetWindowSize();
             var bounds = WindowBounds.GetNormalizedBounds();
             float sx = winSize.X > 0 ? winSize.X : 1f;
@@ -475,7 +475,7 @@ namespace Engine13.Core
 
             const int iterations = 30;
 
-            for (int iter = 0; iter < iterations; iter++)
+            for (int Itteration = 0; Itteration < iterations; Itteration++)
             {
                 var collisionPairs = _grid.GetCollisionPairs();
                 if (collisionPairs.Count == 0)
@@ -507,7 +507,7 @@ namespace Engine13.Core
                     break;
 
                 // Update grid after each iteration for better convergence
-                if (iter < iterations - 1)
+                if (Itteration < iterations - 1)
                     _grid.UpdateAllAabb(_entities);
             }
         }
@@ -544,13 +544,13 @@ namespace Engine13.Core
                 string args = "";
                 if (cmdArgs.Length > 1)
                 {
-                    var sb = new System.Text.StringBuilder();
+                    var StringBuilder = new System.Text.StringBuilder();
                     for (int i = 1; i < cmdArgs.Length; i++)
                     {
-                        sb.Append('"').Append(cmdArgs[i].Replace("\"", "\\\"")).Append('"');
-                        if (i < cmdArgs.Length - 1) sb.Append(' ');
+                        StringBuilder.Append('"').Append(cmdArgs[i].Replace("\"", "\\\"")).Append('"');
+                        if (i < cmdArgs.Length - 1) StringBuilder.Append(' ');
                     }
-                    args = sb.ToString();
+                    args = StringBuilder.ToString();
                 }
 
                 var psi = new ProcessStartInfo

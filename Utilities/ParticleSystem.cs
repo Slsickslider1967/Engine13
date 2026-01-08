@@ -293,7 +293,7 @@ namespace Engine13.Core
                 
                 // Add tiny random velocity perturbations to break lattice symmetry
                 // This creates more realistic, chaotic fluid behavior
-                var oc = particle.GetComponent<Engine13.Utilities.Attributes.ObjectCollision>();
+                var oc = particle.GetComponent<ObjectCollision>();
                 if (oc != null)
                 {
                     float perturbMagnitude = 0.01f;  // Very small perturbation to avoid adding energy
@@ -332,7 +332,7 @@ namespace Engine13.Core
                 _sph.AddParticle(particle);
                 
                 // Set initial velocity to zero - granular materials start at rest
-                var oc = particle.GetComponent<Engine13.Utilities.Attributes.ObjectCollision>();
+                var oc = particle.GetComponent<ObjectCollision>();
                 if (oc != null)
                 {
                     oc.Velocity = Vector2.Zero;

@@ -1,8 +1,4 @@
 #version 450
-// ============================================
-// Particle Fragment Shader
-// Used for GPU-instanced particle rendering
-// ============================================
 
 // Input from vertex shader
 layout(location = 0) in vec4 fragColor;

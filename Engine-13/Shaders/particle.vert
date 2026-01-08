@@ -1,8 +1,4 @@
 #version 450
-// ============================================
-// Particle Vertex Shader
-// Used for GPU-instanced particle rendering
-// ============================================
 
 // Projection matrix (orthographic)
 layout(set = 0, binding = 0) uniform ProjectionBuffer {

@@ -17,7 +17,7 @@ namespace Engine13.Utilities
     }
 
     // System-level molecular dynamics / bond manager. Registered as an IUpdatable.
-    public sealed class MolecularDynamicsSystem : Engine13.Core.IUpdatable
+    public sealed class MolecularDynamicsSystem : IUpdatable
     {
         public static readonly MolecularDynamicsSystem Instance = new();
 
@@ -54,8 +54,8 @@ namespace Engine13.Utilities
                 var b = bond.B;
                 if (a == null || b == null) continue;
 
-                var ocA = a.GetComponent<Engine13.Utilities.Attributes.ObjectCollision>();
-                var ocB = b.GetComponent<Engine13.Utilities.Attributes.ObjectCollision>();
+                var ocA = a.GetComponent<Attributes.ObjectCollision>();
+                var ocB = b.GetComponent<Attributes.ObjectCollision>();
                 if ((ocA != null && ocA.IsStatic) || (ocB != null && ocB.IsStatic)) continue;
 
                 Vector2 pa = a.Position;

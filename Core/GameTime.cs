@@ -13,10 +13,14 @@ namespace Engine13.Core
         private readonly Stopwatch _timer = new();
         private float _lastTime;
 
-        /// <summary>Time elapsed since last frame in seconds.</summary>
+        /// <summary>
+        /// Time elapsed since last frame in seconds.
+        /// </summary>
         public float DeltaTime { get; private set; }
 
-        /// <summary>Total time elapsed since game start in seconds.</summary>
+        /// <summary>
+        /// Total time elapsed since game start in seconds.
+        /// </summary>
         public float TotalTime { get; private set; }
 
         public GameTime()
@@ -27,7 +31,9 @@ namespace Engine13.Core
             DeltaTime = 0f;
         }
 
-        /// <summary>Updates time values. Call once per frame.</summary>
+        /// <summary>
+        /// Updates time values. Call once per frame.
+        /// </summary>
         public void Update()
         {
             float currentTime = (float)_timer.Elapsed.TotalSeconds;
@@ -38,7 +44,9 @@ namespace Engine13.Core
             _lastTime = currentTime;
         }
 
-        /// <summary>Overrides delta time for fixed-timestep simulation.</summary>
+        /// <summary>
+        /// Overrides delta time for fixed-timestep simulation.
+        /// </summary>
         public void OverrideDeltaTime(float deltaTime)
         {
             DeltaTime = ClampDelta(deltaTime);

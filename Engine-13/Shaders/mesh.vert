@@ -1,8 +1,4 @@
 #version 450
-// ============================================
-// Mesh Vertex Shader
-// Used for rendering individual mesh entities
-// ============================================
 
 // Per-mesh position uniform
 layout(set = 0, binding = 0) uniform PositionBuffer {

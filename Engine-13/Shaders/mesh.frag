@@ -1,8 +1,4 @@
 #version 450
-// ============================================
-// Mesh Fragment Shader
-// Used for rendering individual mesh entities
-// ============================================
 
 layout(location = 0) in vec4 fsin_Color;
 layout(location = 1) in vec2 fsin_UV;
