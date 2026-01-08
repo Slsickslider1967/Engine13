@@ -64,10 +64,6 @@ public static class Forces
             if (collision == null || collision.IsStatic)
                 continue;
 
-            // Skip SPH particles - they handle everything in StepFluid()
-            if (collision.UseSPHIntegration)
-                continue;
-
             float mass = PhysicsMath.SafeMass(entity.Mass);
             var forceVec = new Vector2((float)force.X, (float)force.Y);
 
@@ -76,7 +72,7 @@ public static class Forces
             collision.Velocity += deltaV;
 
             // Clamp to max velocity
-            collision.Velocity = PhysicsMath.ClampMagnitude(collision.Velocity, MaxVelocity);
+            //collision.Velocity = PhysicsMath.ClampMagnitude(collision.Velocity, MaxVelocity);
         }
     }
 }

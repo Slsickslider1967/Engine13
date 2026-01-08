@@ -26,7 +26,14 @@
       "MaxForceMagnitude": 80.0,
       "VelocityDamping": 0.25,
       "PressureStrength": 1.5,
-      "PressureRadius": 0.015
+      "PressureRadius": 0.015,
+      "IsGranular": true,
+      "GranularFrictionAngle": 30.0,
+      "GranularCohesion": 0.0,
+      "GranularDilatancy": 0.05,
+      "SPHRestDensity": 1600.0,
+      "SPHGasConstant": 5000.0,
+      "SPHViscosity": 0.5
     },
     "WetSand": {
       "Name": "WetSand",
@@ -54,7 +61,14 @@
       "MaxForceMagnitude": 120.0,
       "VelocityDamping": 0.1,
       "PressureStrength": 2.0,
-      "PressureRadius": 0.03
+      "PressureRadius": 0.03,
+      "IsGranular": true,
+      "GranularFrictionAngle": 35.0,
+      "GranularCohesion": 0.0,
+      "GranularDilatancy": 0.08,
+      "SPHRestDensity": 2600.0,
+      "SPHGasConstant": 8000.0,
+      "SPHViscosity": 0.3
     },
     "Steel": {
       "Name": "Steel",

@@ -273,6 +273,7 @@ namespace Engine13.Core
 
             // Configure the SPH solver with material properties
             _sph.Configure(
+                SPHMaterialType.Fluid,
                 smoothingRadius: Material.ParticleRadius * 4.0f, // Larger radius for better neighbor detection
                 gasConstant: Material.SPHGasConstant * 0.5f, // Gentler pressure
                 viscosity: Material.SPHViscosity,
@@ -303,7 +304,44 @@ namespace Engine13.Core
             }
         }
 
+        public void InitializeGranular()
+        {
+            if (!Material.IsGranular)
+                return;
+
+            // Configure the SPH solver for granular materials
+            _sph.Configure(
+                SPHMaterialType.Granular,
+                smoothingRadius: Material.ParticleRadius * 3.0f, // Smaller radius than fluids
+                gasConstant: Material.SPHGasConstant,
+                viscosity: Material.SPHViscosity,
+                restDensity: Material.SPHRestDensity,
+                particleRadius: Material.ParticleRadius,
+                gravity: new Vector2(0f, Material.GravityStrength),
+                damping: 0.95f, // Higher damping than fluids
+                maxVelocity: 2.0f, // Lower max velocity
+                frictionAngle: Material.GranularFrictionAngle,
+                cohesion: Material.GranularCohesion,
+                dilatancy: Material.GranularDilatancy
+            );
+            
+            // Register all particles with the SPH solver
+            _sph.Clear();
+            foreach (var particle in Particles)
+            {
+                _sph.AddParticle(particle);
+                
+                // Set initial velocity to zero - granular materials start at rest
+                var oc = particle.GetComponent<Engine13.Utilities.Attributes.ObjectCollision>();
+                if (oc != null)
+                {
+                    oc.Velocity = Vector2.Zero;
+                }
+            }
+        }
+
         public int FluidCount => _sph.ParticleCount;
+        public int GranularCount => _sph.ParticleCount;
 
         public void GetFluidDebugData(
             Dictionary<Entity, int> entityToIndex,
@@ -322,7 +360,7 @@ namespace Engine13.Core
 
         public void StepFluid(float dt, SpatialGrid grid)
         {
-            if (!Material.IsFluid)
+            if (!Material.IsFluid && !Material.IsGranular)
                 return;
                 
             _sph.Step(dt, grid);
@@ -331,7 +369,7 @@ namespace Engine13.Core
         public (int particleCount, float avgDensity, float maxDensity, float avgPressure, 
                 float avgViscosity, float avgNeighbors, float avgVelocity, float maxVelocity) GetSPHDebugInfo()
         {
-            if (!Material.IsFluid)
+            if (!Material.IsFluid && !Material.IsGranular)
                 return (0, 0f, 0f, 0f, 0f, 0f, 0f, 0f);
                 
             return (_sph.ParticleCount, _sph.AvgDensity, _sph.MaxDensity, _sph.AvgPressure,

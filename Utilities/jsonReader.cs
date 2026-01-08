@@ -39,6 +39,7 @@ namespace Engine13.Utilities.JsonReader
 
         public bool IsFluid { get; set; } = false;
         public bool IsSolid { get; set; } = false;
+        public bool IsGranular { get; set; } = false;
 
         // Bond/spring parameters (Hooke's law)
         public float BondStiffness { get; set; } = 0f;
@@ -49,6 +50,11 @@ namespace Engine13.Utilities.JsonReader
         public float SPHGasConstant { get; set; } = 2000f; // Pressure stiffness
         public float SPHViscosity { get; set; } = 0.1f; // Dynamic viscosity
         public float SPHSurfaceTension { get; set; } = 0.0728f; // Surface tension coefficient
+        
+        // Granular material parameters
+        public float GranularFrictionAngle { get; set; } = 30f; // Internal friction angle (degrees)
+        public float GranularCohesion { get; set; } = 0f; // Cohesive strength
+        public float GranularDilatancy { get; set; } = 0f; // Volume expansion during shear
 
         public List<CompositionItem>? Composition { get; set; }
 
@@ -83,7 +89,7 @@ namespace Engine13.Utilities.JsonReader
             if (_Presets.TryGetValue(presetName, out var preset) && preset != null)
             {
                 // Debug output
-                Console.WriteLine($"[jsonReader] Loaded '{presetName}': IsFluid={preset.IsFluid}");
+                Console.WriteLine($"[jsonReader] Loaded '{presetName}': IsFluid={preset.IsFluid}, IsGranular={preset.IsGranular}");
                 return preset;
             }
 

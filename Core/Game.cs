@@ -55,9 +55,6 @@ namespace Engine13.Core
         private ImGuiController? _imgui;
         private CsvPlotter? _csvPlotter;
 
-        private static bool IsSelecting = false;
-        private static Vector2 SelectStart;
-        private static Vector2 SelectEnd;
         private int _selectionPresetIndex = 0;
         private string _selectionMaterial = "Sand";
 
@@ -70,6 +67,7 @@ namespace Engine13.Core
         private bool HasPrecomputeRun = false;
         private bool _showGraphInWindow = false;
         private bool _startRunningImmediately = true;
+        private bool _EditorWindow = false;
 
         private bool _overlayDensity;
         private bool _overlayPressure;
@@ -80,7 +78,7 @@ namespace Engine13.Core
         private readonly Dictionary<Entity, int> _entityIndexMap = new();
 
         private string PrecomputeName = "Open Precompute Window";
-        private const float GraphPlotHeight = 100f;
+        private string EditorName = "Open Editor Window";
 
         public Game(Sdl2Window window, GraphicsDevice graphicsDevice)
             : base(window, graphicsDevice)
@@ -113,9 +111,47 @@ namespace Engine13.Core
         {
             _inputManager.Update();
             _imgui?.NewFrame(gameTime.DeltaTime);
-            DrawUI();
+            
+            // Call UI methods from LoadGui
+            LoadGui.DrawUI(
+                ref _showStartWindow,
+                ref SimulationWindow,
+                ref PrecomputeWindow,
+                ref HasPrecomputeRun,
+                ref _showGraphInWindow,
+                ref _startRunningImmediately,
+                ref _EditorWindow,
+                ref PrecomputeName,
+                ref EditorName,
+                ref _startRequested,
+                ref MaxFrames,
+                ref PlaybackFps,
+                ref _tickIndex,
+                ref _playbackStartOffsetSeconds,
+                _tickCounter,
+                _lastTickTime,
+                _lastAvgSpeed,
+                _lastMaxSpeed,
+                _lastAvgPos,
+                _lastGroundedCount,
+                _particleSystems.Count,
+                _entities.Count,
+                _playbackTimer,
+                _tickLock,
+                _tickPositions,
+                _csvPlotter,
+                Stop,
+                Restart,
+                ShowEditorWindow
+            );
 
-            DrawSelectionRect();
+            LoadGui.DrawSelectionRect(
+                ref _selectionPresetIndex,
+                ref _selectionMaterial,
+                _entities,
+                CreateObjectsWrapper,
+                RemoveParticleSystemInSelection
+            );
 
             if (!_simulationComplete && _tickPositions.Count == 0)
             {
@@ -140,38 +176,6 @@ namespace Engine13.Core
             GameTime.OverrideDeltaTime(gameTime.DeltaTime);
         }
 
-        private void LogInImGui()
-        {
-            ImGui.SetNextWindowSize(new Vector2(400, 300), ImGuiCond.FirstUseEver);
-            ImGui.Begin("Simulation Debug", ref _showGuiDebug, ImGuiWindowFlags.None);
-            ImGui.Text($"Ticks Computed: {_tickCounter}");
-            ImGui.Text($"Tick Time: {_lastTickTime:F2} ms");
-            ImGui.Separator();
-            ImGui.Text("Global Stats:");
-            ImGui.Text($"  Avg Speed: {_lastAvgSpeed:F4} units/s");
-            ImGui.Text($"  Max Speed: {_lastMaxSpeed:F4} units/s");
-            ImGui.Text($"  Avg Pos Y: {_lastAvgPos.Y:F3} units");
-            ImGui.Text($"  Grounded: {_lastGroundedCount}");
-
-            // SPH Debug Info
-            var fluidSystem = _particleSystems.Find(ps => ps.Material.IsFluid);
-            if (fluidSystem != null)
-            {
-                ImGui.Separator();
-                ImGui.Text("SPH Fluid Debug:");
-                var debugInfo = fluidSystem.GetSPHDebugInfo();
-                ImGui.Text($"  Particles: {debugInfo.particleCount}");
-                ImGui.Text($"  Avg Density: {debugInfo.avgDensity:F2}");
-                ImGui.Text($"  Max Density: {debugInfo.maxDensity:F2}");
-                ImGui.Text($"  Avg Pressure: {debugInfo.avgPressure:F2}");
-                ImGui.Text($"  Avg Viscosity: {debugInfo.avgViscosity:F3}");
-                ImGui.Text($"  Avg Neighbors: {debugInfo.avgNeighbors:F1}");
-                ImGui.Text($"  Avg Velocity: {debugInfo.avgVelocity:F3}");
-                ImGui.Text($"  Max Velocity: {debugInfo.maxVelocity:F3}");
-            }
-            ImGui.End();
-        }
-
         private void RunPrecompute()
         {
             Logger.InitCSV(
@@ -194,11 +198,16 @@ namespace Engine13.Core
 
                 GameTime.OverrideDeltaTime(SimulationDeltaTime);
 
-                // Update forces and SPH velocities first
-                _updateManager.Update(GameTime);
+                // Reset forces before any calculations
+                Forces.Reset();
 
+                // FIRST: Calculate SPH forces and add them to the Forces system
                 foreach (var ps in _particleSystems)
                     ps.StepFluid(SimulationDeltaTime, _grid);
+
+                // SECOND: Update forces (includes gravity, particle dynamics, AND SPH forces)
+                // Note: UpdateManager will NOT call Forces.Reset() again
+                _updateManager.Update(GameTime);
 
                 // FIRST: Enforce edge boundaries immediately after SPH
                 // This prevents particles from being pushed through floor/walls by SPH forces
@@ -287,208 +296,29 @@ namespace Engine13.Core
             _playbackTimer.Start();
         }
 
-        private void DrawSelectionRect()
+        private void RemoveParticleSystemInSelection()
         {
-            var io = ImGui.GetIO();
-            var dbgList = ImGui.GetForegroundDrawList();
+            var SelectStart = LoadGui.GetSelectStart();
+            var SelectEnd = LoadGui.GetSelectEnd();
+            
+            var winSize = WindowBounds.GetWindowSize();
+            var bounds = WindowBounds.GetNormalizedBounds();
+            float sx = winSize.X > 0 ? winSize.X : 1f;
+            float sy = winSize.Y > 0 ? winSize.Y : 1f;
 
-            if (!io.WantCaptureMouse && ImGui.IsMouseClicked(ImGuiMouseButton.Left))
-            {
-                IsSelecting = true;
-                SelectStart = io.MousePos;
-                SelectEnd = io.MousePos;
-                Logger.Log($"Selection started at {SelectStart}");
-            }
+            float x0 = bounds.left + (bounds.right - bounds.left) * (SelectStart.X / sx);
+            // Screen Y increases downward (0 at top), world Y increases downward too (top=-1, bottom=1)
+            // So we map: screen 0 -> world -1, screen height -> world 1
+            float y0 = bounds.top + (bounds.bottom - bounds.top) * (SelectStart.Y / sy);
+            float x1 = bounds.left + (bounds.right - bounds.left) * (SelectEnd.X / sx);
+            float y1 = bounds.top + (bounds.bottom - bounds.top) * (SelectEnd.Y / sy);
 
-            if (IsSelecting)
-            {
-                if (ImGui.IsMouseDown(ImGuiMouseButton.Left))
-                {
-                    SelectEnd = io.MousePos;
-                }
-                else
-                {
-                    bool TooSmall =
-                        MathF.Abs(SelectEnd.X - SelectStart.X) < 5f
-                        || MathF.Abs(SelectEnd.Y - SelectStart.Y) < 5f;
-                    if (TooSmall)
-                    {
-                        SelectStart = Vector2.Zero;
-                        SelectEnd = Vector2.Zero;
-                    }
+            float minX = MathF.Min(x0, x1);
+            float maxX = MathF.Max(x0, x1);
+            float minY = MathF.Min(y0, y1);
+            float maxY = MathF.Max(y0, y1);
 
-                    IsSelecting = false;
-                }
-            }
-
-            if (!IsSelecting && SelectStart != SelectEnd)
-            {
-                ImGui.Begin("SelectionInfo");
-                int matCount = ParticlePresetReader.GetPresetCount();
-                if (matCount <= 0)
-                {
-                    ImGui.Text("No presets available");
-                }
-                else
-                {
-                    var presetNames = new string[matCount];
-                    var presetReader = new ParticlePresetReader();
-                    for (int i = 0; i < matCount; i++)
-                        presetNames[i] = presetReader.GetPresetName(i);
-
-                    _selectionPresetIndex = Math.Clamp(
-                        _selectionPresetIndex,
-                        0,
-                        presetNames.Length - 1
-                    );
-                    int selected = _selectionPresetIndex;
-                    if (ImGui.Combo("Material", ref selected, presetNames, presetNames.Length))
-                    {
-                        _selectionPresetIndex = Math.Clamp(selected, 0, presetNames.Length - 1);
-                        _selectionMaterial = presetNames[_selectionPresetIndex];
-                    }
-
-                    if (string.IsNullOrWhiteSpace(_selectionMaterial))
-                        _selectionMaterial = presetNames[_selectionPresetIndex];
-                }
-                if (ImGui.Button("Fill"))
-                {
-                    var winSize = WindowBounds.GetWindowSize();
-                    var bounds = WindowBounds.GetNormalizedBounds();
-                    float sx = winSize.X > 0 ? winSize.X : 1f;
-                    float sy = winSize.Y > 0 ? winSize.Y : 1f;
-
-                    float x0 = bounds.left + (bounds.right - bounds.left) * (SelectStart.X / sx);
-                    // Screen Y increases downward (0 at top), world Y increases downward too (top=-1, bottom=1)
-                    // So we map: screen 0 -> world -1, screen height -> world 1
-                    float y0 = bounds.top + (bounds.bottom - bounds.top) * (SelectStart.Y / sy);
-                    float x1 = bounds.left + (bounds.right - bounds.left) * (SelectEnd.X / sx);
-                    float y1 = bounds.top + (bounds.bottom - bounds.top) * (SelectEnd.Y / sy);
-
-                    float minX = MathF.Min(x0, x1);
-                    float maxX = MathF.Max(x0, x1);
-                    float minY = MathF.Min(y0, y1);
-                    float maxY = MathF.Max(y0, y1);
-
-                    // Use 1.15f to match ParticleSystem.CreateParticles hardcoded spacing
-                    const float selectionSpacing = 1.15f;
-                    var layout = CalculateFillLayout(
-                        minX,
-                        minY,
-                        maxX,
-                        maxY,
-                        _selectionMaterial,
-                        selectionSpacing
-                    );
-
-                    CreateObjects(
-                        _selectionMaterial,
-                        layout.capacity,
-                        minX,
-                        minY,
-                        maxX,
-                        maxY,
-                        layout.columns,
-                        layout.origin,
-                        selectionSpacing
-                    );
-                }
-                if (ImGui.Button("Zoom"))
-                {
-                    Logger.Log(
-                        $"Yet to implement zoom to selection from {SelectStart} to {SelectEnd}"
-                    );
-                }
-                if (ImGui.Button("Clear Selection"))
-                {
-                    SelectStart = Vector2.Zero;
-                    SelectEnd = Vector2.Zero;
-                }
-                ImGui.End();
-            }
-
-            if (IsSelecting)
-            {
-                Vector2 min = new(
-                    MathF.Min(SelectStart.X, SelectEnd.X),
-                    MathF.Min(SelectStart.Y, SelectEnd.Y)
-                );
-
-                Vector2 max = new(
-                    MathF.Max(SelectStart.X, SelectEnd.X),
-                    MathF.Max(SelectStart.Y, SelectEnd.Y)
-                );
-
-                var drawList = ImGui.GetForegroundDrawList();
-
-                drawList.AddRectFilled(
-                    min,
-                    max,
-                    ImGui.GetColorU32(new Vector4(0f, 0.5f, 1f, 0.25f))
-                );
-
-                drawList.AddRect(
-                    min,
-                    max,
-                    ImGui.ColorConvertFloat4ToU32(new Vector4(0f, 0.5f, 1f, 1f)),
-                    0.0f,
-                    ImDrawFlags.None,
-                    1.5f
-                );
-            }
-            else
-            {
-                Vector2 min = new(
-                    MathF.Min(SelectStart.X, SelectEnd.X),
-                    MathF.Min(SelectStart.Y, SelectEnd.Y)
-                );
-
-                Vector2 max = new(
-                    MathF.Max(SelectStart.X, SelectEnd.X),
-                    MathF.Max(SelectStart.Y, SelectEnd.Y)
-                );
-
-                var drawList = ImGui.GetForegroundDrawList();
-
-                drawList.AddRectFilled(
-                    min,
-                    max,
-                    ImGui.GetColorU32(new Vector4(0f, 0.3f, 0.8f, 0.05f))
-                );
-
-                drawList.AddRect(
-                    min,
-                    max,
-                    ImGui.ColorConvertFloat4ToU32(new Vector4(0f, 0.3f, 0.8f, 0.8f)),
-                    0.0f,
-                    ImDrawFlags.None,
-                    1.5f
-                );
-            }
-        }
-
-        private (int capacity, int columns, Vector2 origin) CalculateFillLayout(
-            float minX,
-            float minY,
-            float maxX,
-            float maxY,
-            string materialName,
-            float spacingFactor = 1.15f
-        )
-        {
-            var tempPs = ParticleSystemFactory.Create("Temp", materialName);
-            float radius = tempPs.Material.ParticleRadius;
-
-            var (capacity, columns, rows, origin) = ParticleGridLayout.CalculateParticleGrid(
-                minX,
-                minY,
-                maxX,
-                maxY,
-                radius,
-                spacingFactor
-            );
-
-            return (capacity, columns, origin);
+            ParticleDynamics.RemoveParticlesInArea(_entities, minX, minY, maxX, maxY);
         }
 
         protected override void Draw()
@@ -614,271 +444,34 @@ namespace Engine13.Core
             return new Vector4(r, g, b, 1f);
         }
 
-        private void DrawUI()
+        public void ShowEditorWindow()
         {
-            var io = ImGui.GetIO();
-            var display = io.DisplaySize;
-            const float margin = 10f;
-            const float spacing = 6f;
-
-            var mainSize = new Vector2(450, 300);
-            var mainPos = new Vector2(margin, margin);
-            ImGui.SetNextWindowSize(mainSize, ImGuiCond.Always);
-            ImGui.SetNextWindowPos(mainPos, ImGuiCond.Always);
-            ImGui.Begin("Simulation Setup", ref _showStartWindow, ImGuiWindowFlags.None);
-
-            var mainWinPos = ImGui.GetWindowPos();
-            var mainWinSize = ImGui.GetWindowSize();
-            float columnX = mainWinPos.X;
-            float nextY = mainWinPos.Y + mainWinSize.Y + spacing;
-            float mainRight = mainWinPos.X + mainWinSize.X;
-            ImGui.Text("Precompute simulation frames before playback.");
-            ImGui.Text($"Particle systems: {_particleSystems.Count}");
-            ImGui.Text($"Entities: {_entities.Count}");
-            if (!HasPrecomputeRun)
-            {
-                if (ImGui.Button(PrecomputeName))
-                {
-                    PrecomputeWindow = true;
-                }
-            }
-            else
-            {
-                if (ImGui.Button(PrecomputeName))
-                {
-                    SimulationWindow = !SimulationWindow;
-                }
-            }
-
-            ImGui.SameLine();
-            if (ImGui.Button("Stop and Quit"))
-            {
-                Stop();
-            }
-            ImGui.Separator();
-            if (_showStartWindow == true)
-            {
-                ImGui.Text($"Ticks Computed: {_tickCounter}");
-                ImGui.Text($"Tick Time: {_lastTickTime:F2} ms");
-                ImGui.Text($"Avg Speed: {_lastAvgSpeed:F4} units/s");
-                ImGui.Text($"Max Speed: {_lastMaxSpeed:F4} units/s");
-                ImGui.Text($"Avg Pos: {_lastAvgPos.Y:F3} units");
-                ImGui.Text($"Grounded Count: {_lastGroundedCount}");
-                ImGui.ProgressBar(
-                    (float)_tickCounter / MaxFrames,
-                    new Vector2(-1, 0),
-                    "Precompute Progress"
-                );
-            }
-            else
-            {
-                if (ImGui.Checkbox("Show Graph In Window", ref _showGraphInWindow)) { }
-                if (!_showGraphInWindow)
-                {
-                    if (_csvPlotter != null)
-                    {
-                        ShowGraphGuiWindow(_csvPlotter);
-                    }
-                    else
-                    {
-                        ImGui.Text("No Ticks.csv found in working directory.");
-                        if (ImGui.Button("Reload CSV"))
-                        {
-                            try
-                            {
-                                string csvPath = Path.Combine(
-                                    Directory.GetCurrentDirectory(),
-                                    "Ticks.csv"
-                                );
-                                _csvPlotter = new CsvPlotter(csvPath);
-                            }
-                            catch
-                            {
-                                _csvPlotter = null;
-                            }
-                        }
-                    }
-                }
-            }
-            if (SimulationWindow)
-            {
-                var simSize = new Vector2(300, 200);
-                ImGui.SetNextWindowSize(simSize, ImGuiCond.Always);
-                ImGui.SetNextWindowPos(new Vector2(columnX, nextY), ImGuiCond.Always);
-                ImGui.Begin("Simulation");
-                if (_isPrecomputing)
-                {
-                    ImGui.Text("Precomputing...");
-                }
-                else
-                {
-                    if (!_startRunningImmediately)
-                    {
-                        // Keep playback timer stopped until user presses play; accumulate offset only when running
-                        _playbackTimer.Stop();
-                    }
-                    if (ImGui.Button("Play/Pause"))
-                    {
-                        _startRunningImmediately = true;
-                        if (_playbackTimer.IsRunning)
-                        {
-                            _playbackStartOffsetSeconds += (float)
-                                _playbackTimer.Elapsed.TotalSeconds;
-                            _playbackTimer.Reset();
-                        }
-                        else
-                        {
-                            _playbackTimer.Restart();
-                        }
-                    }
-                    int selectedFrame = _tickIndex;
-                    int maxFrame = MaxFrames - 1;
-                    lock (_tickLock)
-                    {
-                        if (_tickPositions.Count > 0)
-                            maxFrame = Math.Min(MaxFrames - 1, _tickPositions.Count - 1);
-                    }
-
-                    if (ImGui.SliderInt("Frame Select", ref selectedFrame, 0, maxFrame))
-                    {
-                        _tickIndex = Math.Clamp(selectedFrame, 0, maxFrame);
-                        float frameTime = 1f / MathF.Max(PlaybackFps, 1f);
-                        _playbackStartOffsetSeconds = _tickIndex * frameTime;
-                        if (_playbackTimer.IsRunning)
-                            _playbackTimer.Reset();
-                    }
-
-                    if (ImGui.SliderFloat("Playback FPS", ref PlaybackFps, 1f, 240f))
-                    {
-                        PlaybackFps = Math.Clamp(PlaybackFps, 1f, 240f);
-                        float frameTime = 1f / PlaybackFps;
-                        _playbackStartOffsetSeconds = _tickIndex * frameTime;
-                        if (_playbackTimer.IsRunning)
-                            _playbackTimer.Reset();
-                    }
-                    ImGui.SameLine();
-                    if (ImGui.Button("Close"))
-                    {
-                        SimulationWindow = false;
-                    }
-                }
-                var simWinSize = ImGui.GetWindowSize();
-                ImGui.End();
-                nextY += simWinSize.Y + spacing;
-            }
-            if (PrecomputeWindow)
-            {
-                var preSize = new Vector2(300, 160);
-                ImGui.SetNextWindowSize(preSize, ImGuiCond.Always);
-                ImGui.SetNextWindowPos(new Vector2(columnX, nextY), ImGuiCond.Always);
-                ImGui.Begin("Precompute Settings");
-                if (ImGui.Button("Begin compute"))
-                {
-                    _startRequested = true;
-                    PrecomputeWindow = false;
-                    SimulationWindow = true;
-                    HasPrecomputeRun = true;
-                    PrecomputeName = "Show/Hide Simulation Settings";
-                    _playbackTimer.Stop();
-                }
-                ImGui.Separator();
-                ImGui.SliderInt("Max Frames", ref MaxFrames, 100, 5000);
-                if (ImGui.Checkbox("Start Running Immediately", ref _startRunningImmediately)) { }
-                var preWinSize = ImGui.GetWindowSize();
-                ImGui.End();
-                nextY += preWinSize.Y + spacing;
-            }
-            if (_showGraphInWindow)
-            {
-                float graphX = mainRight + spacing;
-                float graphW = MathF.Max(80f, display.X - graphX - margin);
-
-                float buttonH = ImGui.GetFrameHeightWithSpacing();
-                float titleBarApprox = 24f;
-                float padding = 12f;
-                float graphH = GraphPlotHeight + buttonH + titleBarApprox + padding;
-
-                ImGui.SetNextWindowPos(new Vector2(graphX, mainWinPos.Y), ImGuiCond.Always);
-                ImGui.SetNextWindowSize(new Vector2(graphW, graphH + 15), ImGuiCond.Always);
-                ImGui.Begin("Tick Graph");
-                ShowGraphGuiWindow(_csvPlotter);
-                ImGui.End();
-            }
-
-            ImGui.End();
+            _EditorWindow = true;
         }
 
-        private void ShowGraphGuiWindow(CsvPlotter? csvPlotter)
+        private void CreateObjectsWrapper(
+            string materialName,
+            int particleCount,
+            float minX,
+            float minY,
+            float maxX,
+            float maxY,
+            int columns,
+            Vector2 origin,
+            float spacingFactor
+        )
         {
-            ImGui.Text($"Ticks Computed: {_tickCounter}");
-
-            if (csvPlotter == null)
-            {
-                ImGui.Text("No CSV plotter available.");
-                return;
-            }
-
-            // Prefer column 1 as timing column (if file is [tick, time, ...])
-            float[]? ySeries = csvPlotter.GetSeries(1) ?? csvPlotter.GetSeries(0);
-
-            if (ySeries == null || ySeries.Length == 0)
-            {
-                ImGui.Text("No numeric data available in the CSV selected columns.");
-                return;
-            }
-
-            float lastValid = 0f;
-            for (int i = 0; i < ySeries.Length; i++)
-            {
-                if (float.IsNaN(ySeries[i]))
-                    ySeries[i] = lastValid;
-                else
-                    lastValid = ySeries[i];
-            }
-
-            float minVal = float.PositiveInfinity;
-            float maxVal = float.NegativeInfinity;
-            for (int i = 0; i < ySeries.Length; i++)
-            {
-                var v = ySeries[i];
-                if (float.IsNaN(v))
-                    continue;
-                if (v < minVal)
-                    minVal = v;
-                if (v > maxVal)
-                    maxVal = v;
-            }
-
-            if (minVal == float.PositiveInfinity)
-            {
-                ImGui.Text("Series contains no valid numeric points to plot.");
-            }
-            else
-            {
-                ImGui.PlotLines(
-                    "Tick Time (ms)",
-                    ref ySeries[0],
-                    ySeries.Length,
-                    0,
-                    $"{_tickCounter}/{MaxFrames}",
-                    minVal,
-                    maxVal,
-                    new System.Numerics.Vector2(-1, GraphPlotHeight)
-                );
-            }
-
-            if (ImGui.Button("Reload CSV"))
-            {
-                try
-                {
-                    csvPlotter.Load();
-                    Logger.Log("CSV reloaded from UI");
-                }
-                catch (Exception ex)
-                {
-                    Logger.Log($"Reload failed: {ex.Message}");
-                }
-            }
+            CreateObjects(
+                materialName,
+                particleCount,
+                minX,
+                minY,
+                maxX,
+                maxY,
+                columns,
+                origin,
+                spacingFactor
+            );
         }
 
         private void RunCollisionDetection(float stepDelta)
@@ -932,9 +525,59 @@ namespace Engine13.Core
         public void Stop()
         {
             Logger.Log("Game stopping...");
-            _imgui?.Dispose();
+            if (_imgui != null)
+            {
+                _imgui.Dispose();
+                _imgui = null;
+            }
             Dispose();
             Window.Close();
+        }
+
+        public void Restart()
+        {
+            Logger.Log("Game restarting...");
+            if (_imgui != null)
+            {
+                _imgui.Dispose();
+                _imgui = null;
+            }
+            Dispose();
+            try
+            {
+                string exe = System.Reflection.Assembly.GetEntryAssembly()?.Location;
+                if (string.IsNullOrEmpty(exe))
+                    exe = Environment.GetCommandLineArgs()[0];
+                exe = Path.GetFullPath(exe);
+
+                var cmdArgs = Environment.GetCommandLineArgs();
+                string args = "";
+                if (cmdArgs.Length > 1)
+                {
+                    var sb = new System.Text.StringBuilder();
+                    for (int i = 1; i < cmdArgs.Length; i++)
+                    {
+                        sb.Append('"').Append(cmdArgs[i].Replace("\"", "\\\"")).Append('"');
+                        if (i < cmdArgs.Length - 1) sb.Append(' ');
+                    }
+                    args = sb.ToString();
+                }
+
+                var psi = new ProcessStartInfo
+                {
+                    FileName = exe,
+                    Arguments = args,
+                    UseShellExecute = true,
+                };
+
+                Process.Start(psi);
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"Restart failed: {ex.Message}");
+            }
+
+            Environment.Exit(0);
         }
 
         private void CreateObjects(
@@ -1033,6 +676,14 @@ namespace Engine13.Core
             {
                 particleSystem.InitializeFluid();
                 Logger.Log($"[Fluid] Initialized {particleSystem.Particles.Count} particles");
+            }
+
+            if (particleSystem.Material.IsGranular)
+            {
+                particleSystem.InitializeGranular();
+                Logger.Log(
+                    $"[Granular] Initialized {particleSystem.Particles.Count} particles with friction angle={particleSystem.Material.GranularFrictionAngle}°"
+                );
             }
 
             _particleSystems.Add(particleSystem);

@@ -67,22 +67,22 @@ public sealed class Gravity : IEntityComponent
         if (dt <= 0f)
             return;
 
-        var oc = entity.GetComponent<ObjectCollision>();
-        if (oc != null && !oc.IsStatic)
+        var ObjectColission = entity.GetComponent<ObjectCollision>();
+        if (ObjectColission != null && !ObjectColission.IsStatic)
         {
-            // CRITICAL: Skip gravity for fluids - SPH handles it in Integrate()
+            // CRITICAL: Skip gravity for fluids and granular materials - SPH handles it
             // Otherwise gravity is applied TWICE causing momentum accumulation
-            if (oc.IsFluid)
+            if (ObjectColission.IsFluid || ObjectColission.UseSPHIntegration)
                 return;
             
-            float vY = oc.Velocity.Y;
-            float vX = oc.Velocity.X;
+            float ChangeY = ObjectColission.Velocity.Y;
+            float ChangeX = ObjectColission.Velocity.X;
 
-            if (!(oc.IsGrounded && vY >= 0f))
-                vY += AccelerationY * dt;
-            vX += AccelerationX * dt;
+            if (!(ObjectColission.IsGrounded && ChangeY >= 0f))
+                ChangeY += AccelerationY * dt;
+            ChangeX += AccelerationX * dt;
 
-            float massForDrag = oc.Mass > 0f ? oc.Mass : Mass;
+            float massForDrag = ObjectColission.Mass > 0f ? ObjectColission.Mass : Mass;
             float area = MathHelpers.ComputeArea(entity.Size);
             float effectiveDrag = DragCoefficient * area;
             float terminalMag = MathHelpers.ComputeTerminalVelocityMag(
@@ -92,13 +92,13 @@ public sealed class Gravity : IEntityComponent
             );
 
             if (float.IsFinite(terminalMag))
-                vY = Math.Clamp(vY, -terminalMag, terminalMag);
+                ChangeY = Math.Clamp(ChangeY, -terminalMag, terminalMag);
             if (float.IsFinite(TerminalVelocityY))
-                vY = Math.Clamp(vY, -TerminalVelocityY, TerminalVelocityY);
+                ChangeY = Math.Clamp(ChangeY, -TerminalVelocityY, TerminalVelocityY);
             if (float.IsFinite(TerminalVelocityX))
-                vX = Math.Clamp(vX, -TerminalVelocityX, TerminalVelocityX);
+                ChangeX = Math.Clamp(ChangeX, -TerminalVelocityX, TerminalVelocityX);
 
-            oc.Velocity = new Vector2(vX, vY);
+            ObjectColission.Velocity = new Vector2(ChangeX, ChangeY);
         }
         else
         {
@@ -182,7 +182,14 @@ public sealed class ParticleDynamics : IEntityComponent
         Forces.AddForce(entity, new Vec2(totalForce.X, totalForce.Y));
     }
 
-
+    public static void RemoveParticlesInArea(List<Entity> entities, float minX, float minY, float maxX, float maxY)
+    {
+        entities.RemoveAll(entity =>
+        {
+            var pos = entity.Position;
+            return pos.X >= minX && pos.X <= maxX && pos.Y >= minY && pos.Y <= maxY;
+        });
+    }
 
     Vector2 ComputeInterParticleForces(Entity entity)
     {
@@ -335,21 +342,20 @@ public sealed class EdgeCollision : IEntityComponent
         WindowBounds.GetNormalizedBounds();
 
     void HandleWallCollision(
-        ObjectCollision oc,
+        ObjectCollision ObjectCollision,
         bool isXAxis,
         float sleepVelocity,
         Entity? entity = null
     )
     {
-        if (oc == null)
+        if (ObjectCollision == null)
             return;
 
         // Strong damping for fluids to remove energy at walls
-        float extraDamping = oc.IsFluid ? 0.5f : 1.0f;
-
+        float extraDamping = ObjectCollision.IsFluid ? 0.5f : 1.0f;
         if (isXAxis)
         {
-            float vX = oc.Velocity.X;
+            float vX = ObjectCollision.Velocity.X;
             // Only reflect if moving toward wall (into penetration), not away from it
             if (MathF.Abs(vX) < sleepVelocity)
                 vX = 0f;
@@ -360,13 +366,13 @@ public sealed class EdgeCollision : IEntityComponent
                 bool atLeftWall = entity.Position.X < (bounds.left + bounds.right) * 0.5f;
                 bool movingIntoWall = (atLeftWall && vX < 0) || (!atLeftWall && vX > 0);
                 if (movingIntoWall)
-                    vX = -vX * oc.Restitution * extraDamping;
+                    vX = -vX * ObjectCollision.Restitution * extraDamping;
             }
-            oc.Velocity = new Vector2(vX, oc.Velocity.Y);
+            ObjectCollision.Velocity = new Vector2(vX, ObjectCollision.Velocity.Y);
         }
         else
         {
-            float vY = oc.Velocity.Y;
+            float vY = ObjectCollision.Velocity.Y;
             // Only reflect if moving toward wall
             if (MathF.Abs(vY) < sleepVelocity)
                 vY = 0f;
@@ -376,9 +382,9 @@ public sealed class EdgeCollision : IEntityComponent
                 bool atTopWall = entity.Position.Y < (bounds.top + bounds.bottom) * 0.5f;
                 bool movingIntoWall = (atTopWall && vY < 0) || (!atTopWall && vY > 0);
                 if (movingIntoWall)
-                    vY = -vY * oc.Restitution * extraDamping;
+                    vY = -vY * ObjectCollision.Restitution * extraDamping;
             }
-            oc.Velocity = new Vector2(oc.Velocity.X, vY);
+            ObjectCollision.Velocity = new Vector2(ObjectCollision.Velocity.X, vY);
         }
     }
 

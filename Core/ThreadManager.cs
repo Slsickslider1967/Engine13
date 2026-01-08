@@ -55,13 +55,15 @@ namespace Engine13.Core
             // Signal threads to wake up and exit (only if not disposed)
             try
             {
-                _updateTaskAvailable?.Set();
+                if (!_disposed)
+                    _updateTaskAvailable?.Set();
             }
             catch (ObjectDisposedException) { }
 
             try
             {
-                _renderTaskAvailable?.Set();
+                if (!_disposed)
+                    _renderTaskAvailable?.Set();
             }
             catch (ObjectDisposedException) { }
 
@@ -125,7 +127,15 @@ namespace Engine13.Core
         {
             while (_isRunning)
             {
-                _renderTaskAvailable.WaitOne(16);
+                try
+                {
+                    if (!_disposed)
+                        _renderTaskAvailable.WaitOne(16);
+                }
+                catch (ObjectDisposedException)
+                {
+                    break;
+                }
 
                 if (!_isRunning)
                     break;

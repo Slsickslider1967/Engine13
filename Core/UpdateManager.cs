@@ -51,8 +51,8 @@ namespace Engine13.Core
 
         public void Update(GameTime gameTime)
         {
-            Forces.Reset();
-
+            // Note: Forces.Reset() is now called externally before SPH calculations
+            
             var collisionUpdates = new List<(Entity entity, ObjectCollision attr)>();
             var lateUpdates = new List<(Entity entity, IEntityComponent attr)>();
 

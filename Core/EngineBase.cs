@@ -70,7 +70,6 @@ namespace Engine13.Core
             ///<summary>
             /// Stops vulkan from throwing a fit when shutting down the program
             /// </summary>
-            CommandList? oldCL = CommandList;
             CommandList frameCL = GraphicsDevice.ResourceFactory.CreateCommandList();
             CommandList = frameCL;
             try
@@ -86,15 +85,6 @@ namespace Engine13.Core
                     frameCL.Dispose();
                 }
                 catch { }
-
-                if (oldCL != null && !ReferenceEquals(oldCL, frameCL))
-                {
-                    try
-                    {
-                        oldCL.Dispose();
-                    }
-                    catch { }
-                }
             }
         }
 
@@ -133,6 +123,9 @@ namespace Engine13.Core
             }
 
             _threadManager.Stop();
+            
+            // Give threads time to fully stop before disposing resources
+            System.Threading.Thread.Sleep(100);
 
             Dispose();
         }

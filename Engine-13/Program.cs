@@ -38,4 +38,11 @@ class Program
         Game game = new Game(window, gd);
         game.Run();
     }
+
+    static public void Restart()
+    {
+        Console.WriteLine("[Program] Restarting application...");
+        System.Diagnostics.Process.Start(Environment.GetCommandLineArgs()[0]);
+        Environment.Exit(0);
+    }
 }
