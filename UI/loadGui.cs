@@ -352,8 +352,8 @@ namespace Engine13.UI
 
             var mainSize = new Vector2(450, 300);
             var mainPos = new Vector2(margin, margin);
-            ImGui.SetNextWindowSize(mainSize, ImGuiCond.Always);
-            ImGui.SetNextWindowPos(mainPos, ImGuiCond.Always);
+            ImGui.SetNextWindowSize(mainSize, ImGuiCond.Once);
+            ImGui.SetNextWindowPos(mainPos, ImGuiCond.Once);
             ImGui.Begin("Simulation Setup", ref showStartWindow, ImGuiWindowFlags.None);
 
             var mainWinPos = ImGui.GetWindowPos();
@@ -581,6 +581,10 @@ namespace Engine13.UI
                 ImGui.End();
             }
             
+            ///<summary>
+            /// This is for editor selection/enable editor mode
+            /// </summary>
+
             if (_EditorWindow)
             {
                 var editorSize = new Vector2(400, 400);
@@ -597,9 +601,36 @@ namespace Engine13.UI
                 if (_SingularPlacementMode)
                 {
                     ImGui.Checkbox("Grid Snap", ref _GridSnapMode);
+
+                    int matCount = ParticlePresetReader.GetPresetCount();
+                    if (matCount <= 0)
+                    {
+                        ImGui.Text("No presets available");
+                    }
+                    else 
+                    {
+                        var presetNames = new string[matCount];
+                        var presetReader = new ParticlePresetReader();
+                        for (int i = 0; i < matCount; i++)
+                            presetNames[i] = presetReader.GetPresetName(i);
+
+                        selectionPresetIndex = Math.Clamp(
+                            selectionPresetIndex,
+                            0,
+                            presetNames.Length - 1
+                        );
+                        int selected = selectionPresetIndex;
+
+                        if (ImGui.Combo("Material", ref selected, presetNames, presetNames.Length))
+                        {
+                            selectionPresetIndex = Math.Clamp(selected, 0, presetNames.Length - 1);
+                            selectionMaterial = presetNames[selectionPresetIndex];
+                        }
+                    }
                 }
 
                 ImGui.Separator();
+                
                 if (ImGui.Button("Clear all particles"))
                 {
                    clearParticlesCallback();
