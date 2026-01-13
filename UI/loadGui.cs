@@ -387,20 +387,23 @@ namespace Engine13.UI
             ///<Summary>
             /// This section toggles the editor window visibility.
             /// </Summary>
-            if (_EditorWindow)
+            if(!_SimulationWindow)
             {
-                editorName = "Hide Editor Window";
-                if (ImGui.Button(editorName))
+                if (_EditorWindow)
                 {
-                    _EditorWindow = false;
+                    editorName = "Hide Editor Window";
+                    if (ImGui.Button(editorName))
+                    {
+                        _EditorWindow = false;
+                    }
                 }
-            }
-            else
-            {
-                editorName = "Show Editor Window";
-                if (ImGui.Button(editorName))
+                else
                 {
-                    _EditorWindow = true;
+                    editorName = "Show Editor Window";
+                    if (ImGui.Button(editorName))
+                    {
+                        _EditorWindow = true;
+                    }
                 }
             }
 
@@ -461,8 +464,8 @@ namespace Engine13.UI
             if (_SimulationWindow)
             {
                 var simSize = new Vector2(300, 200);
-                ImGui.SetNextWindowSize(simSize, ImGuiCond.Always);
-                ImGui.SetNextWindowPos(new Vector2(columnX, nextY), ImGuiCond.Always);
+                ImGui.SetNextWindowSize(simSize, ImGuiCond.Once);
+                ImGui.SetNextWindowPos(new Vector2(columnX, nextY), ImGuiCond.Once);
                 ImGui.Begin("Simulation");
 
                 bool isPrecomputing = false; // This should be passed as parameter if needed
@@ -524,7 +527,17 @@ namespace Engine13.UI
                         if (playbackTimer.IsRunning)
                             playbackTimer.Reset();
                     }
-                    ImGui.SameLine();
+                    if (playbackFps != 60f)
+                    {
+                        if (ImGui.Button("Reset FPS"))
+                        {
+                            playbackFps = 60f;
+                            float frameTime = 1f / MathF.Max(playbackFps, 1f);
+                            playbackStartOffsetSeconds = tickIndex * frameTime;
+                            if (playbackTimer.IsRunning)
+                                playbackTimer.Reset();
+                        }
+                    }
                     if (ImGui.Button("Close"))
                     {
                         _SimulationWindow = false;
@@ -535,6 +548,10 @@ namespace Engine13.UI
                 nextY += simWinSize.Y + spacing;
             }
 
+
+            /// <Summary>
+            /// The Precompute Settings window is for the compute settings.
+            /// </Summary>
             if (precomputeWindow)
             {
                 var preSize = new Vector2(300, 160);
@@ -558,6 +575,10 @@ namespace Engine13.UI
                 nextY += preWinSize.Y + spacing;
             }
 
+
+            ///<summary>
+            /// This is for showing the graph in a separate window.
+            /// </summary>
             if (showGraphInWindow)
             {
                 float graphX = mainRight + spacing;
@@ -575,10 +596,12 @@ namespace Engine13.UI
                 ImGui.End();
             }
 
+
+
             ///<summary>
             /// This is for editor selection/enable editor mode
             /// </summary>
-            if (_EditorWindow)
+            if (_EditorWindow && !_SimulationWindow)
             {
                 var editorSize = new Vector2(400, 400);
                 ImGui.SetNextWindowSize(editorSize, ImGuiCond.Always);
@@ -591,8 +614,10 @@ namespace Engine13.UI
                 ImGui.Separator();
                 ImGui.Checkbox("Selection Edit Mode", ref SelectionEdit);
                 ImGui.Checkbox("Singular placement", ref _SingularPlacementMode);
+
                 if (_SingularPlacementMode)
                 {
+                    ImGui.Separator();
                     ImGui.Checkbox("Grid Snap", ref _GridSnapMode);
 
                     int matCount = ParticlePresetReader.GetPresetCount();
@@ -630,6 +655,9 @@ namespace Engine13.UI
                 }
                 ImGui.End();
             }
+
+
+
 
             ImGui.End();
         }
