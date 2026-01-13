@@ -6,10 +6,6 @@ using System.Collections.Generic;
 
 namespace Engine13.Utilities
 {
-    /// <summary>
-    ///     Simple CSV file reader for plotting data.
-    ///     Loads all data into memory for easy access to columns/series.
-    /// </summary>
     public class CsvPlotter
     {
         private readonly string _filePath;
@@ -56,7 +52,6 @@ namespace Engine13.Utilities
                 return;
 
             int cols = rows.Max(r => r.Length);
-            // transpose rows -> columns
             _columns = new List<float[]>(cols);
             for (int c = 0; c < cols; c++)
             {

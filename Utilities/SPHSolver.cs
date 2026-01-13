@@ -7,18 +7,12 @@ using Engine13.Utilities.Attributes;
 
 namespace Engine13.Utilities
 {
-    /// <summary>
-    /// Material type for SPH simulation.
-    /// </summary>
     public enum SPHMaterialType
     {
         Fluid,
         Granular,
     }
 
-    /// <summary>
-    /// SPH kernel functions for smoothed particle hydrodynamics.
-    /// </summary>
     internal static class SPHKernels
     {
         public static float Poly6(float r, float h)
@@ -30,12 +24,10 @@ namespace Engine13.Utilities
             if (r >= h)
                 return 0f;
             float hr2 = h * h - r * r;
-            // 2D Poly6 kernel: 4/(π*h^8)
             float coeff = 4f / (MathF.PI * MathF.Pow(h, 8));
             return coeff * hr2 * hr2 * hr2;
         }
 
-        // Spiky gradient kernel (2D) - returns gradient vector
         public static Vector2 SpikyGradient(float r, float h, Vector2 dir)
         {
             if (h <= 0f)
@@ -45,12 +37,10 @@ namespace Engine13.Utilities
             if (dir.LengthSquared() <= 1e-12f)
                 return Vector2.Zero;
             float x = h - r;
-            // 2D Spiky gradient: -10/(π*h^5) for better stability
             float coeff = -10f / (MathF.PI * MathF.Pow(h, 5));
             return coeff * x * x * dir;
         }
 
-        // Viscosity laplacian kernel (2D)
         public static float ViscosityLaplacian(float r, float h)
         {
             if (h <= 0f)
@@ -59,16 +49,11 @@ namespace Engine13.Utilities
                 r = 0f;
             if (r >= h)
                 return 0f;
-            // 2D Viscosity laplacian: 10/(π*h^5)
             float coeff = 10f / (MathF.PI * MathF.Pow(h, 5));
             return coeff * (h - r);
         }
     }
 
-    /// <summary>
-    /// Smoothed Particle Hydrodynamics (SPH) fluid solver.
-    /// Handles all fluid physics: density calculation, pressure forces, viscosity, and integration.
-    /// </summary>
     public class SPH
     {
         private readonly List<FluidParticle> _particles = new();
@@ -84,7 +69,6 @@ namespace Engine13.Utilities
         private Vector2 _gravity;
         private float _maxVelocity;
 
-        // Granular material parameters
         private float _frictionAngle;
         private float _cohesion;
         private float _dilatancy;
@@ -95,7 +79,6 @@ namespace Engine13.Utilities
         private readonly List<Entity> _neighborBuffer = new();
         private readonly Dictionary<FluidParticle, int> _particleIndexMap = new();
 
-        // Debug tracking
         public float AvgDensity { get; private set; }
         public float MaxDensity { get; private set; }
         public float AvgPressure { get; private set; }
@@ -109,13 +92,10 @@ namespace Engine13.Utilities
 
         public SPH()
         {
-            _maxVelocity = 3.0f; // Limit velocity for stability
-            _damping = 0.99f; // Light damping
+            _maxVelocity = 3.0f;
+            _damping = 0.99f;
         }
 
-        /// <summary>
-        /// Configure SPH parameters for fluid or granular simulation.
-        /// </summary>
         public void Configure(
             SPHMaterialType materialType,
             float smoothingRadius,
@@ -145,9 +125,6 @@ namespace Engine13.Utilities
             _dilatancy = dilatancy;
         }
 
-        /// <summary>
-        /// Register an entity as a fluid particle.
-        /// </summary>
         public void AddParticle(Entity entity)
         {
             if (_particleMap.ContainsKey(entity))
@@ -157,7 +134,6 @@ namespace Engine13.Utilities
             _particles.Add(fluidParticle);
             _particleMap[entity] = fluidParticle;
 
-            // Mark components to use SPH
             var pd = entity.GetComponent<ParticleDynamics>();
             if (pd != null)
                 pd.UseSPHSolver = true;
@@ -167,25 +143,18 @@ namespace Engine13.Utilities
                 oc.UseSPHIntegration = true;
         }
 
-        /// <summary>
-        /// Clear all particles from the solver.
-        /// </summary>
         public void Clear()
         {
             _particles.Clear();
             _particleMap.Clear();
         }
 
-        /// <summary>
-        /// Main simulation step - updates all fluid particle positions and velocities.
-        /// </summary>
         public void Step(float dt, SpatialGrid grid)
         {
             int n = _particles.Count;
             if (n == 0)
                 return;
 
-            // Resize arrays if needed
             if (_densities.Length < n)
             {
                 _densities = new float[n];
@@ -194,15 +163,10 @@ namespace Engine13.Utilities
             }
 
             FindNeighbors(grid);
-
             ComputeDensities();
-
             ComputePressures();
-
             ComputeForces();
-
             AddForcesToSystem();
-
             ComputeDebugStats();
         }
 
@@ -248,7 +212,6 @@ namespace Engine13.Utilities
                 var particle = _particles[i];
                 float mass = PhysicsMath.SafeMass(particle.Entity.Mass);
 
-                // Self-contribution
                 _densities[i] = mass * SPHKernels.Poly6(0f, h);
 
                 if (particle.Neighbors.Count == 0)
@@ -259,7 +222,6 @@ namespace Engine13.Utilities
 
                 Vector2 pos = particle.Entity.Position;
 
-                // Neighbor contributions
                 for (int j = 0; j < particle.Neighbors.Count; j++)
                 {
                     var neighbor = particle.Neighbors[j];
@@ -272,14 +234,12 @@ namespace Engine13.Utilities
                     _densities[i] += neighborMass * SPHKernels.Poly6(dist, h);
                 }
 
-                // Ensure minimum density
                 _densities[i] = MathF.Max(_densities[i], 1e-6f);
             }
         }
 
         private void ComputePressures()
         {
-            // Pressure based on how much particles overlap their ideal separation (2 * radius)
             float targetSeparation = _particleRadius * 2f;
 
             for (int i = 0; i < _particles.Count; i++)
@@ -287,7 +247,6 @@ namespace Engine13.Utilities
                 var particle = _particles[i];
                 float pressure = 0f;
 
-                // Check distance to neighbors - if closer than target separation, apply pressure
                 foreach (var neighbor in particle.Neighbors)
                 {
                     Vector2 diff = particle.Entity.Position - neighbor.Entity.Position;
@@ -295,7 +254,6 @@ namespace Engine13.Utilities
 
                     if (dist < targetSeparation && dist > 0.0001f)
                     {
-                        // Pressure increases as particles get closer than target separation
                         float overlap = targetSeparation - dist;
                         pressure += _gasConstant * overlap;
                     }
@@ -315,10 +273,8 @@ namespace Engine13.Utilities
 
         private void ComputeFluidForces()
         {
-            // Use particle radius for separation - particles should be 2*radius apart
             float targetSeparation = _particleRadius * 2f;
 
-            // Build index map once
             _particleIndexMap.Clear();
             for (int i = 0; i < _particles.Count; i++)
                 _particleIndexMap[_particles[i]] = i;
@@ -352,21 +308,18 @@ namespace Engine13.Utilities
 
                     float dist = MathF.Sqrt(distSq);
 
-                    // Only apply force if particles are closer than target separation
                     if (dist >= targetSeparation)
                         continue;
 
                     Vector2 dir = diff / dist;
 
-                    // Strong force with very steep falloff - only active when very close
                     float overlap = targetSeparation - dist;
-                    float normalizedOverlap = overlap / targetSeparation; // 0 to 1
+                    float normalizedOverlap = overlap / targetSeparation;
 
-                    // Power of 6 for very steep falloff - force drops to near zero quickly
                     float falloff = MathF.Pow(normalizedOverlap, 6f);
 
                     float avgPressure = (_pressures[i] + _pressures[j]) * 0.5f;
-                    float forceMag = avgPressure * falloff * 0.02f; // Much smaller multiplier
+                    float forceMag = avgPressure * falloff * 0.02f;
 
                     pressureForce += dir * forceMag;
                 }
@@ -377,11 +330,9 @@ namespace Engine13.Utilities
 
         private void ComputeGranularForces()
         {
-            // Granular materials: pressure + friction + cohesion
             float targetSeparation = _particleRadius * 2f;
             float tanFriction = MathF.Tan(_frictionAngle * MathF.PI / 180f);
 
-            // Build index map once
             _particleIndexMap.Clear();
             for (int i = 0; i < _particles.Count; i++)
                 _particleIndexMap[_particles[i]] = i;
@@ -420,42 +371,33 @@ namespace Engine13.Utilities
 
                     float dist = MathF.Sqrt(distSq);
 
-                    // Only interact if particles are overlapping or very close
                     if (dist >= targetSeparation)
                         continue;
 
                     Vector2 dir = diff / dist;
                     float overlap = targetSeparation - dist;
 
-                    // Normal force (repulsion when particles overlap)
                     float normalForce = _gasConstant * overlap;
 
-                    // Relative velocity
                     Vector2 relVel = vel - neighborOc.Velocity;
 
-                    // Decompose relative velocity into normal and tangential components
                     float relVelNormal = Vector2.Dot(relVel, dir);
                     Vector2 relVelTangent = relVel - dir * relVelNormal;
                     float tangentSpeed = relVelTangent.Length();
 
-                    // Pressure force (normal direction)
                     Vector2 pressureForce = dir * normalForce;
 
-                    // Friction force (opposes tangential motion)
                     Vector2 frictionForce = Vector2.Zero;
                     if (tangentSpeed > 1e-6f)
                     {
                         Vector2 tangentDir = relVelTangent / tangentSpeed;
-                        // Mohr-Coulomb friction: F_friction = μ * F_normal
                         float frictionMag = tanFriction * normalForce;
                         frictionForce = -tangentDir * frictionMag;
                     }
 
-                    // Cohesion force (attraction between particles)
                     Vector2 cohesionForce = Vector2.Zero;
                     if (_cohesion > 0f)
                     {
-                        // Cohesion acts like a weak attractive force at short range
                         float cohesionRange = targetSeparation * 1.2f;
                         if (dist < cohesionRange)
                         {
@@ -464,7 +406,6 @@ namespace Engine13.Utilities
                         }
                     }
 
-                    // Viscous damping (energy dissipation)
                     Vector2 viscousForce = -_viscosity * relVel;
 
                     totalForce += pressureForce + frictionForce + cohesionForce + viscousForce;
@@ -486,32 +427,25 @@ namespace Engine13.Utilities
 
                 float mass = PhysicsMath.SafeMass(particle.Entity.Mass);
                 
-                // Get screen bounds to check for floor proximity
                 var bounds = Engine13.Utilities.WindowBounds.GetNormalizedBounds();
                 float floorY = bounds.bottom;
                 float distToFloor = floorY - particle.Entity.Position.Y;
                 bool nearFloor = distToFloor <= _particleRadius * 1.5f;
 
-                // SPH pressure forces
                 Vector2 sphForce = _forces[i];
                 
-                // If near floor, don't allow SPH forces to push downward
                 if (nearFloor && sphForce.Y > 0f)
                     sphForce.Y = 0f;
 
-                // Add gravity force
                 Vector2 gravityForce = _gravity * mass;
                 
-                // Total force
                 Vector2 totalForce = sphForce + gravityForce;
                 
-                // Limit force to prevent explosions
                 float forceMag = totalForce.Length();
                 float maxForce = (_materialType == SPHMaterialType.Granular ? 150f : 100f) * mass;
                 if (forceMag > maxForce)
                     totalForce *= maxForce / forceMag;
 
-                // Add to Forces system for proper integration
                 Forces.AddForce(particle.Entity, new Vec2(totalForce.X, totalForce.Y));
             }
         }
@@ -561,9 +495,6 @@ namespace Engine13.Utilities
             MaxVelocity = maxVel;
         }
 
-        /// <summary>
-        /// Get debug information for a specific particle.
-        /// </summary>
         public bool TryGetDebugInfo(
             Entity entity,
             out float density,
@@ -588,9 +519,6 @@ namespace Engine13.Utilities
             return true;
         }
 
-        /// <summary>
-        /// Get all particle debug data.
-        /// </summary>
         public void GetAllDebugData(
             Dictionary<Entity, int> entityToIndex,
             Span<float> densitiesOut,
@@ -612,9 +540,6 @@ namespace Engine13.Utilities
             }
         }
 
-        /// <summary>
-        /// Try to get entity at specific index.
-        /// </summary>
         public bool TryGetEntityAt(int index, out Entity entity)
         {
             if (index >= 0 && index < _particles.Count)
@@ -628,9 +553,6 @@ namespace Engine13.Utilities
         }
     }
 
-    /// <summary>
-    /// Represents a single fluid particle with its neighbors.
-    /// </summary>
     public class FluidParticle
     {
         public Entity Entity { get; set; } = null!;

@@ -138,7 +138,6 @@ namespace Engine13.Core
                 _tickPositions,
                 _csvPlotter,
                 Stop,
-                Restart,
                 ClearAllParticles
             );
 
@@ -522,52 +521,6 @@ namespace Engine13.Core
             }
             Dispose();
             Window.Close();
-        }
-
-        public void Restart()
-        {
-            Logger.Log("Game restarting...");
-            if (_imgui != null)
-            {
-                _imgui.Dispose();
-                _imgui = null;
-            }
-            Dispose();
-            try
-            {
-                string exe = System.Reflection.Assembly.GetEntryAssembly()?.Location;
-                if (string.IsNullOrEmpty(exe))
-                    exe = Environment.GetCommandLineArgs()[0];
-                exe = Path.GetFullPath(exe);
-
-                var cmdArgs = Environment.GetCommandLineArgs();
-                string args = "";
-                if (cmdArgs.Length > 1)
-                {
-                    var StringBuilder = new System.Text.StringBuilder();
-                    for (int i = 1; i < cmdArgs.Length; i++)
-                    {
-                        StringBuilder.Append('"').Append(cmdArgs[i].Replace("\"", "\\\"")).Append('"');
-                        if (i < cmdArgs.Length - 1) StringBuilder.Append(' ');
-                    }
-                    args = StringBuilder.ToString();
-                }
-
-                var psi = new ProcessStartInfo
-                {
-                    FileName = exe,
-                    Arguments = args,
-                    UseShellExecute = true,
-                };
-
-                Process.Start(psi);
-            }
-            catch (Exception ex)
-            {
-                Logger.Log($"Restart failed: {ex.Message}");
-            }
-
-            Environment.Exit(0);
         }
 
         private void CreateObjects(

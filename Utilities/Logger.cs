@@ -6,28 +6,22 @@ using ImGuiNET;
 
 namespace Engine13.Utilities
 {
-    /// <summary>
-    /// Thread-safe logging utility with console output and CSV file support.
-    /// </summary>
     public static class Logger
     {
         private static readonly Dictionary<string, StreamWriter> _csvWriters = new();
         private static readonly Dictionary<string, bool> _headerWritten = new();
         private static readonly object _syncLock = new();
 
-        /// <summary>Logs an informational message to console with timestamp.</summary>
         public static void Log(string message)
         {
             Console.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] {message}");
         }
 
-        /// <summary>Logs a simulation key identifier.</summary>
         public static void LogSimKey(string key)
         {
             Console.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] SIMKEY: {key}");
         }
 
-        /// <summary>Logs an error message to console in red.</summary>
         public static void LogError(string message)
         {
             Console.ForegroundColor = ConsoleColor.Red;
@@ -35,7 +29,6 @@ namespace Engine13.Utilities
             Console.ResetColor();
         }
 
-        /// <summary>Logs a warning message to console in yellow.</summary>
         public static void LogWarning(string message)
         {
             Console.ForegroundColor = ConsoleColor.Yellow;
@@ -43,7 +36,6 @@ namespace Engine13.Utilities
             Console.ResetColor();
         }
 
-        /// <summary>Initializes a new CSV log file with column headers.</summary>
         public static void InitCSV(string filename, params string[] headers)
         {
             lock (_syncLock)
@@ -80,7 +72,6 @@ namespace Engine13.Utilities
             }
         }
 
-        /// <summary>Writes a row of data to an initialized CSV file.</summary>
         public static void LogCSV(string filename, params object[] values)
         {
             lock (_syncLock)
@@ -107,7 +98,6 @@ namespace Engine13.Utilities
             }
         }
 
-        /// <summary>Writes a timestamped row of data to an initialized CSV file.</summary>
         public static void LogCSVWithTimestamp(string filename, params object[] values)
         {
             var timestampedValues = new object[values.Length + 1];
@@ -116,7 +106,6 @@ namespace Engine13.Utilities
             LogCSV(filename, timestampedValues);
         }
 
-        /// <summary>Closes a specific CSV file.</summary>
         public static void CloseCSV(string filename)
         {
             lock (_syncLock)
@@ -133,7 +122,6 @@ namespace Engine13.Utilities
             }
         }
 
-        /// <summary>Closes all open CSV files.</summary>
         public static void CloseAllCSV()
         {
             lock (_syncLock)
@@ -150,7 +138,6 @@ namespace Engine13.Utilities
             }
         }
 
-        /// <summary>Logs a performance metric to a dedicated CSV file.</summary>
         public static void LogPerformance(
             string filename,
             string metricName,

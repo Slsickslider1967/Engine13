@@ -7,17 +7,13 @@ using Vortice.Direct3D11;
 
 namespace Engine13.Utilities.JsonReader
 {
-    /// <summary>
-    /// Preset reader for particle simulation parameters.
-    /// Handles particle-scale physics properties only.
-    /// </summary>
     public class ParticlePresetReader
     {
         public class CompositionItem
         {
             public string Name { get; set; } = "";
             public int Ratio { get; set; } = 1;
-            public string ParticleType { get; set; } = "standard"; // standard, heavy, light, fluid
+            public string ParticleType { get; set; } = "standard";
         }
 
         public string Name { get; set; } = "Unknown";
@@ -41,20 +37,17 @@ namespace Engine13.Utilities.JsonReader
         public bool IsSolid { get; set; } = false;
         public bool IsGranular { get; set; } = false;
 
-        // Bond/spring parameters (Hooke's law)
         public float BondStiffness { get; set; } = 0f;
         public float BondDamping { get; set; } = 0f;
 
-        // SPH-specific parameters for scientific fluid simulation
-        public float SPHRestDensity { get; set; } = 1000f; // kg/m³ (water = 1000)
-        public float SPHGasConstant { get; set; } = 2000f; // Pressure stiffness
-        public float SPHViscosity { get; set; } = 0.1f; // Dynamic viscosity
-        public float SPHSurfaceTension { get; set; } = 0.0728f; // Surface tension coefficient
+        public float SPHRestDensity { get; set; } = 1000f;
+        public float SPHGasConstant { get; set; } = 2000f;
+        public float SPHViscosity { get; set; } = 0.1f;
+        public float SPHSurfaceTension { get; set; } = 0.0728f;
         
-        // Granular material parameters
-        public float GranularFrictionAngle { get; set; } = 30f; // Internal friction angle (degrees)
-        public float GranularCohesion { get; set; } = 0f; // Cohesive strength
-        public float GranularDilatancy { get; set; } = 0f; // Volume expansion during shear
+        public float GranularFrictionAngle { get; set; } = 30f;
+        public float GranularCohesion { get; set; } = 0f;
+        public float GranularDilatancy { get; set; } = 0f;
 
         public List<CompositionItem>? Composition { get; set; }
 
@@ -76,7 +69,6 @@ namespace Engine13.Utilities.JsonReader
                 if (!File.Exists(jsonPath))
                 {
                     Console.WriteLine($"[jsonReader] File not found! Returning default preset.");
-                    // Return default preset if file doesn't exist
                     return new ParticlePresetReader { Name = presetName };
                 }
 
@@ -88,12 +80,10 @@ namespace Engine13.Utilities.JsonReader
 
             if (_Presets.TryGetValue(presetName, out var preset) && preset != null)
             {
-                // Debug output
                 Console.WriteLine($"[jsonReader] Loaded '{presetName}': IsFluid={preset.IsFluid}, IsGranular={preset.IsGranular}");
                 return preset;
             }
 
-            // Return default if preset not found
             return new ParticlePresetReader { Name = presetName };
         }
 
@@ -110,6 +100,7 @@ namespace Engine13.Utilities.JsonReader
             if (ps == null)
                 return;
         }
+        
         public static int GetPresetCount()
         {
             if (_Presets == null)

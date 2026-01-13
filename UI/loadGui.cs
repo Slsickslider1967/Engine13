@@ -23,7 +23,9 @@ namespace Engine13.UI
         private static bool _GridSnapMode = false;
 
         private static bool SelectionEdit = false;
-        
+        private static int _selectionPresetIndex = 0;
+        private static string _selectionMaterial = "Sand";
+
         private const float GraphPlotHeight = 100f;
 
         public static void ShowLoadWindow(ref bool showWindow, ref bool startRequested)
@@ -258,7 +260,6 @@ namespace Engine13.UI
                 );
 
                 //Impliment EntitySelectedVisualizer to change/outline selected entities
-                
             }
             else
             {
@@ -341,7 +342,6 @@ namespace Engine13.UI
             List<Vector2[]> tickPositions,
             CsvPlotter? csvPlotter,
             Action stopCallback,
-            Action restartCallback,
             Action clearParticlesCallback
         )
         {
@@ -361,11 +361,11 @@ namespace Engine13.UI
             float columnX = mainWinPos.X;
             float nextY = mainWinPos.Y + mainWinSize.Y + spacing;
             float mainRight = mainWinPos.X + mainWinSize.X;
-            
+
             ImGui.Text("Precompute simulation frames before playback.");
             ImGui.Text($"Particle systems: {particleSystemCount}");
             ImGui.Text($"Entities: {entityCount}");
-            
+
             if (!hasPrecomputeRun)
             {
                 if (ImGui.Button(precomputeName))
@@ -387,7 +387,6 @@ namespace Engine13.UI
             ///<Summary>
             /// This section toggles the editor window visibility.
             /// </Summary>
-            
             if (_EditorWindow)
             {
                 editorName = "Hide Editor Window";
@@ -406,17 +405,13 @@ namespace Engine13.UI
             }
 
             ImGui.NewLine();
-            if (ImGui.Button("Stop and Restart"))
-            {
-                restartCallback();
-            }
-            ImGui.SameLine();
+            ImGui.NewLine();
             if (ImGui.Button("Stop and Quit"))
             {
                 stopCallback();
             }
             ImGui.Separator();
-            
+
             if (showStartWindow == true)
             {
                 ImGui.Text($"Ticks Computed: {tickCounter}");
@@ -463,14 +458,13 @@ namespace Engine13.UI
             ///<summary>
             /// Simulation control window
             /// </summary>
-            
             if (_SimulationWindow)
             {
                 var simSize = new Vector2(300, 200);
                 ImGui.SetNextWindowSize(simSize, ImGuiCond.Always);
                 ImGui.SetNextWindowPos(new Vector2(columnX, nextY), ImGuiCond.Always);
                 ImGui.Begin("Simulation");
-                
+
                 bool isPrecomputing = false; // This should be passed as parameter if needed
                 if (isPrecomputing)
                 {
@@ -482,7 +476,7 @@ namespace Engine13.UI
                     {
                         playbackTimer.Stop();
                     }
-                    
+
                     if (ImGui.Button("Play/Pause"))
                     {
                         startRunningImmediately = true;
@@ -504,7 +498,7 @@ namespace Engine13.UI
                         playbackTimer.Reset();
                     }
                     ImGui.Separator();
-                    
+
                     int selectedFrame = tickIndex;
                     int maxFrame = maxFrames - 1;
                     lock (tickLock)
@@ -540,7 +534,7 @@ namespace Engine13.UI
                 ImGui.End();
                 nextY += simWinSize.Y + spacing;
             }
-            
+
             if (precomputeWindow)
             {
                 var preSize = new Vector2(300, 160);
@@ -563,7 +557,7 @@ namespace Engine13.UI
                 ImGui.End();
                 nextY += preWinSize.Y + spacing;
             }
-            
+
             if (showGraphInWindow)
             {
                 float graphX = mainRight + spacing;
@@ -580,11 +574,10 @@ namespace Engine13.UI
                 ShowGraphGuiWindow(csvPlotter, tickCounter, maxFrames);
                 ImGui.End();
             }
-            
+
             ///<summary>
             /// This is for editor selection/enable editor mode
             /// </summary>
-
             if (_EditorWindow)
             {
                 var editorSize = new Vector2(400, 400);
@@ -607,33 +600,33 @@ namespace Engine13.UI
                     {
                         ImGui.Text("No presets available");
                     }
-                    else 
+                    else
                     {
                         var presetNames = new string[matCount];
                         var presetReader = new ParticlePresetReader();
                         for (int i = 0; i < matCount; i++)
                             presetNames[i] = presetReader.GetPresetName(i);
 
-                        selectionPresetIndex = Math.Clamp(
-                            selectionPresetIndex,
+                        _selectionPresetIndex = Math.Clamp(
+                            _selectionPresetIndex,
                             0,
                             presetNames.Length - 1
                         );
-                        int selected = selectionPresetIndex;
+                        int selected = _selectionPresetIndex;
 
                         if (ImGui.Combo("Material", ref selected, presetNames, presetNames.Length))
                         {
-                            selectionPresetIndex = Math.Clamp(selected, 0, presetNames.Length - 1);
-                            selectionMaterial = presetNames[selectionPresetIndex];
+                            _selectionPresetIndex = Math.Clamp(selected, 0, presetNames.Length - 1);
+                            _selectionMaterial = presetNames[_selectionPresetIndex];
                         }
                     }
                 }
 
                 ImGui.Separator();
-                
+
                 if (ImGui.Button("Clear all particles"))
                 {
-                   clearParticlesCallback();
+                    clearParticlesCallback();
                 }
                 ImGui.End();
             }
@@ -716,7 +709,6 @@ namespace Engine13.UI
                 }
             }
         }
-
 
         public static Vector2 GetSelectStart() => SelectStart;
 

@@ -16,7 +16,6 @@ namespace Engine13.Utilities
         public float Damping { get; set; }
     }
 
-    // System-level molecular dynamics / bond manager. Registered as an IUpdatable.
     public sealed class MolecularDynamicsSystem : IUpdatable
     {
         public static readonly MolecularDynamicsSystem Instance = new();

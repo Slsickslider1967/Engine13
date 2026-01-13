@@ -40,7 +40,7 @@ class Program
         game.Run();
     }
 
-    static public void Restart()
+    public static void Restart()
     {
         Console.WriteLine("[Program] Restarting application...");
         System.Diagnostics.Process.Start(Environment.GetCommandLineArgs()[0]);

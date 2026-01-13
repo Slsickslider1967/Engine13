@@ -5,13 +5,6 @@ using Engine13.Graphics;
 
 namespace Engine13.Utilities;
 
-
-/// <summary>
-///     This is for accumulating and applying forces to entities.
-///     Totaling forces per entity and applying them in one go improves stability,
-///     especially when multiple systems are adding forces to the same entity.
-/// </summary>
-
 public readonly struct Vec2(double x, double y)
 {
     public static readonly Vec2 Zero = new(0.0, 0.0);
@@ -20,17 +13,12 @@ public readonly struct Vec2(double x, double y)
     public double Y { get; } = y;
 
     public static Vec2 operator +(Vec2 a, Vec2 b) => new(a.X + b.X, a.Y + b.Y);
-
     public static Vec2 operator -(Vec2 a, Vec2 b) => new(a.X - b.X, a.Y - b.Y);
-
     public static Vec2 operator *(Vec2 a, double b) => new(a.X * b, a.Y * b);
-
     public static Vec2 operator *(double b, Vec2 a) => new(a.X * b, a.Y * b);
-
     public static Vec2 operator /(Vec2 a, double b) => new(a.X / b, a.Y / b);
 
     public double LengthSquared() => X * X + Y * Y;
-
     public double Length() => Math.Sqrt(LengthSquared());
 }
 
@@ -67,12 +55,8 @@ public static class Forces
             float mass = PhysicsMath.SafeMass(entity.Mass);
             var forceVec = new Vector2((float)force.X, (float)force.Y);
 
-            // Apply force as impulse: Δv = F * dt / m
             Vector2 deltaV = forceVec * ((float)dt / mass);
             collision.Velocity += deltaV;
-
-            // Clamp to max velocity
-            //collision.Velocity = PhysicsMath.ClampMagnitude(collision.Velocity, MaxVelocity);
         }
     }
 }

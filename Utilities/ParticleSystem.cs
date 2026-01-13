@@ -271,11 +271,10 @@ namespace Engine13.Core
             if (!Material.IsFluid)
                 return;
 
-            // Configure the SPH solver with material properties
             _sph.Configure(
                 SPHMaterialType.Fluid,
-                smoothingRadius: Material.ParticleRadius * 4.0f, // Larger radius for better neighbor detection
-                gasConstant: Material.SPHGasConstant * 0.5f, // Gentler pressure
+                smoothingRadius: Material.ParticleRadius * 4.0f,
+                gasConstant: Material.SPHGasConstant * 0.5f,
                 viscosity: Material.SPHViscosity,
                 restDensity: Material.SPHRestDensity,
                 particleRadius: Material.ParticleRadius,
@@ -284,19 +283,16 @@ namespace Engine13.Core
                 maxVelocity: 3.0f
             );
             
-            // Register all particles with the SPH solver
             _sph.Clear();
             var random = new Random();
             foreach (var particle in Particles)
             {
                 _sph.AddParticle(particle);
                 
-                // Add tiny random velocity perturbations to break lattice symmetry
-                // This creates more realistic, chaotic fluid behavior
                 var oc = particle.GetComponent<ObjectCollision>();
                 if (oc != null)
                 {
-                    float perturbMagnitude = 0.01f;  // Very small perturbation to avoid adding energy
+                    float perturbMagnitude = 0.01f;
                     float vx = (float)(random.NextDouble() * 2.0 - 1.0) * perturbMagnitude;
                     float vy = (float)(random.NextDouble() * 2.0 - 1.0) * perturbMagnitude;
                     oc.Velocity = new Vector2(vx, vy);
@@ -309,29 +305,26 @@ namespace Engine13.Core
             if (!Material.IsGranular)
                 return;
 
-            // Configure the SPH solver for granular materials
             _sph.Configure(
                 SPHMaterialType.Granular,
-                smoothingRadius: Material.ParticleRadius * 3.0f, // Smaller radius than fluids
+                smoothingRadius: Material.ParticleRadius * 3.0f,
                 gasConstant: Material.SPHGasConstant,
                 viscosity: Material.SPHViscosity,
                 restDensity: Material.SPHRestDensity,
                 particleRadius: Material.ParticleRadius,
                 gravity: new Vector2(0f, Material.GravityStrength),
-                damping: 0.95f, // Higher damping than fluids
-                maxVelocity: 2.0f, // Lower max velocity
+                damping: 0.95f,
+                maxVelocity: 2.0f,
                 frictionAngle: Material.GranularFrictionAngle,
                 cohesion: Material.GranularCohesion,
                 dilatancy: Material.GranularDilatancy
             );
             
-            // Register all particles with the SPH solver
             _sph.Clear();
             foreach (var particle in Particles)
             {
                 _sph.AddParticle(particle);
                 
-                // Set initial velocity to zero - granular materials start at rest
                 var oc = particle.GetComponent<ObjectCollision>();
                 if (oc != null)
                 {

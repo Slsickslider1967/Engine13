@@ -51,7 +51,6 @@ public sealed class Gravity : IEntityComponent
         var particleDynamics = entity.GetComponent<ParticleDynamics>();
         if (particleDynamics != null)
         {
-            // If using SPH solver, skip - gravity handled in StepFluid()
             if (particleDynamics.UseSPHSolver)
                 return;
                 
@@ -70,8 +69,6 @@ public sealed class Gravity : IEntityComponent
         var ObjectColission = entity.GetComponent<ObjectCollision>();
         if (ObjectColission != null && !ObjectColission.IsStatic)
         {
-            // CRITICAL: Skip gravity for fluids and granular materials - SPH handles it
-            // Otherwise gravity is applied TWICE causing momentum accumulation
             if (ObjectColission.IsFluid || ObjectColission.UseSPHIntegration)
                 return;
             
@@ -202,10 +199,7 @@ public sealed class ParticleDynamics : IEntityComponent
             return Vector2.Zero;
 
         var oc = entity.GetComponent<ObjectCollision>();
-        bool isFluid = oc?.IsFluid ?? false;
-        
-        // If fluid, SPH solver handles all forces - skip this entirely
-        if (isFluid)
+        if (oc?.IsFluid ?? false)
             return Vector2.Zero;
 
         Vector2 totalForce = Vector2.Zero;
@@ -228,12 +222,9 @@ public sealed class ParticleDynamics : IEntityComponent
             float dist = MathF.Sqrt(distSq);
             Vector2 dir = delta / dist;
 
-            // Simple inverse-square repulsion (like electrostatic force)
-            // Gets very strong when particles are close
             float targetDist = (entity.CollisionRadius + other.CollisionRadius) * 1.2f;
             if (dist < targetDist)
             {
-                // Inverse square gets naturally stronger as particles get closer
                 float ratio = targetDist / dist;
                 float forceMag = PressureStrength * ratio * ratio;
                 totalForce += dir * forceMag;
@@ -356,17 +347,14 @@ public sealed class EdgeCollision : IEntityComponent
         if (ObjectCollision == null)
             return;
 
-        // Strong damping for fluids to remove energy at walls
         float extraDamping = ObjectCollision.IsFluid ? 0.5f : 1.0f;
         if (isXAxis)
         {
             float vX = ObjectCollision.Velocity.X;
-            // Only reflect if moving toward wall (into penetration), not away from it
             if (MathF.Abs(vX) < sleepVelocity)
                 vX = 0f;
             else if (entity != null)
             {
-                // Check if we're at left or right wall and moving toward it
                 var bounds = GetBounds();
                 bool atLeftWall = entity.Position.X < (bounds.left + bounds.right) * 0.5f;
                 bool movingIntoWall = (atLeftWall && vX < 0) || (!atLeftWall && vX > 0);
@@ -378,7 +366,6 @@ public sealed class EdgeCollision : IEntityComponent
         else
         {
             float vY = ObjectCollision.Velocity.Y;
-            // Only reflect if moving toward wall
             if (MathF.Abs(vY) < sleepVelocity)
                 vY = 0f;
             else if (entity != null)
@@ -398,7 +385,6 @@ public sealed class EdgeCollision : IEntityComponent
         var (left, right, top, bottom) = GetBounds();
         var position = entity.Position;
         
-        // For circular entities, use CollisionRadius; otherwise fall back to Size
         float halfWidth, halfHeight;
         if (entity.CollisionShape == Engine13.Graphics.Entity.CollisionShapeType.Circle && entity.CollisionRadius > 0f)
         {
@@ -429,17 +415,15 @@ public sealed class EdgeCollision : IEntityComponent
         {
             var oc = entity.GetComponent<ObjectCollision>();
             const float sleepVelocity = 0.05f;
-            // Use stronger recovery for fluids to prevent tunneling
             float recovery = MathF.Max(halfWidth, halfHeight) * (oc?.IsFluid == true ? 0.15f : 0.08f);
 
             if (position.X < left + halfWidth)
             {
                 position.X = left + halfWidth + recovery;
-                entity.Position = position;  // Update position before velocity check
+                entity.Position = position;
                 if (oc != null)
                 {
                     HandleWallCollision(oc, true, sleepVelocity, entity);
-                    // Extra damping for fluids
                     if (oc.IsFluid)
                         oc.Velocity *= 0.8f;
                 }
@@ -447,11 +431,10 @@ public sealed class EdgeCollision : IEntityComponent
             else if (position.X > right - halfWidth)
             {
                 position.X = right - halfWidth - recovery;
-                entity.Position = position;  // Update position before velocity check
+                entity.Position = position;
                 if (oc != null)
                 {
                     HandleWallCollision(oc, true, sleepVelocity, entity);
-                    // Extra damping for fluids
                     if (oc.IsFluid)
                         oc.Velocity *= 0.8f;
                 }
@@ -460,12 +443,11 @@ public sealed class EdgeCollision : IEntityComponent
             if (position.Y < top + halfHeight)
             {
                 position.Y = top + halfHeight + recovery;
-                entity.Position = position;  // Update position before velocity check
+                entity.Position = position;
                 if (oc != null)
                 {
                     HandleWallCollision(oc, false, sleepVelocity, entity);
                     oc.IsGrounded = false;
-                    // Extra damping for fluids
                     if (oc.IsFluid)
                         oc.Velocity *= 0.8f;
                 }
@@ -473,14 +455,11 @@ public sealed class EdgeCollision : IEntityComponent
             else if (position.Y > bottom - halfHeight)
             {
                 position.Y = bottom - halfHeight - recovery;
-                entity.Position = position;  // Update position before velocity check
+                entity.Position = position;
                 if (oc != null)
                 {
                     HandleWallCollision(oc, false, sleepVelocity, entity);
                     oc.IsGrounded = MathF.Abs(oc.Velocity.Y) < sleepVelocity;
-                    // Extra damping for fluids
-                    if (oc.IsFluid)
-                        oc.Velocity *= 0.8f;
                 }
             }
             else
@@ -508,19 +487,13 @@ public sealed class ObjectCollision : IEntityComponent
 
     public void Update(Entity entity, GameTime gameTime)
     {
-        // SPH solver updates velocities, but we still need to integrate position here
-        // This ensures collision detection and boundary handling work correctly
-        
         if (!IsStatic)
         {
-            // Apply light air resistance (not for fluids)
             if (!IsFluid && Velocity.LengthSquared() > 0.0001f)
             {
-                float airResistance = 0.999f; // Very light damping
-                Velocity *= airResistance;
+                Velocity *= 0.999f;
             }
             
-            // Clamp velocity to prevent instability
             const float maxVelocity = 15f;
             float velMag = Velocity.Length();
             if (velMag > maxVelocity)
@@ -530,14 +503,11 @@ public sealed class ObjectCollision : IEntityComponent
             pos += Velocity * gameTime.DeltaTime;
             entity.Position = pos;
             
-            // Apply angular velocity for rolling
             entity.Rotation += AngularVelocity * gameTime.DeltaTime;
             
-            // Apply rolling resistance damping
             if (IsGrounded && MathF.Abs(AngularVelocity) > 0.01f)
             {
-                float rollingResistance = 0.98f;
-                AngularVelocity *= rollingResistance;
+                AngularVelocity *= 0.98f;
             }
         }
     }
