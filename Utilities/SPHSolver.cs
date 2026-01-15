@@ -162,11 +162,22 @@ namespace Engine13.Utilities
                 _forces = new Vector2[n];
             }
 
+            // Build neighbor lists using spatial grid for efficient O(n) lookup
             FindNeighbors(grid);
+
+            // Calculate density at each particle using Poly6 kernel
             ComputeDensities();
+            
+            // Convert densities to pressure using Tait equation
             ComputePressures();
+
+            // Calculate pressure and viscosity forces between neighbors
             ComputeForces();
+
+            // Apply computed forces to entities with safety clamping
             AddForcesToSystem();
+
+            // Collect diagnostic statistics for debugging
             ComputeDebugStats();
         }
 
@@ -244,8 +255,6 @@ namespace Engine13.Utilities
             for (int i = 0; i < _particles.Count; i++)
             {
                 float density = _densities[i];
-                // Only create pressure when density exceeds rest (compression)
-                // This prevents clumping by not creating negative/attractive pressure
                 float densityRatio = density / MathF.Max(_restDensity, 1e-6f);
                 float pressure = _gasConstant * MathF.Max(densityRatio - 1f, 0f);
                 _pressures[i] = pressure;
@@ -454,7 +463,6 @@ namespace Engine13.Utilities
                 Vector2 totalForce = sphForce + gravityForce;
                 
                 // Clamp total force to prevent explosions
-                // Use gravity as reference: max acceleration = 10x gravity
                 float gravMag = MathF.Abs(_gravity.Y);
                 float maxAccel = (_materialType == SPHMaterialType.Granular ? 15f : 10f) * gravMag;
                 float maxForce = maxAccel * mass;
@@ -463,8 +471,6 @@ namespace Engine13.Utilities
                 if (forceMag > maxForce && forceMag > 1e-8f)
                     totalForce *= maxForce / forceMag;
                 
-                // Extra safety: cap upward force to prevent floating
-                // Upward force should never exceed 1.5x weight
                 float maxUpwardForce = 1.5f * gravMag * mass;
                 if (totalForce.Y < -maxUpwardForce)
                     totalForce.Y = -maxUpwardForce;
