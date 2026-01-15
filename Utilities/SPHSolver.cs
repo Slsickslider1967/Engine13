@@ -240,25 +240,14 @@ namespace Engine13.Utilities
 
         private void ComputePressures()
         {
-            float targetSeparation = _particleRadius * 2f;
-
+            // Tait equation of state: pressure based on density deviation from rest
             for (int i = 0; i < _particles.Count; i++)
             {
-                var particle = _particles[i];
-                float pressure = 0f;
-
-                foreach (var neighbor in particle.Neighbors)
-                {
-                    Vector2 diff = particle.Entity.Position - neighbor.Entity.Position;
-                    float dist = diff.Length();
-
-                    if (dist < targetSeparation && dist > 0.0001f)
-                    {
-                        float overlap = targetSeparation - dist;
-                        pressure += _gasConstant * overlap;
-                    }
-                }
-
+                float density = _densities[i];
+                // Only create pressure when density exceeds rest (compression)
+                // This prevents clumping by not creating negative/attractive pressure
+                float densityRatio = density / MathF.Max(_restDensity, 1e-6f);
+                float pressure = _gasConstant * MathF.Max(densityRatio - 1f, 0f);
                 _pressures[i] = pressure;
             }
         }
@@ -273,8 +262,6 @@ namespace Engine13.Utilities
 
         private void ComputeFluidForces()
         {
-            float targetSeparation = _particleRadius * 2f;
-
             _particleIndexMap.Clear();
             for (int i = 0; i < _particles.Count; i++)
                 _particleIndexMap[_particles[i]] = i;
@@ -291,7 +278,12 @@ namespace Engine13.Utilities
                 }
 
                 Vector2 pressureForce = Vector2.Zero;
+                Vector2 viscosityForce = Vector2.Zero;
                 Vector2 pos = particle.Entity.Position;
+                Vector2 vel = oc.Velocity;
+                float mass = PhysicsMath.SafeMass(particle.Entity.Mass);
+                float density = MathF.Max(_densities[i], 1e-6f);
+                float pressure = _pressures[i];
 
                 for (int nIdx = 0; nIdx < particle.Neighbors.Count; nIdx++)
                 {
@@ -300,31 +292,50 @@ namespace Engine13.Utilities
                     if (!_particleIndexMap.TryGetValue(neighbor, out int j))
                         continue;
 
+                    var neighborOc = neighbor.Entity.GetComponent<ObjectCollision>();
+                    if (neighborOc == null)
+                        continue;
+
                     Vector2 diff = pos - neighbor.Entity.Position;
                     float distSq = diff.LengthSquared();
 
-                    if (distSq <= 1e-8f)
+                    // Skip near-coincident particles to avoid numerical instability
+                    float minDist = _particleRadius * 0.1f;
+                    if (distSq <= minDist * minDist)
                         continue;
 
                     float dist = MathF.Sqrt(distSq);
 
-                    if (dist >= targetSeparation)
+                    if (dist >= _smoothingRadius)
                         continue;
 
                     Vector2 dir = diff / dist;
 
-                    float overlap = targetSeparation - dist;
-                    float normalizedOverlap = overlap / targetSeparation;
+                    float neighborDensity = MathF.Max(_densities[j], 1e-6f);
+                    float neighborPressure = _pressures[j];
+                    float massJ = PhysicsMath.SafeMass(neighbor.Entity.Mass);
 
-                    float falloff = MathF.Pow(normalizedOverlap, 6f);
+                    // Pressure force using spiky kernel gradient (standard SPH)
+                    // This creates repulsion that spreads particles apart
+                    Vector2 gradW = SPHKernels.SpikyGradient(dist, _smoothingRadius, dir);
+                    float pressureAccel = (pressure / (density * density))
+                        + (neighborPressure / (neighborDensity * neighborDensity));
+                    pressureForce += -mass * massJ * pressureAccel * gradW;
 
-                    float avgPressure = (_pressures[i] + _pressures[j]) * 0.5f;
-                    float forceMag = avgPressure * falloff * 0.02f;
-
-                    pressureForce += dir * forceMag;
+                    // Viscosity force to smooth velocity differences and reduce jitter
+                    Vector2 velDiff = neighborOc.Velocity - vel;
+                    float laplacian = SPHKernels.ViscosityLaplacian(dist, _smoothingRadius);
+                    viscosityForce += _viscosity * massJ * (velDiff / neighborDensity) * laplacian;
                 }
 
-                _forces[i] = pressureForce;
+                // Combine forces with gentle velocity damping to prevent energy gain
+                Vector2 totalForce = pressureForce + viscosityForce;
+                
+                // Apply damping proportional to velocity to dissipate energy
+                float dampFactor = 1f - _damping; // damping=0.99 -> dampFactor=0.01
+                totalForce -= vel * mass * dampFactor * 2f;
+
+                _forces[i] = totalForce;
             }
         }
 
@@ -430,10 +441,11 @@ namespace Engine13.Utilities
                 var bounds = Engine13.Utilities.WindowBounds.GetNormalizedBounds();
                 float floorY = bounds.bottom;
                 float distToFloor = floorY - particle.Entity.Position.Y;
-                bool nearFloor = distToFloor <= _particleRadius * 1.5f;
+                bool nearFloor = distToFloor <= _particleRadius * 2f;
 
                 Vector2 sphForce = _forces[i];
                 
+                // Near floor: prevent upward SPH forces that would cause bouncing
                 if (nearFloor && sphForce.Y > 0f)
                     sphForce.Y = 0f;
 
@@ -441,10 +453,21 @@ namespace Engine13.Utilities
                 
                 Vector2 totalForce = sphForce + gravityForce;
                 
+                // Clamp total force to prevent explosions
+                // Use gravity as reference: max acceleration = 10x gravity
+                float gravMag = MathF.Abs(_gravity.Y);
+                float maxAccel = (_materialType == SPHMaterialType.Granular ? 15f : 10f) * gravMag;
+                float maxForce = maxAccel * mass;
+                
                 float forceMag = totalForce.Length();
-                float maxForce = (_materialType == SPHMaterialType.Granular ? 150f : 100f) * mass;
-                if (forceMag > maxForce)
+                if (forceMag > maxForce && forceMag > 1e-8f)
                     totalForce *= maxForce / forceMag;
+                
+                // Extra safety: cap upward force to prevent floating
+                // Upward force should never exceed 1.5x weight
+                float maxUpwardForce = 1.5f * gravMag * mass;
+                if (totalForce.Y < -maxUpwardForce)
+                    totalForce.Y = -maxUpwardForce;
 
                 Forces.AddForce(particle.Entity, new Vec2(totalForce.X, totalForce.Y));
             }

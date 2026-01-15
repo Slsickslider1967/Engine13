@@ -253,9 +253,9 @@
       "PressureStrength": 0.0,
       "PressureRadius": 0.018,
       "IsFluid": true,
-      "SPHRestDensity": 5.0,
-      "SPHGasConstant": 8.0,
-      "SPHViscosity": 1.0,
+      "SPHRestDensity": 1.0,
+      "SPHGasConstant": 50.0,
+      "SPHViscosity": 2.5,
       "SPHSurfaceTension": 0.01
     },
     "Oil": {
