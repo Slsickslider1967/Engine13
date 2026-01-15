@@ -324,12 +324,20 @@ namespace Engine13.Utilities
                     float neighborPressure = _pressures[j];
                     float massJ = PhysicsMath.SafeMass(neighbor.Entity.Mass);
 
-                    // Pressure force using spiky kernel gradient (standard SPH)
-                    // This creates repulsion that spreads particles apart
                     Vector2 gradW = SPHKernels.SpikyGradient(dist, _smoothingRadius, dir);
                     float pressureAccel = (pressure / (density * density))
                         + (neighborPressure / (neighborDensity * neighborDensity));
                     pressureForce += -mass * massJ * pressureAccel * gradW;
+
+                    // Short-range repulsion to prevent sticking when particles get very close
+                    // This activates only when dist < particleRadius and prevents pair lock
+                    float stickThreshold = _particleRadius * 0.95f;
+                    if (dist < stickThreshold)
+                    {
+                        float penetration = stickThreshold - dist;
+                        float stickForce = _gasConstant * penetration * 0.3f;
+                        pressureForce += dir * massJ * stickForce;
+                    }
 
                     // Viscosity force to smooth velocity differences and reduce jitter
                     Vector2 velDiff = neighborOc.Velocity - vel;
@@ -340,9 +348,31 @@ namespace Engine13.Utilities
                 // Combine forces with gentle velocity damping to prevent energy gain
                 Vector2 totalForce = pressureForce + viscosityForce;
                 
-                // Apply damping proportional to velocity to dissipate energy
-                float dampFactor = 1f - _damping; // damping=0.99 -> dampFactor=0.01
+                // Progressive velocity damping: stronger at higher speeds
+                float dampFactor = 1f - _damping;
+                float velMag = vel.Length();
+                
+                // Base damping proportional to velocity
                 totalForce -= vel * mass * dampFactor * 2f;
+                
+                // Additional quadratic damping for high velocities (like drag)
+                if (velMag > 0.5f)
+                {
+                    float dragCoeff = 0.15f;
+                    totalForce -= vel * mass * dragCoeff * velMag;
+                }
+                
+                // Extra damping on upward velocity to prevent brief lift events
+                if (vel.Y < -0.1f)
+                {
+                    totalForce.Y += vel.Y * mass * 0.5f;
+                }
+                
+                // Settling damping: when moving slowly, increase damping to help settle
+                if (velMag < 0.3f && velMag > 0.01f)
+                {
+                    totalForce -= vel * mass * 1.5f;
+                }
 
                 _forces[i] = totalForce;
             }
@@ -457,6 +487,19 @@ namespace Engine13.Utilities
                 // Near floor: prevent upward SPH forces that would cause bouncing
                 if (nearFloor && sphForce.Y > 0f)
                     sphForce.Y = 0f;
+                
+                // Apply ground friction when near floor to help settle
+                if (nearFloor)
+                {
+                    float groundFrictionCoeff = 2.0f;
+                    Vector2 lateralVel = new Vector2(oc.Velocity.X, 0f);
+                    float lateralSpeed = MathF.Abs(lateralVel.X);
+                    if (lateralSpeed > 0.01f)
+                    {
+                        Vector2 frictionForce = -lateralVel * mass * groundFrictionCoeff;
+                        sphForce += frictionForce;
+                    }
+                }
 
                 Vector2 gravityForce = _gravity * mass;
                 
@@ -471,7 +514,9 @@ namespace Engine13.Utilities
                 if (forceMag > maxForce && forceMag > 1e-8f)
                     totalForce *= maxForce / forceMag;
                 
-                float maxUpwardForce = 1.5f * gravMag * mass;
+                // Extra safety: cap upward force to prevent floating
+                // Upward force capped to 0.5x weight to eliminate lifting
+                float maxUpwardForce = 0.5f * gravMag * mass;
                 if (totalForce.Y < -maxUpwardForce)
                     totalForce.Y = -maxUpwardForce;
 

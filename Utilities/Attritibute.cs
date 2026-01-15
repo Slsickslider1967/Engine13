@@ -489,15 +489,31 @@ public sealed class ObjectCollision : IEntityComponent
     {
         if (!IsStatic)
         {
+            // Progressive damping for non-fluid particles
             if (!IsFluid && Velocity.LengthSquared() > 0.0001f)
             {
                 Velocity *= 0.999f;
             }
             
+            // Settling damping for fluid particles when moving slowly
+            float currentSpeed = Velocity.Length();
+            if (IsFluid)
+            {
+                if (currentSpeed < 0.2f && currentSpeed > 0.001f)
+                {
+                    // Stronger damping when settling to reach rest state faster
+                    Velocity *= 0.97f;
+                }
+                else if (currentSpeed <= 0.001f)
+                {
+                    // Stop completely when velocity is negligible
+                    Velocity = Vector2.Zero;
+                }
+            }
+            
             const float maxVelocity = 15f;
-            float velMag = Velocity.Length();
-            if (velMag > maxVelocity)
-                Velocity = Velocity * (maxVelocity / velMag);
+            if (currentSpeed > maxVelocity)
+                Velocity = Velocity * (maxVelocity / currentSpeed);
 
             var pos = entity.Position;
             pos += Velocity * gameTime.DeltaTime;

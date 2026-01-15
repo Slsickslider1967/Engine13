@@ -150,6 +150,8 @@ namespace Engine13.UI
 
             if (!IsSelecting && SelectStart != SelectEnd && SelectionEdit)
             {
+                ImGui.SetNextWindowSize(new Vector2(250, 150), ImGuiCond.Always);
+                ImGui.SetNextWindowPos(new Vector2(SelectEnd.X, SelectEnd.Y - 150), ImGuiCond.Always);
                 ImGui.Begin("SelectionInfo");
                 int matCount = ParticlePresetReader.GetPresetCount();
                 if (matCount <= 0)
@@ -569,6 +571,13 @@ namespace Engine13.UI
                 }
                 ImGui.Separator();
                 ImGui.SliderInt("Max Frames", ref maxFrames, 100, 5000);
+
+                ImGui.Separator();
+                ImGui.Text("Physics Settings:");
+                ImGui.SliderFloat("Gravity Scale", ref PhysicsSettings.GravityScale, 0f, 5f);
+                ImGui.SliderFloat("Air Resistance", ref PhysicsSettings.AirResistance, 0f, 1f); 
+
+                ImGui.Separator();
                 if (ImGui.Checkbox("Start Running Immediately", ref startRunningImmediately)) { }
                 var preWinSize = ImGui.GetWindowSize();
                 ImGui.End();
