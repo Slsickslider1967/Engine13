@@ -10,6 +10,7 @@ namespace Engine13.Utilities
     {
         private static float _gravitationalConstant = 9.81f;
         private static float _airResistance = 0.0f;
+        private static float _wallRestitution = 0.7f;
 
         /// <summary>
         /// Gravitational acceleration constant in m/s².
@@ -34,12 +35,24 @@ namespace Engine13.Utilities
         }
 
         /// <summary>
+        /// Wall collision restitution coefficient (bounciness).
+        /// 0.0 = perfectly inelastic (no bounce), 1.0 = perfectly elastic (full bounce)
+        /// Default is 0.7 (elastic but not perfect - realistic).
+        /// </summary>
+        public static float WallRestitution
+        {
+            get => _wallRestitution;
+            set => _wallRestitution = Math.Clamp(value, 0f, 1f);
+        }
+
+        /// <summary>
         /// Reset all physics settings to their default values.
         /// </summary>
         public static void Reset()
         {
             _gravitationalConstant = 9.81f;
             _airResistance = 0.0f;
+            _wallRestitution = 0.7f;
         }
     }
 }

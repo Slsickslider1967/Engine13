@@ -51,7 +51,7 @@ namespace Engine13.UI
             ImGui.End();
         }
 
-        public static void ShowDebugTerminal()
+        public static void `ShowDebugTerminal()
         {
             ImGui.SetNextWindowSize(new System.Numerics.Vector2(600, 400), ImGuiCond.FirstUseEver);
             ImGui.Begin("Debug Terminal");
@@ -151,7 +151,10 @@ namespace Engine13.UI
             if (!IsSelecting && SelectStart != SelectEnd && SelectionEdit)
             {
                 ImGui.SetNextWindowSize(new Vector2(250, 150), ImGuiCond.Always);
-                ImGui.SetNextWindowPos(new Vector2(SelectEnd.X, SelectEnd.Y - 150), ImGuiCond.Always);
+                ImGui.SetNextWindowPos(
+                    new Vector2(SelectEnd.X, SelectEnd.Y - 150),
+                    ImGuiCond.Always
+                );
                 ImGui.Begin("SelectionInfo");
                 int matCount = ParticlePresetReader.GetPresetCount();
                 if (matCount <= 0)
@@ -389,8 +392,7 @@ namespace Engine13.UI
             ///<Summary>
             /// This section toggles the editor window visibility.
             /// </Summary>
-            
-            if(!_SimulationWindow)
+            if (!_SimulationWindow)
             {
                 if (_EditorWindow)
                 {
@@ -551,16 +553,17 @@ namespace Engine13.UI
                 nextY += simWinSize.Y + spacing;
             }
 
-
             /// <Summary>
             /// The Precompute Settings window is for the compute settings.
             /// </Summary>
-            
             if (precomputeWindow)
             {
                 var preSize = new Vector2(300, 160);
-                ImGui.SetNextWindowSize(preSize, ImGuiCond.Always);
-                ImGui.SetNextWindowPos(new Vector2(columnX, nextY), ImGuiCond.Always);
+                ImGui.SetNextWindowSize(
+                    new Vector2(preSize.X + 30, preSize.Y + 45),
+                    ImGuiCond.Once
+                );
+                ImGui.SetNextWindowPos(new Vector2(columnX, nextY), ImGuiCond.Once);
                 ImGui.Begin("Precompute Settings");
                 if (ImGui.Button("Begin compute"))
                 {
@@ -578,21 +581,34 @@ namespace Engine13.UI
                 ImGui.Text("Physics Settings:");
 
                 float gravitationalConstant = PhysicsSettings.GravitationalConstant;
-                if (ImGui.SliderFloat("Gravitational Constant (m/s²)", ref gravitationalConstant, 0f, 50f))
+                if (
+                    ImGui.SliderFloat(
+                        "Gravitational Constant (m/s²)",
+                        ref gravitationalConstant,
+                        0f,
+                        50f
+                    )
+                )
                 {
                     PhysicsSettings.GravitationalConstant = gravitationalConstant;
                 }
-                
+
                 float airResistance = PhysicsSettings.AirResistance;
                 if (ImGui.SliderFloat("Air Resistance", ref airResistance, 0f, 1f))
                 {
                     PhysicsSettings.AirResistance = airResistance;
                 }
-                
+
+                float wallRestitution = PhysicsSettings.WallRestitution;
+                if (ImGui.SliderFloat("Wall Bounciness", ref wallRestitution, 0f, 1f))
+                {
+                    PhysicsSettings.WallRestitution = wallRestitution;
+                }
+
                 if (ImGui.Button("Reset Physics"))
                 {
                     PhysicsSettings.Reset();
-                } 
+                }
 
                 ImGui.Separator();
                 if (ImGui.Checkbox("Start Running Immediately", ref startRunningImmediately)) { }
@@ -600,7 +616,6 @@ namespace Engine13.UI
                 ImGui.End();
                 nextY += preWinSize.Y + spacing;
             }
-
 
             ///<summary>
             /// This is for showing the graph in a separate window.
@@ -621,8 +636,6 @@ namespace Engine13.UI
                 ShowGraphGuiWindow(csvPlotter, tickCounter, maxFrames);
                 ImGui.End();
             }
-
-
 
             ///<summary>
             /// This is for editor selection/enable editor mode
@@ -681,9 +694,6 @@ namespace Engine13.UI
                 }
                 ImGui.End();
             }
-
-
-
 
             ImGui.End();
         }

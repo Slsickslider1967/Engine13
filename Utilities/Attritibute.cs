@@ -53,17 +53,23 @@ public sealed class Gravity : IEntityComponent
         {
             if (particleDynamics.UseSPHSolver)
                 return;
-                
+
             double effectiveMass = entity.Mass > 0f ? entity.Mass : 1.0;
-            
+
             // Use global gravitational constant
             float gravityConstant = PhysicsSettings.GravitationalConstant;
-            float gravityRatio = MathF.Abs(AccelerationY) > 0.001f ? gravityConstant / MathF.Abs(AccelerationY) : 1.0f;
+            float gravityRatio =
+                MathF.Abs(AccelerationY) > 0.001f
+                    ? gravityConstant / MathF.Abs(AccelerationY)
+                    : 1.0f;
             Forces.AddForce(
                 entity,
-                new Vec2(effectiveMass * AccelerationX * gravityRatio, effectiveMass * AccelerationY * gravityRatio)
+                new Vec2(
+                    effectiveMass * AccelerationX * gravityRatio,
+                    effectiveMass * AccelerationY * gravityRatio
+                )
             );
-            
+
             // Apply air resistance from global physics settings
             if (PhysicsSettings.AirResistance > 0f)
             {
@@ -87,17 +93,20 @@ public sealed class Gravity : IEntityComponent
         {
             if (ObjectColission.IsFluid || ObjectColission.UseSPHIntegration)
                 return;
-            
+
             float ChangeY = ObjectColission.Velocity.Y;
             float ChangeX = ObjectColission.Velocity.X;
 
             // Use global gravitational constant
             float gravityConstant = PhysicsSettings.GravitationalConstant;
-            float gravityRatio = MathF.Abs(AccelerationY) > 0.001f ? gravityConstant / MathF.Abs(AccelerationY) : 1.0f;
+            float gravityRatio =
+                MathF.Abs(AccelerationY) > 0.001f
+                    ? gravityConstant / MathF.Abs(AccelerationY)
+                    : 1.0f;
             if (!(ObjectColission.IsGrounded && ChangeY >= 0f))
                 ChangeY += AccelerationY * gravityRatio * dt;
             ChangeX += AccelerationX * gravityRatio * dt;
-            
+
             // Apply air resistance from global physics settings
             if (PhysicsSettings.AirResistance > 0f)
             {
@@ -128,10 +137,13 @@ public sealed class Gravity : IEntityComponent
         {
             // Use global gravitational constant
             float gravityConstant = PhysicsSettings.GravitationalConstant;
-            float gravityRatio = MathF.Abs(AccelerationY) > 0.001f ? gravityConstant / MathF.Abs(AccelerationY) : 1.0f;
+            float gravityRatio =
+                MathF.Abs(AccelerationY) > 0.001f
+                    ? gravityConstant / MathF.Abs(AccelerationY)
+                    : 1.0f;
             _velocityY += AccelerationY * gravityRatio * dt;
             _velocityX += AccelerationX * gravityRatio * dt;
-            
+
             // Apply air resistance from global physics settings
             if (PhysicsSettings.AirResistance > 0f)
             {
@@ -166,7 +178,7 @@ public sealed class Gravity : IEntityComponent
 public sealed class ParticleDynamics : IEntityComponent
 {
     public const float DefaultPressureRadius = 0.025f;
-    
+
     readonly List<Entity>? _allEntities;
     readonly SpatialGrid? _grid;
     readonly List<Entity> _neighborBuffer = new();
@@ -217,7 +229,13 @@ public sealed class ParticleDynamics : IEntityComponent
         Forces.AddForce(entity, new Vec2(totalForce.X, totalForce.Y));
     }
 
-    public static void RemoveParticlesInArea(List<Entity> entities, float minX, float minY, float maxX, float maxY)
+    public static void RemoveParticlesInArea(
+        List<Entity> entities,
+        float minX,
+        float minY,
+        float maxX,
+        float maxY
+    )
     {
         entities.RemoveAll(entity =>
         {
@@ -385,7 +403,15 @@ public sealed class EdgeCollision : IEntityComponent
         if (ObjectCollision == null)
             return;
 
-        float extraDamping = ObjectCollision.IsFluid ? 0.5f : 1.0f;
+        // Use global wall restitution with particle-specific adjustments
+        float wallRestitution = PhysicsSettings.WallRestitution;
+        float particleRestitution = ObjectCollision.Restitution;
+        float effectiveRestitution = wallRestitution * particleRestitution;
+        
+        // Fluids have additional damping for realistic behavior
+        if (ObjectCollision.IsFluid)
+            effectiveRestitution *= 0.5f;
+            
         if (isXAxis)
         {
             float vX = ObjectCollision.Velocity.X;
@@ -397,7 +423,7 @@ public sealed class EdgeCollision : IEntityComponent
                 bool atLeftWall = entity.Position.X < (bounds.left + bounds.right) * 0.5f;
                 bool movingIntoWall = (atLeftWall && vX < 0) || (!atLeftWall && vX > 0);
                 if (movingIntoWall)
-                    vX = -vX * ObjectCollision.Restitution * extraDamping;
+                    vX = -vX * effectiveRestitution;
             }
             ObjectCollision.Velocity = new Vector2(vX, ObjectCollision.Velocity.Y);
         }
@@ -412,7 +438,7 @@ public sealed class EdgeCollision : IEntityComponent
                 bool atTopWall = entity.Position.Y < (bounds.top + bounds.bottom) * 0.5f;
                 bool movingIntoWall = (atTopWall && vY < 0) || (!atTopWall && vY > 0);
                 if (movingIntoWall)
-                    vY = -vY * ObjectCollision.Restitution * extraDamping;
+                    vY = -vY * effectiveRestitution;
             }
             ObjectCollision.Velocity = new Vector2(ObjectCollision.Velocity.X, vY);
         }
@@ -422,9 +448,13 @@ public sealed class EdgeCollision : IEntityComponent
     {
         var (left, right, top, bottom) = GetBounds();
         var position = entity.Position;
-        
-        float halfWidth, halfHeight;
-        if (entity.CollisionShape == Engine13.Graphics.Entity.CollisionShapeType.Circle && entity.CollisionRadius > 0f)
+
+        float halfWidth,
+            halfHeight;
+        if (
+            entity.CollisionShape == Engine13.Graphics.Entity.CollisionShapeType.Circle
+            && entity.CollisionRadius > 0f
+        )
         {
             halfWidth = entity.CollisionRadius;
             halfHeight = entity.CollisionRadius;
@@ -453,7 +483,8 @@ public sealed class EdgeCollision : IEntityComponent
         {
             var oc = entity.GetComponent<ObjectCollision>();
             const float sleepVelocity = 0.05f;
-            float recovery = MathF.Max(halfWidth, halfHeight) * (oc?.IsFluid == true ? 0.15f : 0.08f);
+            float recovery =
+                MathF.Max(halfWidth, halfHeight) * (oc?.IsFluid == true ? 0.15f : 0.08f);
 
             if (position.X < left + halfWidth)
             {
@@ -532,7 +563,7 @@ public sealed class ObjectCollision : IEntityComponent
             {
                 Velocity *= 0.999f;
             }
-            
+
             // Settling damping for fluid particles when moving slowly
             float currentSpeed = Velocity.Length();
             if (IsFluid)
@@ -548,7 +579,7 @@ public sealed class ObjectCollision : IEntityComponent
                     Velocity = Vector2.Zero;
                 }
             }
-            
+
             const float maxVelocity = 15f;
             if (currentSpeed > maxVelocity)
                 Velocity = Velocity * (maxVelocity / currentSpeed);
@@ -556,9 +587,9 @@ public sealed class ObjectCollision : IEntityComponent
             var pos = entity.Position;
             pos += Velocity * gameTime.DeltaTime;
             entity.Position = pos;
-            
+
             entity.Rotation += AngularVelocity * gameTime.DeltaTime;
-            
+
             if (IsGrounded && MathF.Abs(AngularVelocity) > 0.01f)
             {
                 AngularVelocity *= 0.98f;

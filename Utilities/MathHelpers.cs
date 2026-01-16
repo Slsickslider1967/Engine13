@@ -285,8 +285,9 @@ namespace Engine13.Utilities
 
             var objA = entityA.GetComponent<ObjectCollision>();
             var objB = entityB.GetComponent<ObjectCollision>();
-            
-            bool isFluidCollision = (objA != null && objA.IsFluid) || (objB != null && objB.IsFluid);
+
+            bool isFluidCollision =
+                (objA != null && objA.IsFluid) || (objB != null && objB.IsFluid);
 
             float invMassA =
                 (objA == null || objA.IsStatic || objA.Mass <= 0f) ? 0f : 1f / objA.Mass;
@@ -322,19 +323,19 @@ namespace Engine13.Utilities
             {
                 float correctionPercent = isFluidCollision ? 1.0f : PositionalCorrectionPercent;
                 float maxCorrection = isFluidCollision ? 1.0f : MaxPenetrationCorrection;
-                
+
                 float correctionMag = MathF.Min(
                     penetrationDepth * correctionPercent,
                     maxCorrection
                 );
                 Vector2 correction = (correctionMag / invMassSum) * normal;
-                
+
                 if (isFluidCollision)
                 {
                     float totalRadius = (entityA.CollisionRadius + entityB.CollisionRadius);
                     Vector2 delta = entityB.Position - entityA.Position;
                     float dist = delta.Length();
-                    
+
                     if (dist < totalRadius)
                     {
                         if (dist < 0.0001f)
@@ -348,28 +349,32 @@ namespace Engine13.Utilities
                         {
                             Vector2 separationDir = delta / dist;
                             float overlap = totalRadius - dist;
-                            
+
                             bool aMovable = objA != null && invMassA > 0f && !objA.IsStatic;
                             bool bMovable = objB != null && invMassB > 0f && !objB.IsStatic;
-                            
+
                             bool aGrounded = objA != null && objA.IsGrounded;
                             bool bGrounded = objB != null && objB.IsGrounded;
-                            
+
                             if (aMovable && bMovable)
                             {
                                 if (aGrounded && !bGrounded)
                                 {
-                                    entityB.Position = entityA.Position + separationDir * totalRadius;
+                                    entityB.Position =
+                                        entityA.Position + separationDir * totalRadius;
                                 }
                                 else if (bGrounded && !aGrounded)
                                 {
-                                    entityA.Position = entityB.Position - separationDir * totalRadius;
+                                    entityA.Position =
+                                        entityB.Position - separationDir * totalRadius;
                                 }
                                 else
                                 {
                                     Vector2 midpoint = (entityA.Position + entityB.Position) * 0.5f;
-                                    entityA.Position = midpoint - separationDir * (totalRadius * 0.5f);
-                                    entityB.Position = midpoint + separationDir * (totalRadius * 0.5f);
+                                    entityA.Position =
+                                        midpoint - separationDir * (totalRadius * 0.5f);
+                                    entityB.Position =
+                                        midpoint + separationDir * (totalRadius * 0.5f);
                                 }
                             }
                             else if (aMovable)
@@ -415,7 +420,7 @@ namespace Engine13.Utilities
                 0f,
                 1f
             );
-            
+
             if (MathF.Abs(relVelN) < RestitutionVelocityThreshold)
                 restitution = 0f;
 
@@ -436,7 +441,7 @@ namespace Engine13.Utilities
             {
                 return;
             }
-            
+
             if (isFluidCollision)
             {
                 if (objA != null && objA.IsFluid && invMassA > 0f)
@@ -506,25 +511,41 @@ namespace Engine13.Utilities
                     objA.Velocity -= frictionImpulse * invMassA;
                 if (objB != null && invMassB > 0f)
                     objB.Velocity += frictionImpulse * invMassB;
-                
-                if (entityA.CollisionShape == Entity.CollisionShapeType.Circle && objA != null && invMassA > 0f)
+
+                if (
+                    entityA.CollisionShape == Entity.CollisionShapeType.Circle
+                    && objA != null
+                    && invMassA > 0f
+                )
                 {
-                    float radiusA = entityA.CollisionRadius > 0f ? entityA.CollisionRadius : MathF.Max(entityA.Size.X, entityA.Size.Y) * 0.5f;
+                    float radiusA =
+                        entityA.CollisionRadius > 0f
+                            ? entityA.CollisionRadius
+                            : MathF.Max(entityA.Size.X, entityA.Size.Y) * 0.5f;
                     float momentOfInertia = 0.5f * objA.Mass * radiusA * radiusA;
                     if (momentOfInertia > 1e-8f)
                     {
-                        float angularImpulse = -radiusA * Vector2.Dot(frictionImpulse, tangent) / momentOfInertia;
+                        float angularImpulse =
+                            -radiusA * Vector2.Dot(frictionImpulse, tangent) / momentOfInertia;
                         objA.AngularVelocity += angularImpulse;
                     }
                 }
-                
-                if (entityB.CollisionShape == Entity.CollisionShapeType.Circle && objB != null && invMassB > 0f)
+
+                if (
+                    entityB.CollisionShape == Entity.CollisionShapeType.Circle
+                    && objB != null
+                    && invMassB > 0f
+                )
                 {
-                    float radiusB = entityB.CollisionRadius > 0f ? entityB.CollisionRadius : MathF.Max(entityB.Size.X, entityB.Size.Y) * 0.5f;
+                    float radiusB =
+                        entityB.CollisionRadius > 0f
+                            ? entityB.CollisionRadius
+                            : MathF.Max(entityB.Size.X, entityB.Size.Y) * 0.5f;
                     float momentOfInertia = 0.5f * objB.Mass * radiusB * radiusB;
                     if (momentOfInertia > 1e-8f)
                     {
-                        float angularImpulse = radiusB * Vector2.Dot(frictionImpulse, tangent) / momentOfInertia;
+                        float angularImpulse =
+                            radiusB * Vector2.Dot(frictionImpulse, tangent) / momentOfInertia;
                         objB.AngularVelocity += angularImpulse;
                     }
                 }
@@ -564,14 +585,17 @@ namespace Engine13.Utilities
             }
         }
 
-        private static Vector2 ClampVelocity(Vector2 velocity) => PhysicsMath.ClampMagnitude(velocity, MaxLinearVelocity);
+        private static Vector2 ClampVelocity(Vector2 velocity) =>
+            PhysicsMath.ClampMagnitude(velocity, MaxLinearVelocity);
     }
 
     public static class PhysicsMath
     {
-        public static float SafeMass(float mass, float fallback = 1f) => mass > 0f ? mass : fallback;
+        public static float SafeMass(float mass, float fallback = 1f) =>
+            mass > 0f ? mass : fallback;
 
-        public static float SafeInvMass(float mass, float fallback = 0f) => mass > 0f ? 1f / mass : fallback;
+        public static float SafeInvMass(float mass, float fallback = 0f) =>
+            mass > 0f ? 1f / mass : fallback;
 
         public static Vector2 ClampMagnitude(Vector2 value, float max)
         {
@@ -587,7 +611,12 @@ namespace Engine13.Utilities
             return value * (max / len);
         }
 
-        public static bool TryNormalize(Vector2 value, float epsilon, out Vector2 dir, out float length)
+        public static bool TryNormalize(
+            Vector2 value,
+            float epsilon,
+            out Vector2 dir,
+            out float length
+        )
         {
             length = value.Length();
             if (length <= epsilon)
@@ -600,7 +629,8 @@ namespace Engine13.Utilities
             return true;
         }
 
-        public static Vector2 Project(Vector2 value, Vector2 onto) => Vector2.Dot(value, onto) * onto;
+        public static Vector2 Project(Vector2 value, Vector2 onto) =>
+            Vector2.Dot(value, onto) * onto;
 
         public static Vector2 HookeDampedForce(
             Vector2 delta,
@@ -1167,12 +1197,14 @@ namespace Engine13.Utilities
             float availableWidth = selectionWidth - (2f * particleRadius);
             float availableHeight = selectionHeight - (2f * particleRadius);
 
-            int columns = availableWidth > 0 
-                ? Math.Max(1, (int)MathF.Floor(availableWidth / horizontalSpacing) + 1) 
-                : 1;
-            int rows = availableHeight > 0 
-                ? Math.Max(1, (int)MathF.Floor(availableHeight / verticalSpacing) + 1) 
-                : 1;
+            int columns =
+                availableWidth > 0
+                    ? Math.Max(1, (int)MathF.Floor(availableWidth / horizontalSpacing) + 1)
+                    : 1;
+            int rows =
+                availableHeight > 0
+                    ? Math.Max(1, (int)MathF.Floor(availableHeight / verticalSpacing) + 1)
+                    : 1;
 
             int capacity = columns * rows;
 
