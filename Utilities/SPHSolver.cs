@@ -167,7 +167,7 @@ namespace Engine13.Utilities
 
             // Calculate density at each particle using Poly6 kernel
             ComputeDensities();
-            
+
             // Convert densities to pressure using Tait equation
             ComputePressures();
 
@@ -325,7 +325,8 @@ namespace Engine13.Utilities
                     float massJ = PhysicsMath.SafeMass(neighbor.Entity.Mass);
 
                     Vector2 gradW = SPHKernels.SpikyGradient(dist, _smoothingRadius, dir);
-                    float pressureAccel = (pressure / (density * density))
+                    float pressureAccel =
+                        (pressure / (density * density))
                         + (neighborPressure / (neighborDensity * neighborDensity));
                     pressureForce += -mass * massJ * pressureAccel * gradW;
 
@@ -346,28 +347,28 @@ namespace Engine13.Utilities
                 }
 
                 // Combine forces with gentle velocity damping to prevent energy gain
-                Vector2 totalForce = pressureForce + viscosityForce;
-                
+                Vector2 totalForce = pressureForce + (viscosityForce);
+
                 // Progressive velocity damping: stronger at higher speeds
-                float dampFactor = 1f - _damping;
+                float dampFactor = (1f - _damping);
                 float velMag = vel.Length();
-                
+
                 // Base damping proportional to velocity
                 totalForce -= vel * mass * dampFactor * 2f;
-                
+
                 // Additional quadratic damping for high velocities (like drag)
                 if (velMag > 0.5f)
                 {
                     float dragCoeff = 0.15f;
                     totalForce -= vel * mass * dragCoeff * velMag;
                 }
-                
+
                 // Extra damping on upward velocity to prevent brief lift events
                 if (vel.Y < -0.1f)
                 {
                     totalForce.Y += vel.Y * mass * 0.5f;
                 }
-                
+
                 // Settling damping: when moving slowly, increase damping to help settle
                 if (velMag < 0.3f && velMag > 0.01f)
                 {
@@ -476,18 +477,18 @@ namespace Engine13.Utilities
                     continue;
 
                 float mass = PhysicsMath.SafeMass(particle.Entity.Mass);
-                
+
                 var bounds = Engine13.Utilities.WindowBounds.GetNormalizedBounds();
                 float floorY = bounds.bottom;
                 float distToFloor = floorY - particle.Entity.Position.Y;
                 bool nearFloor = distToFloor <= _particleRadius * 2f;
 
                 Vector2 sphForce = _forces[i];
-                
+
                 // Near floor: prevent upward SPH forces that would cause bouncing
                 if (nearFloor && sphForce.Y > 0f)
                     sphForce.Y = 0f;
-                
+
                 // Apply ground friction when near floor to help settle
                 if (nearFloor)
                 {
@@ -503,17 +504,34 @@ namespace Engine13.Utilities
 
                 Vector2 gravityForce = _gravity * mass;
                 
-                Vector2 totalForce = sphForce + gravityForce;
+                // Use global gravitational constant
+                float gravityConstant = PhysicsSettings.GravitationalConstant;
+                float currentGravMag = _gravity.Length();
+                if (currentGravMag > 0.001f)
+                {
+                    Vector2 gravityDir = _gravity / currentGravMag;
+                    gravityForce = gravityDir * gravityConstant * mass;
+                }
                 
+                // Apply air resistance from global physics settings
+                if (PhysicsSettings.AirResistance > 0f)
+                {
+                    float dragCoeff = PhysicsSettings.AirResistance * 3f; // Scale for visible effect on fluids
+                    Vector2 airResistanceForce = -oc.Velocity * mass * dragCoeff;
+                    sphForce += airResistanceForce;
+                }
+
+                Vector2 totalForce = sphForce + gravityForce;
+
                 // Clamp total force to prevent explosions
                 float gravMag = MathF.Abs(_gravity.Y);
                 float maxAccel = (_materialType == SPHMaterialType.Granular ? 15f : 10f) * gravMag;
                 float maxForce = maxAccel * mass;
-                
+
                 float forceMag = totalForce.Length();
                 if (forceMag > maxForce && forceMag > 1e-8f)
                     totalForce *= maxForce / forceMag;
-                
+
                 // Extra safety: cap upward force to prevent floating
                 // Upward force capped to 0.5x weight to eliminate lifting
                 float maxUpwardForce = 0.5f * gravMag * mass;

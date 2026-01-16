@@ -55,10 +55,26 @@ public sealed class Gravity : IEntityComponent
                 return;
                 
             double effectiveMass = entity.Mass > 0f ? entity.Mass : 1.0;
+            
+            // Use global gravitational constant
+            float gravityConstant = PhysicsSettings.GravitationalConstant;
+            float gravityRatio = MathF.Abs(AccelerationY) > 0.001f ? gravityConstant / MathF.Abs(AccelerationY) : 1.0f;
             Forces.AddForce(
                 entity,
-                new Vec2(effectiveMass * AccelerationX, effectiveMass * AccelerationY)
+                new Vec2(effectiveMass * AccelerationX * gravityRatio, effectiveMass * AccelerationY * gravityRatio)
             );
+            
+            // Apply air resistance from global physics settings
+            if (PhysicsSettings.AirResistance > 0f)
+            {
+                var oc = entity.GetComponent<ObjectCollision>();
+                if (oc != null)
+                {
+                    float dragCoeff = PhysicsSettings.AirResistance * 5f; // Scale for visible effect
+                    Vector2 dragForce = -oc.Velocity * (float)effectiveMass * dragCoeff;
+                    Forces.AddForce(entity, new Vec2(dragForce.X, dragForce.Y));
+                }
+            }
             return;
         }
 
@@ -75,9 +91,20 @@ public sealed class Gravity : IEntityComponent
             float ChangeY = ObjectColission.Velocity.Y;
             float ChangeX = ObjectColission.Velocity.X;
 
+            // Use global gravitational constant
+            float gravityConstant = PhysicsSettings.GravitationalConstant;
+            float gravityRatio = MathF.Abs(AccelerationY) > 0.001f ? gravityConstant / MathF.Abs(AccelerationY) : 1.0f;
             if (!(ObjectColission.IsGrounded && ChangeY >= 0f))
-                ChangeY += AccelerationY * dt;
-            ChangeX += AccelerationX * dt;
+                ChangeY += AccelerationY * gravityRatio * dt;
+            ChangeX += AccelerationX * gravityRatio * dt;
+            
+            // Apply air resistance from global physics settings
+            if (PhysicsSettings.AirResistance > 0f)
+            {
+                float dragCoeff = PhysicsSettings.AirResistance * 2f;
+                ChangeX *= (1f - dragCoeff * dt);
+                ChangeY *= (1f - dragCoeff * dt);
+            }
 
             float massForDrag = ObjectColission.Mass > 0f ? ObjectColission.Mass : Mass;
             float area = MathHelpers.ComputeArea(entity.Size);
@@ -99,8 +126,19 @@ public sealed class Gravity : IEntityComponent
         }
         else
         {
-            _velocityY += AccelerationY * dt;
-            _velocityX += AccelerationX * dt;
+            // Use global gravitational constant
+            float gravityConstant = PhysicsSettings.GravitationalConstant;
+            float gravityRatio = MathF.Abs(AccelerationY) > 0.001f ? gravityConstant / MathF.Abs(AccelerationY) : 1.0f;
+            _velocityY += AccelerationY * gravityRatio * dt;
+            _velocityX += AccelerationX * gravityRatio * dt;
+            
+            // Apply air resistance from global physics settings
+            if (PhysicsSettings.AirResistance > 0f)
+            {
+                float dragCoeff = PhysicsSettings.AirResistance * 2f;
+                _velocityY *= (1f - dragCoeff * dt);
+                _velocityX *= (1f - dragCoeff * dt);
+            }
 
             float area = MathHelpers.ComputeArea(entity.Size);
             float effectiveDrag = DragCoefficient * area;

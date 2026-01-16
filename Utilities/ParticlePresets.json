@@ -249,7 +249,7 @@
       "Friction": 0.5,
       "EnableEdgeCollision": true,
       "MaxForceMagnitude": 30.0,
-      "VelocityDamping": 0.03,
+      "VelocityDamping": 0.05,
       "PressureStrength": 0.0,
       "PressureRadius": 0.018,
       "IsFluid": true,

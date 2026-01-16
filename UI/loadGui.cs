@@ -389,6 +389,7 @@ namespace Engine13.UI
             ///<Summary>
             /// This section toggles the editor window visibility.
             /// </Summary>
+            
             if(!_SimulationWindow)
             {
                 if (_EditorWindow)
@@ -554,6 +555,7 @@ namespace Engine13.UI
             /// <Summary>
             /// The Precompute Settings window is for the compute settings.
             /// </Summary>
+            
             if (precomputeWindow)
             {
                 var preSize = new Vector2(300, 160);
@@ -574,8 +576,23 @@ namespace Engine13.UI
 
                 ImGui.Separator();
                 ImGui.Text("Physics Settings:");
-                ImGui.SliderFloat("Gravity Scale", ref PhysicsSettings.GravityScale, 0f, 5f);
-                ImGui.SliderFloat("Air Resistance", ref PhysicsSettings.AirResistance, 0f, 1f); 
+
+                float gravitationalConstant = PhysicsSettings.GravitationalConstant;
+                if (ImGui.SliderFloat("Gravitational Constant (m/s²)", ref gravitationalConstant, 0f, 50f))
+                {
+                    PhysicsSettings.GravitationalConstant = gravitationalConstant;
+                }
+                
+                float airResistance = PhysicsSettings.AirResistance;
+                if (ImGui.SliderFloat("Air Resistance", ref airResistance, 0f, 1f))
+                {
+                    PhysicsSettings.AirResistance = airResistance;
+                }
+                
+                if (ImGui.Button("Reset Physics"))
+                {
+                    PhysicsSettings.Reset();
+                } 
 
                 ImGui.Separator();
                 if (ImGui.Checkbox("Start Running Immediately", ref startRunningImmediately)) { }
