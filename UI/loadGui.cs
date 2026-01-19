@@ -51,53 +51,6 @@ namespace Engine13.UI
             ImGui.End();
         }
 
-        public static void `ShowDebugTerminal()
-        {
-            ImGui.SetNextWindowSize(new System.Numerics.Vector2(600, 400), ImGuiCond.FirstUseEver);
-            ImGui.Begin("Debug Terminal");
-        }
-
-        public static void LogInImGui(
-            ref bool showGuiDebug,
-            int tickCounter,
-            double lastTickTime,
-            float lastAvgSpeed,
-            float lastMaxSpeed,
-            Vector2 lastAvgPos,
-            int lastGroundedCount,
-            List<ParticleSystem> particleSystems
-        )
-        {
-            ImGui.SetNextWindowSize(new Vector2(400, 300), ImGuiCond.FirstUseEver);
-            ImGui.Begin("Simulation Debug", ref showGuiDebug, ImGuiWindowFlags.None);
-            ImGui.Text($"Ticks Computed: {tickCounter}");
-            ImGui.Text($"Tick Time: {lastTickTime:F2} ms");
-            ImGui.Separator();
-            ImGui.Text("Global Stats:");
-            ImGui.Text($"  Avg Speed: {lastAvgSpeed:F4} units/s");
-            ImGui.Text($"  Max Speed: {lastMaxSpeed:F4} units/s");
-            ImGui.Text($"  Avg Pos Y: {lastAvgPos.Y:F3} units");
-            ImGui.Text($"  Grounded: {lastGroundedCount}");
-
-            // SPH Debug Info
-            var fluidSystem = particleSystems.Find(ps => ps.Material.IsFluid);
-            if (fluidSystem != null)
-            {
-                ImGui.Separator();
-                ImGui.Text("SPH Fluid Debug:");
-                var debugInfo = fluidSystem.GetSPHDebugInfo();
-                ImGui.Text($"  Particles: {debugInfo.particleCount}");
-                ImGui.Text($"  Avg Density: {debugInfo.avgDensity:F2}");
-                ImGui.Text($"  Max Density: {debugInfo.maxDensity:F2}");
-                ImGui.Text($"  Avg Pressure: {debugInfo.avgPressure:F2}");
-                ImGui.Text($"  Avg Viscosity: {debugInfo.avgViscosity:F3}");
-                ImGui.Text($"  Avg Neighbors: {debugInfo.avgNeighbors:F1}");
-                ImGui.Text($"  Avg Velocity: {debugInfo.avgVelocity:F3}");
-                ImGui.Text($"  Max Velocity: {debugInfo.maxVelocity:F3}");
-            }
-            ImGui.End();
-        }
-
         public static void DrawSelectionRect(
             ref int selectionPresetIndex,
             ref string selectionMaterial,
@@ -392,7 +345,8 @@ namespace Engine13.UI
             ///<Summary>
             /// This section toggles the editor window visibility.
             /// </Summary>
-            if (!_SimulationWindow)
+            
+            if (!_SimulationWindow && !hasPrecomputeRun)
             {
                 if (_EditorWindow)
                 {
@@ -640,7 +594,7 @@ namespace Engine13.UI
             ///<summary>
             /// This is for editor selection/enable editor mode
             /// </summary>
-            if (_EditorWindow && !_SimulationWindow)
+            if (_EditorWindow && !_SimulationWindow && !hasPrecomputeRun)
             {
                 var editorSize = new Vector2(400, 400);
                 ImGui.SetNextWindowSize(editorSize, ImGuiCond.Always);
