@@ -274,6 +274,9 @@ namespace Engine13.UI
             return (capacity, columns, origin);
         }
 
+
+        ///Impliment custom particle, selection visualization, single placement mode, Preset Loading
+
         public static void DrawUI(
             ref bool showStartWindow,
             ref bool precomputeWindow,
@@ -308,7 +311,7 @@ namespace Engine13.UI
             const float margin = 10f;
             const float spacing = 6f;
 
-            var mainSize = new Vector2(450, 300);
+            var mainSize = new Vector2(450, 320);
             var mainPos = new Vector2(margin, margin);
             ImGui.SetNextWindowSize(mainSize, ImGuiCond.Once);
             ImGui.SetNextWindowPos(mainPos, ImGuiCond.Once);
