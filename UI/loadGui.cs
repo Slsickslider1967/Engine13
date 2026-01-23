@@ -25,7 +25,7 @@ namespace Engine13.UI
         private static bool SelectionEdit = false;
         private static int _selectionPresetIndex = 0;
         private static string _selectionMaterial = "Sand";
-        private static List<Entity> _selectedEntities = new List<Entity>();
+        private static List<Entity> _selectedEntities = new List<Entity>(); 
 
         private const float GraphPlotHeight = 100f;
 
@@ -289,7 +289,7 @@ namespace Engine13.UI
                 );
 
                 // Visualize selected entities even when not selecting
-                DrawSelectedEntitiesHighlight();
+                    DrawSelectedEntitiesHighlight();
             }
         }
 
@@ -347,15 +347,15 @@ namespace Engine13.UI
                 float screenY =
                     ((entity.Position.Y - bounds.top) / (bounds.bottom - bounds.top)) * sy;
 
-                // Draw highlight circle around selected entity
-                float highlightRadius = 8f; // Adjust as needed
-                drawList.AddCircle(
-                    new Vector2(screenX, screenY),
-                    highlightRadius,
-                    ImGui.ColorConvertFloat4ToU32(new Vector4(1f, 1f, 0f, 0.8f)),
-                    12,
-                    2.0f
-                );
+                float highlightRadius = 8f; 
+                // drawList.AddCircle(
+                //     new Vector2(screenX, screenY),
+                //     highlightRadius,
+                //     ImGui.ColorConvertFloat4ToU32(new Vector4(1f, 1f, 0f, 0.8f)),
+                //     12,
+                //     2.0f
+                // );
+                entity.Colour = new Vector4(1f, 1f, 0f, 0.8f);
             }
         }
 
