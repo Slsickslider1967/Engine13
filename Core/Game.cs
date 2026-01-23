@@ -146,7 +146,8 @@ namespace Engine13.Core
                 ref _selectionMaterial,
                 _entities,
                 CreateObjectsWrapper,
-                RemoveParticleSystemInSelection
+                RemoveParticleSystemInSelection,
+                CreateSingleParticle
             );
 
             if (!_simulationComplete && _tickPositions.Count == 0)
@@ -313,6 +314,66 @@ namespace Engine13.Core
         private void ClearAllParticles()
         {
             ParticleDynamics.RemoveAllParticles(_entities);
+        }
+
+        private void CreateSingleParticle(string materialName, float worldX, float worldY)
+        {
+            // Find or create a particle system for this material
+            var existingSystem = _particleSystems.Find(ps => ps.Name.Contains(materialName));
+
+            if (existingSystem == null)
+            {
+                existingSystem = ParticleSystemFactory.Create(
+                    $"{materialName}System",
+                    materialName
+                );
+                existingSystem.Material.ApplyTo(existingSystem);
+                _particleSystems.Add(existingSystem);
+            }
+
+            // Create a single particle at the specified position using CircleFactory
+            float particleRadius = existingSystem.Material.ParticleRadius;
+            var particle = CircleFactory.CreateCircle(GraphicsDevice, particleRadius, 8, 8);
+
+            particle.Position = new Vector2(worldX, worldY);
+            particle.CollisionRadius = particleRadius;
+            particle.Mass = existingSystem.Material.Mass;
+
+            // Add components based on material properties
+            particle.AddComponent(
+                new Gravity(
+                    existingSystem.Material.GravityStrength,
+                    0f,
+                    particle.Mass,
+                    existingSystem.Material.HorizontalForce,
+                    0f
+                )
+            );
+            particle.AddComponent(
+                new ObjectCollision
+                {
+                    Mass = particle.Mass,
+                    Restitution = existingSystem.Material.Restitution,
+                    Friction = existingSystem.Material.Friction,
+                    IsFluid = existingSystem.Material.IsFluid,
+                }
+            );
+            particle.AddComponent(
+                existingSystem.Material.EnableEdgeCollision
+                    ? new EdgeCollision(false)
+                    : new EdgeCollision(true)
+            );
+
+            // Add to collections
+            _entities.Add(particle);
+            existingSystem.Particles.Add(particle);
+            _grid.AddEntity(particle);
+
+            // If it's a fluid system, reinitialize
+            if (existingSystem.Material.IsFluid)
+            {
+                existingSystem.InitializeFluid();
+            }
         }
 
         protected override void Draw()

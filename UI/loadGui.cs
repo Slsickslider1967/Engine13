@@ -25,6 +25,7 @@ namespace Engine13.UI
         private static bool SelectionEdit = false;
         private static int _selectionPresetIndex = 0;
         private static string _selectionMaterial = "Sand";
+        private static List<Entity> _selectedEntities = new List<Entity>();
 
         private const float GraphPlotHeight = 100f;
 
@@ -66,13 +67,46 @@ namespace Engine13.UI
                 Vector2,
                 float
             > createObjectsCallback,
-            Action removeParticlesCallback
+            Action removeParticlesCallback,
+            Action<string, float, float> createSingleParticleCallback
         )
         {
             var io = ImGui.GetIO();
             var dbgList = ImGui.GetForegroundDrawList();
 
-            if (!io.WantCaptureMouse && ImGui.IsMouseClicked(ImGuiMouseButton.Left))
+            // Handle single placement mode
+            if (
+                _SingularPlacementMode
+                && !io.WantCaptureMouse
+                && ImGui.IsMouseClicked(ImGuiMouseButton.Left)
+            )
+            {
+                var winSize = WindowBounds.GetWindowSize();
+                var bounds = WindowBounds.GetNormalizedBounds();
+                float sx = winSize.X > 0 ? winSize.X : 1f;
+                float sy = winSize.Y > 0 ? winSize.Y : 1f;
+
+                float worldX = bounds.left + (bounds.right - bounds.left) * (io.MousePos.X / sx);
+                float worldY = bounds.top + (bounds.bottom - bounds.top) * (io.MousePos.Y / sy);
+
+                // Snap to grid if enabled
+                if (_GridSnapMode)
+                {
+                    float gridSize = 0.5f; // Adjust grid size as needed
+                    worldX = MathF.Round(worldX / gridSize) * gridSize;
+                    worldY = MathF.Round(worldY / gridSize) * gridSize;
+                }
+
+                createSingleParticleCallback(_selectionMaterial, worldX, worldY);
+                Logger.Log($"Placed {_selectionMaterial} particle at ({worldX:F2}, {worldY:F2})");
+                return; // Skip selection logic when in placement mode
+            }
+
+            if (
+                !io.WantCaptureMouse
+                && ImGui.IsMouseClicked(ImGuiMouseButton.Left)
+                && !_SingularPlacementMode
+            )
             {
                 IsSelecting = true;
                 SelectStart = io.MousePos;
@@ -95,6 +129,11 @@ namespace Engine13.UI
                     {
                         SelectStart = Vector2.Zero;
                         SelectEnd = Vector2.Zero;
+                    }
+                    else
+                    {
+                        // Update selected entities
+                        UpdateSelectedEntities(entities);
                     }
 
                     IsSelecting = false;
@@ -217,7 +256,8 @@ namespace Engine13.UI
                     1.5f
                 );
 
-                //Impliment EntitySelectedVisualizer to change/outline selected entities
+                // Visualize selected entities
+                DrawSelectedEntitiesHighlight();
             }
             else
             {
@@ -247,6 +287,75 @@ namespace Engine13.UI
                     ImDrawFlags.None,
                     1.5f
                 );
+
+                // Visualize selected entities even when not selecting
+                DrawSelectedEntitiesHighlight();
+            }
+        }
+
+        private static void UpdateSelectedEntities(List<Entity> entities)
+        {
+            _selectedEntities.Clear();
+
+            var winSize = WindowBounds.GetWindowSize();
+            var bounds = WindowBounds.GetNormalizedBounds();
+            float sx = winSize.X > 0 ? winSize.X : 1f;
+            float sy = winSize.Y > 0 ? winSize.Y : 1f;
+
+            float x0 = bounds.left + (bounds.right - bounds.left) * (SelectStart.X / sx);
+            float y0 = bounds.top + (bounds.bottom - bounds.top) * (SelectStart.Y / sy);
+            float x1 = bounds.left + (bounds.right - bounds.left) * (SelectEnd.X / sx);
+            float y1 = bounds.top + (bounds.bottom - bounds.top) * (SelectEnd.Y / sy);
+
+            float minX = MathF.Min(x0, x1);
+            float maxX = MathF.Max(x0, x1);
+            float minY = MathF.Min(y0, y1);
+            float maxY = MathF.Max(y0, y1);
+
+            foreach (var entity in entities)
+            {
+                if (
+                    entity.Position.X >= minX
+                    && entity.Position.X <= maxX
+                    && entity.Position.Y >= minY
+                    && entity.Position.Y <= maxY
+                )
+                {
+                    _selectedEntities.Add(entity);
+                }
+            }
+
+            Logger.Log($"Selected {_selectedEntities.Count} entities");
+        }
+
+        private static void DrawSelectedEntitiesHighlight()
+        {
+            if (_selectedEntities.Count == 0)
+                return;
+
+            var drawList = ImGui.GetForegroundDrawList();
+            var winSize = WindowBounds.GetWindowSize();
+            var bounds = WindowBounds.GetNormalizedBounds();
+            float sx = winSize.X > 0 ? winSize.X : 1f;
+            float sy = winSize.Y > 0 ? winSize.Y : 1f;
+
+            foreach (var entity in _selectedEntities)
+            {
+                // Convert world position to screen position
+                float screenX =
+                    ((entity.Position.X - bounds.left) / (bounds.right - bounds.left)) * sx;
+                float screenY =
+                    ((entity.Position.Y - bounds.top) / (bounds.bottom - bounds.top)) * sy;
+
+                // Draw highlight circle around selected entity
+                float highlightRadius = 8f; // Adjust as needed
+                drawList.AddCircle(
+                    new Vector2(screenX, screenY),
+                    highlightRadius,
+                    ImGui.ColorConvertFloat4ToU32(new Vector4(1f, 1f, 0f, 0.8f)),
+                    12,
+                    2.0f
+                );
             }
         }
 
@@ -274,9 +383,13 @@ namespace Engine13.UI
             return (capacity, columns, origin);
         }
 
-
-        ///Impliment custom particle, selection visualization, single placement mode, Preset Loading
-
+        /// <summary>
+        /// Features implemented:
+        /// - Single placement mode with grid snap
+        /// - Selection visualization with entity highlighting
+        /// - Preset loading and material selection
+        /// - Custom partcles creation and removal
+        /// </summary>
         public static void DrawUI(
             ref bool showStartWindow,
             ref bool precomputeWindow,
@@ -348,7 +461,6 @@ namespace Engine13.UI
             ///<Summary>
             /// This section toggles the editor window visibility.
             /// </Summary>
-            
             if (!_SimulationWindow && !hasPrecomputeRun)
             {
                 if (_EditorWindow)
@@ -610,6 +722,11 @@ namespace Engine13.UI
                 ImGui.Separator();
                 ImGui.Checkbox("Selection Edit Mode", ref SelectionEdit);
                 ImGui.Checkbox("Singular placement", ref _SingularPlacementMode);
+                ImGui.Separator();
+                ImGui.Text("Custom Particle Editor:");
+                //ImGui.SliderFloat("Particle Spacing", ref PhysicsSettings.ParticleSpacing, 0.5f, 3f);
+                //ImGui.SliderFloat("Particle Spacing", ref PhysicsSettings.ParticleSpacing, 0.5f, 3f);
+                
 
                 if (_SingularPlacementMode)
                 {
