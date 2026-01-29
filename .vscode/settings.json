@@ -1,0 +1,4 @@
+{
+    "dotnet.defaultSolution": "Engine13/Engine-13.sln",
+    "dotnet.server.useOmnisharp": false
+}

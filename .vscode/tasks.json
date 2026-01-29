@@ -2,38 +2,27 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "build",
+            "label": "dotnet-build",
+            "type": "shell",
             "command": "dotnet",
-            "type": "process",
             "args": [
                 "build",
-                "${workspaceFolder}/Engine13/Engine-13.sln",
-                "/property:GenerateFullPaths=true",
-                "/consoleloggerparameters:NoSummary;ForceNoAlign"
+                "Engine13/Engine-13.sln"
             ],
-            "problemMatcher": "$msCompile"
+            "problemMatcher": "$msCompile",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
         },
         {
-            "label": "publish",
+            "label": "dotnet-run",
+            "type": "shell",
             "command": "dotnet",
-            "type": "process",
             "args": [
-                "publish",
-                "${workspaceFolder}/Engine13/Engine-13.sln",
-                "/property:GenerateFullPaths=true",
-                "/consoleloggerparameters:NoSummary;ForceNoAlign"
-            ],
-            "problemMatcher": "$msCompile"
-        },
-        {
-            "label": "watch",
-            "command": "dotnet",
-            "type": "process",
-            "args": [
-                "watch",
                 "run",
                 "--project",
-                "${workspaceFolder}/Engine13/Engine-13.sln"
+                "Engine13/Engine-13/Engine-13.csproj"
             ],
             "problemMatcher": "$msCompile"
         }
