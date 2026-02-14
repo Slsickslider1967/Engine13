@@ -1,11 +1,11 @@
 #version 450
 
 // Input from vertex shader
-layout(location = 0) in vec4 fragColor;
+layout(location = 0) in vec4 fragColour;
 layout(location = 1) in vec2 fragUV;
 
-// Output color
-layout(location = 0) out vec4 fsout_Color;
+// Output colour
+layout(location = 0) out vec4 fsout_Colour;
 
 void main()
 {
@@ -18,10 +18,10 @@ void main()
     
     // Outline: outer 20% of the circle is the outline
     float outlineStart = 0.8;
-    vec4 outlineColor = vec4(0.0, 0.0, 0.0, 1.0);  // Black
+    vec4 outlineColour = vec4(0.0, 0.0, 0.0, 1.0);  // Black
     
     if (dist > outlineStart)
-        fsout_Color = outlineColor;
+        fsout_Colour = outlineColour;
     else
-        fsout_Color = fragColor;
+        fsout_Colour = fragColour;
 }

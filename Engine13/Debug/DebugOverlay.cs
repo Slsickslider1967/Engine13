@@ -18,18 +18,18 @@ namespace Engine13.Debug
         public bool ShowSatDebug { get; set; } = true;
         public float SatNormalLength { get; set; } = 0.2f;
         public float SatLineThickness { get; set; } = 0.02f;
-        public Vector4 SatNormalColor { get; set; } = new Vector4(0.1f, 0.6f, 1f, 1f);
-        public Vector4 SatPenetrationColor { get; set; } = new Vector4(1f, 0.2f, 0.2f, 1f);
-        public Vector4 SatContactColor { get; set; } = new Vector4(1f, 1f, 1f, 1f);
+        public Vector4 SatNormalColour { get; set; } = new Vector4(0.1f, 0.6f, 1f, 1f);
+        public Vector4 SatPenetrationColour { get; set; } = new Vector4(1f, 0.2f, 0.2f, 1f);
+        public Vector4 SatContactColour { get; set; } = new Vector4(1f, 1f, 1f, 1f);
 
         public bool ShowOutlines { get; set; } = true;
         public bool ShowAabbs { get; set; } = true;
         public float OutlineThickness { get; set; } = 0.01f;
         public float AabbThickness { get; set; } = 0.008f;
-        public Vector4 OutlineAColor { get; set; } = new Vector4(0.2f, 1f, 0.2f, 1f);
-        public Vector4 OutlineBColor { get; set; } = new Vector4(1f, 0.2f, 1f, 1f);
-        public Vector4 AabbAColor { get; set; } = new Vector4(0.2f, 0.6f, 0.2f, 1f);
-        public Vector4 AabbBColor { get; set; } = new Vector4(0.6f, 0.2f, 0.6f, 1f);
+        public Vector4 OutlineAColour { get; set; } = new Vector4(0.2f, 1f, 0.2f, 1f);
+        public Vector4 OutlineBColour { get; set; } = new Vector4(1f, 0.2f, 1f, 1f);
+        public Vector4 AabbAColour { get; set; } = new Vector4(0.2f, 0.6f, 0.2f, 1f);
+        public Vector4 AabbBColour { get; set; } = new Vector4(0.6f, 0.2f, 0.6f, 1f);
 
         public DebugOverlay(System.Collections.Generic.List<Entity> entities, Renderer renderer)
         {
@@ -54,13 +54,13 @@ namespace Engine13.Debug
                     var b = c.EntityB;
                     if (ShowOutlines)
                     {
-                        DrawEntityOutline(a, OutlineAColor, OutlineThickness);
-                        DrawEntityOutline(b, OutlineBColor, OutlineThickness);
+                        DrawEntityOutline(a, OutlineAColour, OutlineThickness);
+                        DrawEntityOutline(b, OutlineBColour, OutlineThickness);
                     }
                     if (ShowAabbs)
                     {
-                        DrawAabb(a.GetAABB(), AabbAColor, AabbThickness);
-                        DrawAabb(b.GetAABB(), AabbBColor, AabbThickness);
+                        DrawAabb(a.GetAABB(), AabbAColour, AabbThickness);
+                        DrawAabb(b.GetAABB(), AabbBColour, AabbThickness);
                     }
                     Vector2 cp = c.ContactPoint;
                     Vector2 n = c.SeparationDirection;
@@ -120,12 +120,12 @@ namespace Engine13.Debug
             }
         }
 
-        private void DrawLine(Vector2 start, Vector2 end, Vector4 color, float thickness)
+        private void DrawLine(Vector2 start, Vector2 end, Vector4 colour, float thickness)
         {
-            _renderer.DrawVelocityVector(start, end - start, 1f, color, thickness);
+            _renderer.DrawVelocityVector(start, end - start, 1f, colour, thickness);
         }
 
-        private void DrawAabb(Engine13.Utilities.AABB aabb, Vector4 color, float thickness)
+        private void DrawAabb(Engine13.Utilities.AABB aabb, Vector4 colour, float thickness)
         {
             Vector2 min = aabb.Min;
             Vector2 max = aabb.Max;
@@ -133,13 +133,13 @@ namespace Engine13.Debug
             Vector2 v1 = new Vector2(max.X, min.Y);
             Vector2 v2 = max;
             Vector2 v3 = new Vector2(min.X, max.Y);
-            DrawLine(v0, v1, color, thickness);
-            DrawLine(v1, v2, color, thickness);
-            DrawLine(v2, v3, color, thickness);
-            DrawLine(v3, v0, color, thickness);
+            DrawLine(v0, v1, colour, thickness);
+            DrawLine(v1, v2, colour, thickness);
+            DrawLine(v2, v3, colour, thickness);
+            DrawLine(v3, v0, colour, thickness);
         }
 
-        private void DrawEntityOutline(Entity entity, Vector4 color, float thickness)
+        private void DrawEntityOutline(Entity entity, Vector4 colour, float thickness)
         {
             if (entity == null)
                 return;
@@ -159,7 +159,7 @@ namespace Engine13.Debug
             {
                 Vector2 a = world[i];
                 Vector2 b = world[(i + 1) % count];
-                DrawLine(a, b, color, thickness);
+                DrawLine(a, b, colour, thickness);
             }
         }
     }

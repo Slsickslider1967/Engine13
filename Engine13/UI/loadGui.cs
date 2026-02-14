@@ -831,14 +831,14 @@ namespace Engine13.UI
             float worldGridSize = CustomParticleSettings.GridSnapSize * 0.1f;
             float worldW = bounds.right - bounds.left,
                 worldH = bounds.bottom - bounds.top;
-            uint gridColor = ImGui.ColorConvertFloat4ToU32(new Vector4(1f, 1f, 1f, 0.15f));
+            uint gridColour = ImGui.ColorConvertFloat4ToU32(new Vector4(1f, 1f, 1f, 0.15f));
             for (int i = 0; i <= (int)(worldW / worldGridSize) + 1; i++)
             {
                 float worldX = bounds.left + i * worldGridSize;
                 if (worldX > bounds.right)
                     break;
                 float scrX = ((worldX - bounds.left) / worldW) * sx;
-                drawList.AddLine(new Vector2(scrX, 0), new Vector2(scrX, sy), gridColor, 1f);
+                drawList.AddLine(new Vector2(scrX, 0), new Vector2(scrX, sy), gridColour, 1f);
             }
             for (int i = 0; i <= (int)(worldH / worldGridSize) + 1; i++)
             {
@@ -846,7 +846,7 @@ namespace Engine13.UI
                 if (worldY > bounds.bottom)
                     break;
                 float scrY = ((worldY - bounds.top) / worldH) * sy;
-                drawList.AddLine(new Vector2(0, scrY), new Vector2(sx, scrY), gridColor, 1f);
+                drawList.AddLine(new Vector2(0, scrY), new Vector2(sx, scrY), gridColour, 1f);
             }
         }
     }

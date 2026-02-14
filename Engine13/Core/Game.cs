@@ -60,7 +60,7 @@ namespace Engine13.Core
             _overlayNeighbors;
         private float _overlayMin = 0f,
             _overlayMax = 1f;
-        private Vector4[] _overlayColors = Array.Empty<Vector4>();
+        private Vector4[] _overlayColours = Array.Empty<Vector4>();
         private readonly Dictionary<Entity, int> _entityIndexMap = new();
         private string PrecomputeName = "Open Precompute Window",
             EditorName = "Open Editor Window";
@@ -316,7 +316,7 @@ namespace Engine13.Core
         {
             Renderer.BeginFrame(new RgbaFloat(0.1f, 0.1f, 0.1f, 1f));
             Vector2[]? tickPositions = null;
-            Vector4[]? colors = null;
+            Vector4[]? colours = null;
             int tickCount;
             lock (_tickLock)
             {
@@ -346,8 +346,8 @@ namespace Engine13.Core
                 for (int i = 0; i < _entities.Count; i++)
                     tickPositions[i] = _entities[i].Position;
             }
-            colors = BuildOverlayColors(tickPositions);
-            Renderer.DrawInstanced(_entities, tickPositions, colors);
+            colours = BuildOverlayColours(tickPositions);
+            Renderer.DrawInstanced(_entities, tickPositions, colours);
             _imgui?.Render(CommandList);
             Renderer.EndFrame();
         }
@@ -388,9 +388,9 @@ namespace Engine13.Core
                     _overlayDensity ? dens[i]
                     : _overlayPressure ? pres[i]
                     : neigh[i];
-                _overlayColors[idx] = MapGradient(Math.Clamp((v - minVal) * invRange, 0f, 1f));
+                _overlayColours[idx] = MapGradient(Math.Clamp((v - minVal) * invRange, 0f, 1f));
             }
-            return _overlayColors;
+            return _overlayColours;
         }
 
         private static Vector4 MapGradient(float t)

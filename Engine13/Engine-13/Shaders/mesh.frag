@@ -1,15 +1,15 @@
 #version 450
 
-// Color uniform buffer
-layout(set = 2, binding = 0) uniform ColorBuffer {
-    vec4 meshColor;
+// Colour uniform buffer
+layout(set = 2, binding = 0) uniform ColourBuffer {
+    vec4 meshColour;
 };
 
 // Input from vertex shader
 layout(location = 0) in vec2 fsin_UV;
 
-// Output color
-layout(location = 0) out vec4 fsout_Color;
+// Output colour
+layout(location = 0) out vec4 fsout_Colour;
 
 void main()
 {
@@ -20,10 +20,10 @@ void main()
         discard;
     
     float outlineStart = 0.75;
-    vec4 outlineColor = vec4(0.0, 0.0, 0.0, 1.0);
+    vec4 outlineColour = vec4(0.0, 0.0, 0.0, 1.0);
     
     if (dist > outlineStart)
-        fsout_Color = outlineColor;
+        fsout_Colour = outlineColour;
     else
-        fsout_Color = meshColor;
+        fsout_Colour = meshColour;
 }

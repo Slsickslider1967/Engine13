@@ -253,17 +253,17 @@ namespace Engine13.Graphics
     public static class SpriteFactory
     {
         /// <summary>
-        /// Creates a basic colored sprite (no texture)
+        /// Creates a basic coloured sprite (no texture)
         /// </summary>
-        public static Sprite CreateColoredSprite(
+        public static Sprite CreateColouredSprite(
             GraphicsDevice gd,
             float width,
             float height,
-            Vector4 color
+            Vector4 colour
         )
         {
             var sprite = new Sprite(gd, width, height);
-            sprite.Tint = color;
+            sprite.Tint = colour;
             return sprite;
         }
 

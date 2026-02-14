@@ -10,17 +10,17 @@ layout(location = 0) in vec2 inPosition;
 
 // Per-instance input (particle data)
 layout(location = 1) in vec2 inInstancePos;
-layout(location = 2) in vec4 inInstanceColor;
+layout(location = 2) in vec4 inInstanceColour;
 
 // Output to fragment shader
-layout(location = 0) out vec4 fragColor;
+layout(location = 0) out vec4 fragColour;
 layout(location = 1) out vec2 fragUV;
 
 void main()
 {
     vec4 worldPos = vec4(inPosition + inInstancePos, 0.0, 1.0);
     gl_Position = u_Projection * worldPos;
-    fragColor = inInstanceColor;
+    fragColour = inInstanceColour;
     
     // Normalize UV: inPosition goes from -radius to +radius
     // We need to find the radius (max distance from center in this vertex batch)

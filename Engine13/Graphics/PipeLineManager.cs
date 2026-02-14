@@ -14,7 +14,7 @@ namespace Engine13.Graphics
         private ResourceFactory factory;
         public ResourceLayout? PositionLayout { get; private set; }
         public ResourceLayout? ProjectionLayout { get; private set; }
-        public ResourceLayout? ColorLayout { get; private set; }
+        public ResourceLayout? ColourLayout { get; private set; }
 
         public void CreatePipeline()
         {
@@ -70,10 +70,10 @@ namespace Engine13.Graphics
                 )
             );
 
-            ColorLayout = factory.CreateResourceLayout(
+            ColourLayout = factory.CreateResourceLayout(
                 new ResourceLayoutDescription(
                     new ResourceLayoutElementDescription(
-                        "ColorBuffer",
+                        "ColourBuffer",
                         ResourceKind.UniformBuffer,
                         ShaderStages.Fragment
                     )
@@ -84,7 +84,7 @@ namespace Engine13.Graphics
             {
                 PositionLayout,
                 ProjectionLayout,
-                ColorLayout,
+                ColourLayout,
             };
             PipelineDescription.Outputs = GD.SwapchainFramebuffer.OutputDescription;
             _Pipeline = factory.CreateGraphicsPipeline(PipelineDescription);
@@ -160,7 +160,7 @@ namespace Engine13.Graphics
 
             var instanceLayout = new VertexLayoutDescription(
                 new VertexElementDescription("InstancePos", VertexElementSemantic.TextureCoordinate, VertexElementFormat.Float2),
-                new VertexElementDescription("InstanceColor", VertexElementSemantic.Color, VertexElementFormat.Float4)
+                new VertexElementDescription("InstanceColour", VertexElementSemantic.Color, VertexElementFormat.Float4)
             );
             instanceLayout.InstanceStepRate = 1;
 

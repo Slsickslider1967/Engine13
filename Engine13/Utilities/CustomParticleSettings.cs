@@ -73,7 +73,7 @@ namespace Engine13.Utilities
         }
     }
 
-    public class ColorPickerAttribute(string displayName) : ParticleSettingAttribute(displayName)
+    public class ColourPickerAttribute(string displayName) : ParticleSettingAttribute(displayName)
     {
         public override bool RenderControl(PropertyInfo p, object inst)
         {
@@ -104,8 +104,8 @@ namespace Engine13.Utilities
         [FloatSlider("Particle Radius", 0.1f, 5f)]
         public static float ParticleRadius { get; set; } = 0.5f;
 
-        [ColorPicker("Particle Color")]
-        public static Vector3 ParticleColor { get; set; } = new(1f, 1f, 1f);
+        [ColourPicker("Particle Colour")]
+        public static Vector3 ParticleColour { get; set; } = new(1f, 1f, 1f);
 
         [FloatSlider("Mass Multiplier", 0.1f, 10f)]
         public static float MassMultiplier { get; set; } = 1.0f;
@@ -307,7 +307,7 @@ namespace Engine13.Utilities
             || name.Contains("Bounciness")
             || name.Contains("Gravity")
                 ? "Physics"
-            : name.Contains("Color") || name.Contains("Radius") ? "Visual"
+            : name.Contains("Colour") || name.Contains("Radius") ? "Visual"
             : name.Contains("Charge") || name.Contains("Attraction") || name.Contains("Lifetime")
                 ? "Interaction"
             : "Other";

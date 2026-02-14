@@ -6,49 +6,25 @@ using Veldrid;
 
 namespace Engine13.Graphics
 {
-    /// <summary>
-    /// Handles all rendering: frame lifecycle, mesh drawing, debug vectors, and
-    /// instanced particle rendering.
-    ///
-    /// Design rules that prevent the Vulkan "image not acquired" validation error:
-    ///   1.  NEVER call GD.UpdateBuffer() during a frame – it submits internal
-    ///       staging command buffers that break the swapchain semaphore chain.
-    ///       Use CL.UpdateBuffer() instead so all work is recorded into the
-    ///       single per-frame command list.
-    ///   2.  GD.UpdateBuffer() is ONLY used at initialisation time (before the
-    ///       first frame), where it is safe because no swapchain images are in
-    ///       flight.
-    ///   3.  SwapBuffers is wrapped in a try/catch so that a transient
-    ///       VK_ERROR_OUT_OF_DATE (e.g. mid-resize) doesn't kill the render
-    ///       thread; the next frame simply re-acquires.
-    /// </summary>
     public class Renderer
     {
-        // ── Core references ──────────────────────────────────────────────
         private readonly GraphicsDevice _gd;
         private CommandList _cl;
         private readonly PipeLineManager _pipeline;
-
-        // ── Projection uniform ───────────────────────────────────────────
         private DeviceBuffer? _projectionBuffer;
         private ResourceSet? _projectionSet;
-
-        // ── Debug-line resources (single reusable quad) ──────────────────
         private DeviceBuffer? _debugVB;
         private DeviceBuffer? _debugIB;
         private DeviceBuffer? _debugPosBuffer;
         private ResourceSet? _debugPosSet;
-        private DeviceBuffer? _debugColorBuffer;
-        private ResourceSet? _debugColorSet;
-
-        // ── Instanced circle rendering ───────────────────────────────────
+        private DeviceBuffer? _debugColourBuffer;
+        private ResourceSet? _debugColourSet;
         private DeviceBuffer? _instanceBuffer;
         private int _instanceCapacity;
         private DeviceBuffer? _circleVB;
         private DeviceBuffer? _circleIB;
         private int _circleIndexCount;
 
-        // ── Frame state ──────────────────────────────────────────────────
         private bool _frameInProgress;
         public Renderer(GraphicsDevice gd, CommandList cl, PipeLineManager pipeline)
         {
@@ -64,11 +40,11 @@ namespace Engine13.Graphics
         public void SetCommandList(CommandList cl) => _cl = cl;
 
 
-        public void BeginFrame(RgbaFloat clearColor)
+        public void BeginFrame(RgbaFloat clearColour)
         {
             _cl.Begin();
             _cl.SetFramebuffer(_gd.SwapchainFramebuffer);
-            _cl.ClearColorTarget(0, clearColor);
+            _cl.ClearColorTarget(0, clearColour);
             _frameInProgress = true;
 
             EnsureProjectionResources();
@@ -145,9 +121,9 @@ namespace Engine13.Graphics
             if (_projectionSet != null)
                 _cl.SetGraphicsResourceSet(1, _projectionSet);
 
-            if (_pipeline.ColorLayout != null)
+            if (_pipeline.ColourLayout != null)
             {
-                entity.EnsureColourResources(_gd, _pipeline.ColorLayout);
+                entity.EnsureColourResources(_gd, _pipeline.ColourLayout);
                 if (entity.ColourBuffer != null)
                 {
                     var col = entity.Colour;
@@ -160,15 +136,11 @@ namespace Engine13.Graphics
             _cl.DrawIndexed((uint)entity.IndexCount, 1, 0, 0, 0);
         }
 
-        // ─────────────────────────────────────────────────────────────────
-        // Debug velocity vector (world-space thick line drawn as a quad)
-        // ─────────────────────────────────────────────────────────────────
-
         public void DrawVelocityVector(
             Vector2 start,
             Vector2 velocity,
             float scale,
-            Vector4 color,
+            Vector4 colour,
             float thickness = 0.01f
         )
         {
@@ -201,8 +173,8 @@ namespace Engine13.Graphics
                 var zero = Vector4.Zero;
                 _cl.UpdateBuffer(_debugPosBuffer, 0, ref zero);
             }
-            if (_debugColorBuffer != null)
-                _cl.UpdateBuffer(_debugColorBuffer, 0, ref color);
+            if (_debugColourBuffer != null)
+                _cl.UpdateBuffer(_debugColourBuffer, 0, ref colour);
 
             // Bind and draw
             _cl.SetPipeline(_pipeline.GetPipeline());
@@ -213,8 +185,8 @@ namespace Engine13.Graphics
                 _cl.SetGraphicsResourceSet(0, _debugPosSet);
             if (_projectionSet != null)
                 _cl.SetGraphicsResourceSet(1, _projectionSet);
-            if (_debugColorSet != null)
-                _cl.SetGraphicsResourceSet(2, _debugColorSet);
+            if (_debugColourSet != null)
+                _cl.SetGraphicsResourceSet(2, _debugColourSet);
 
             _cl.DrawIndexed(6, 1, 0, 0, 0);
         }
@@ -247,13 +219,13 @@ namespace Engine13.Graphics
                     new ResourceSetDescription(_pipeline.PositionLayout, _debugPosBuffer)
                 );
             }
-            if (_pipeline.ColorLayout != null && _debugColorBuffer == null)
+            if (_pipeline.ColourLayout != null && _debugColourBuffer == null)
             {
-                _debugColorBuffer = _gd.ResourceFactory.CreateBuffer(
+                _debugColourBuffer = _gd.ResourceFactory.CreateBuffer(
                     new BufferDescription(16, BufferUsage.UniformBuffer)
                 );
-                _debugColorSet = _gd.ResourceFactory.CreateResourceSet(
-                    new ResourceSetDescription(_pipeline.ColorLayout, _debugColorBuffer)
+                _debugColourSet = _gd.ResourceFactory.CreateResourceSet(
+                    new ResourceSetDescription(_pipeline.ColourLayout, _debugColourBuffer)
                 );
             }
         }
@@ -307,7 +279,7 @@ namespace Engine13.Graphics
         public void DrawInstanced(
             List<Entity> entities,
             Vector2[] positions,
-            Vector4[]? colors = null
+            Vector4[]? colours = null
         )
         {
             var instancedPipeline = _pipeline.GetInstancedPipeline();
@@ -335,13 +307,13 @@ namespace Engine13.Graphics
                 int o = i * 6;
                 data[o] = positions[i].X;
                 data[o + 1] = positions[i].Y;
-                var c = (colors != null && i < colors.Length) ? colors[i] : entities[i].Colour;
+                var c = (colours != null && i < colours.Length) ? colours[i] : entities[i].Colour;
                 data[o + 2] = c.X;
                 data[o + 3] = c.Y;
                 data[o + 4] = c.Z;
                 data[o + 5] = c.W;
             }
-
+        
             _cl.UpdateBuffer(_instanceBuffer, 0, data);
 
             _cl.SetPipeline(instancedPipeline);

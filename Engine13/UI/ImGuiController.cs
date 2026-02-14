@@ -218,7 +218,7 @@ namespace Engine13.UI
                     VertexElementFormat.Float2
                 ),
                 new VertexElementDescription(
-                    "Color",
+                    "Colour",
                     VertexElementSemantic.Color,
                     VertexElementFormat.Byte4_Norm
                 )
