@@ -352,24 +352,24 @@ namespace Engine13.Core
             Renderer.EndFrame();
         }
 
-        private Vector4[] BuildOverlayColors(Vector2[] positions)
+        private Vector4[] BuildOverlayColours(Vector2[] positions)
         {
             int count = Math.Min(_entities.Count, positions.Length);
-            if (_overlayColors.Length < count)
-                Array.Resize(ref _overlayColors, count);
+            if (_overlayColours.Length < count)
+                Array.Resize(ref _overlayColours, count);
             for (int i = 0; i < count; i++)
-                _overlayColors[i] = _entities[i].Colour;
+                _overlayColours[i] = _entities[i].Colour;
             if (
                 (!_overlayDensity && !_overlayPressure && !_overlayNeighbors)
                 || _particleSystems.Count == 0
             )
-                return _overlayColors;
+                return _overlayColours;
             _entityIndexMap.Clear();
             for (int i = 0; i < count; i++)
                 _entityIndexMap[_entities[i]] = i;
             var ps = _particleSystems.Find(p => p.Material.IsFluid);
             if (ps == null || ps.FluidCount == 0)
-                return _overlayColors;
+                return _overlayColours;
             int fluidCount = ps.FluidCount;
             Span<float> dens = fluidCount <= 256 ? stackalloc float[256] : new float[fluidCount];
             Span<float> pres = fluidCount <= 256 ? stackalloc float[256] : new float[fluidCount];

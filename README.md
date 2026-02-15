@@ -435,12 +435,10 @@ This is an educational project. Contributions are welcome via:
 
 This project is an educational demonstration. No formal license currently applied. Contact the author for usage permissions.
 
-**Developed by**: [Your Name]  
+**Developed by**: Georgio Ferdinand 
 **Institution**: Year 13 School Project  
 **Year**: 2025-2026
 
 ---
 
 *For technical questions or collaboration inquiries, please open a GitHub issue.*
-# Test commit
-# Test commit
